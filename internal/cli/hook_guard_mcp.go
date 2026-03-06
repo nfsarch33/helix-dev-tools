@@ -1,0 +1,77 @@
+package cli
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"github.com/spf13/cobra"
+
+	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/hookio"
+	"github.com/nfsarch33/cursor-tools/internal/logger"
+	"github.com/nfsarch33/cursor-tools/internal/patterns"
+)
+
+var guardMcpCmd = &cobra.Command{
+	Use:   "guard-mcp",
+	Short: "beforeMCPExecution: gate destructive MCP tools",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return runGuardMcp(os.Stdin, os.Stdout)
+	},
+}
+
+type guardMcpHandler struct {
+	log *logger.Logger
+}
+
+func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
+	if input.ToolName == "" {
+		return &hookio.Response{Permission: "allow"}, nil
+	}
+
+	toolInputShort := input.ToolInput
+	if len(toolInputShort) > 100 {
+		toolInputShort = toolInputShort[:100]
+	}
+	h.log.Log(fmt.Sprintf("MCP: %s input=%q", input.ToolName, toolInputShort))
+
+	if patterns.MatchExact(input.ToolName, patterns.MCPDenyTools) {
+		return hookio.Deny(
+			fmt.Sprintf("BLOCKED: MCP tool '%s' is destructive", input.ToolName),
+			fmt.Sprintf("Tool '%s' is blocked by guard-mcp hook. Use a non-destructive alternative.", input.ToolName),
+		), nil
+	}
+
+	if patterns.MatchExact(input.ToolName, patterns.MCPWarnTools) {
+		return hookio.Ask(
+			fmt.Sprintf("MCP '%s' modifies state. Confirm?", input.ToolName),
+			fmt.Sprintf("Tool '%s' requires user confirmation as it modifies external state.", input.ToolName),
+		), nil
+	}
+
+	return &hookio.Response{Permission: "allow"}, nil
+}
+
+func runGuardMcp(stdin *os.File, stdout *os.File) error {
+	paths := config.DefaultPaths()
+	handler := &guardMcpHandler{log: logger.New(paths.LogFile("mcp-audit"))}
+
+	input, err := hookio.ReadInput(stdin)
+	if err != nil {
+		_ = hookio.WriteResponse(stdout, &hookio.Response{Permission: "allow"})
+		return nil
+	}
+
+	resp, err := handler.Handle(context.Background(), input)
+	if err != nil {
+		_ = hookio.WriteResponse(stdout, &hookio.Response{Permission: "allow"})
+		return nil
+	}
+
+	_ = hookio.WriteResponse(stdout, resp)
+	if resp.Permission == "deny" {
+		os.Exit(2)
+	}
+	return nil
+}

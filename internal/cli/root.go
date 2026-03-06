@@ -1,0 +1,45 @@
+package cli
+
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
+
+var version = "dev"
+
+// SetVersion sets the version string for the version command.
+func SetVersion(v string) {
+	version = v
+}
+
+var rootCmd = &cobra.Command{
+	Use:   "cursor-tools",
+	Short: "Cursor IDE memory system tools",
+	Long:  "Single binary for Cursor hooks, git hooks, health checks, and memory system management.",
+}
+
+func init() {
+	rootCmd.AddCommand(hookCmd)
+	rootCmd.AddCommand(githookCmd)
+	rootCmd.AddCommand(syncCountsCmd)
+	rootCmd.AddCommand(promoteCmd)
+	rootCmd.AddCommand(healthCheckCmd)
+	rootCmd.AddCommand(selftestCmd)
+	rootCmd.AddCommand(bootstrapCmd)
+	rootCmd.AddCommand(safeCmd)
+	rootCmd.AddCommand(versionCmd)
+}
+
+var versionCmd = &cobra.Command{
+	Use:   "version",
+	Short: "Print version information",
+	Run: func(cmd *cobra.Command, args []string) {
+		fmt.Println("cursor-tools", version)
+	},
+}
+
+// Execute runs the root command.
+func Execute() error {
+	return rootCmd.Execute()
+}
