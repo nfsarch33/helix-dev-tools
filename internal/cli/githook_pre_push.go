@@ -12,9 +12,9 @@ import (
 )
 
 var prePushCmd = &cobra.Command{
-	Use:   "pre-push [remote]",
+	Use:   "pre-push [remote] [url]",
 	Short: "Block direct pushes to main/master",
-	Args:  cobra.ExactArgs(1),
+	Args:  cobra.RangeArgs(1, 2),
 	RunE:  runPrePush,
 }
 

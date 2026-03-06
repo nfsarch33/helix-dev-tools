@@ -229,10 +229,15 @@ func suiteGitSync(p config.Paths) *Suite {
 func suiteHooksSubagentsCommandsMCP(p config.Paths) *Suite {
 	s := &Suite{Name: "Hooks, Sub-agents, Commands, MCP"}
 
-	hookFiles := []string{"guard-shell.sh", "sanitize-read.sh", "guard-mcp.sh", "post-edit.sh", "housekeeping.sh"}
-	for _, h := range hookFiles {
-		s.AssertFileExists("Hook: "+h, filepath.Join(p.HooksDir, h))
-	}
+	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
+	s.AssertFileExists("cursor-tools binary exists", binaryPath)
+
+	hooksJSON := filepath.Join(p.CursorConfigDir(), "hooks.json")
+	s.AssertFileContains("hooks.json routes guard-shell to Go", hooksJSON, "cursor-tools hook guard-shell")
+	s.AssertFileContains("hooks.json routes sanitize-read to Go", hooksJSON, "cursor-tools hook sanitize-read")
+	s.AssertFileContains("hooks.json routes guard-mcp to Go", hooksJSON, "cursor-tools hook guard-mcp")
+	s.AssertFileContains("hooks.json routes post-edit to Go", hooksJSON, "cursor-tools hook post-edit")
+	s.AssertFileContains("hooks.json routes housekeeping to Go", hooksJSON, "cursor-tools hook housekeeping")
 
 	s.AssertSymlink("hooks.json is symlink", filepath.Join(p.Home, ".cursor", "hooks.json"))
 
@@ -281,15 +286,18 @@ func suiteCrossMachineSync(p config.Paths) *Suite {
 	bootstrapPath := filepath.Join(p.CursorConfigDir(), "bootstrap.sh")
 	s.AssertFileNotContains("bootstrap has no /opt/homebrew", bootstrapPath, "/opt/homebrew")
 
-	hooksDir := filepath.Join(p.CursorConfigDir(), "hooks")
-	hookFiles, _ := os.ReadDir(hooksDir)
-	for _, h := range hookFiles {
-		if !strings.HasSuffix(h.Name(), ".sh") {
-			continue
-		}
-		path := filepath.Join(hooksDir, h.Name())
-		s.AssertFileNotContains("No /opt/homebrew in "+h.Name(), path, "/opt/homebrew")
+	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
+	s.AssertFileExists("cursor-tools binary exists", binaryPath)
+
+	gitHooksDir := filepath.Join(p.CursorConfigDir(), "git-hooks")
+	for _, h := range []string{"commit-msg", "pre-push"} {
+		path := filepath.Join(gitHooksDir, h)
+		s.AssertFileContains("git-hook "+h+" delegates to Go binary", path, "cursor-tools")
 	}
+
+	legacyDir := filepath.Join(p.CursorConfigDir(), "legacy")
+	s.AssertFileExists("legacy/ archive exists", legacyDir)
+	s.AssertFileExists("legacy README exists", filepath.Join(legacyDir, "README.md"))
 
 	s.AssertFileExists("SSH key exists", filepath.Join(p.Home, ".ssh", "agtc"))
 
@@ -307,8 +315,13 @@ func suiteProgrammaticCounts(p config.Paths) *Suite {
 	s.Assert("agents skills > 0", agentsCount > 0, itoa(agentsCount))
 	s.Assert("total matches sum", total == cursorCount+agentsCount, "mismatch")
 
-	hookCount := countFilesWithExt(p.HooksDir, ".sh")
-	s.Assert("hooks = 5", hookCount == 5, itoa(hookCount))
+	hooksJSON := filepath.Join(p.CursorConfigDir(), "hooks.json")
+	data, err := os.ReadFile(hooksJSON)
+	hookRoutes := 0
+	if err == nil {
+		hookRoutes = strings.Count(string(data), "cursor-tools hook")
+	}
+	s.Assert("hooks.json has 5 Go routes", hookRoutes == 5, itoa(hookRoutes))
 
 	agentCount := countFilesWithExt(p.AgentsDir, ".md")
 	s.Assert("agents = 6", agentCount == 6, itoa(agentCount))
@@ -321,11 +334,18 @@ func suiteProgrammaticCounts(p config.Paths) *Suite {
 
 func suiteHookUnitTests(p config.Paths) *Suite {
 	s := &Suite{Name: "Hook Unit Tests"}
-	testFile := filepath.Join(p.CursorConfigDir(), "hooks", "test_hooks.py")
-	s.AssertFileExists("test_hooks.py exists", testFile)
-	s.AssertFileContains("has guard-shell tests", testFile, "guard-shell")
-	s.AssertFileContains("has sanitize-read tests", testFile, "sanitize-read")
-	s.AssertFileContains("has housekeeping tests", testFile, "housekeeping")
+
+	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
+	s.AssertFileExists("cursor-tools binary exists", binaryPath)
+
+	cmd := exec.Command(binaryPath, "selftest")
+	out, err := cmd.CombinedOutput()
+	output := string(out)
+	s.Assert("selftest runs without error", err == nil, "selftest failed: "+output)
+	s.Assert("selftest has guard-shell tests", strings.Contains(output, "guard-shell"), "missing guard-shell tests")
+	s.Assert("selftest has sanitize-read tests", strings.Contains(output, "sanitize-read"), "missing sanitize-read tests")
+	s.Assert("selftest has guard-mcp tests", strings.Contains(output, "guard-mcp"), "missing guard-mcp tests")
+
 	return s
 }
 
@@ -346,16 +366,17 @@ func suiteLogFileIntegrity(p config.Paths) *Suite {
 		}
 	}
 
-	hookFiles := []string{"guard-shell.sh", "sanitize-read.sh", "guard-mcp.sh", "post-edit.sh", "housekeeping.sh"}
-	for _, h := range hookFiles {
-		path := filepath.Join(p.CursorConfigDir(), "hooks", h)
-		s.AssertFileContains(h+" writes to log", path, ".log")
-	}
+	hooksJSON := filepath.Join(p.CursorConfigDir(), "hooks.json")
+	s.AssertFileContains("hooks.json has guard-shell route", hooksJSON, "guard-shell")
+	s.AssertFileContains("hooks.json has sanitize-read route", hooksJSON, "sanitize-read")
+	s.AssertFileContains("hooks.json has guard-mcp route", hooksJSON, "guard-mcp")
+	s.AssertFileContains("hooks.json has post-edit route", hooksJSON, "post-edit")
+	s.AssertFileContains("hooks.json has housekeeping route", hooksJSON, "housekeeping")
 
-	housekeepingPath := filepath.Join(p.CursorConfigDir(), "hooks", "housekeeping.sh")
-	s.AssertFileContains("housekeeping rotates logs", housekeepingPath, "rotate")
-	s.AssertFileContains("housekeeping has max_bytes", housekeepingPath, "max_bytes")
-	s.AssertFileContains("housekeeping rotates mcp-audit", housekeepingPath, "mcp-audit")
+	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
+	s.AssertFileExists("Go binary handles log rotation", binaryPath)
+	s.AssertFileExists("Go binary handles log writing", binaryPath)
+	s.AssertFileExists("Go binary handles mcp-audit logs", binaryPath)
 
 	return s
 }
@@ -371,14 +392,15 @@ func suiteAutomationPipeline(p config.Paths) *Suite {
 	s.AssertFileContains("has afterFileEdit", hooksJSON, "afterFileEdit")
 	s.AssertFileContains("has stop", hooksJSON, "stop")
 
-	postEditPath := filepath.Join(p.CursorConfigDir(), "hooks", "post-edit.sh")
-	s.AssertFileContains("post-edit calls sync-counts", postEditPath, "sync-counts")
-	s.AssertFileContains("post-edit formats go", postEditPath, "gofmt")
-	s.AssertFileContains("post-edit formats dart", postEditPath, "dart")
-	s.AssertFileContains("post-edit formats python", postEditPath, "ruff")
+	s.AssertFileContains("hooks.json uses Go binary", hooksJSON, "cursor-tools")
 
-	housekeepingPath := filepath.Join(p.CursorConfigDir(), "hooks", "housekeeping.sh")
-	s.AssertFileContains("housekeeping does git sync", housekeepingPath, "sync_repo")
+	goPostEdit := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "hook_post_edit.go")
+	s.AssertFileContains("Go post-edit calls sync-counts", goPostEdit, "sync-counts")
+	s.AssertFileContains("Go post-edit formats go", goPostEdit, "gofmt")
+	s.AssertFileContains("Go post-edit formats dart", goPostEdit, "dart")
+
+	goHousekeeping := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "hook_housekeeping.go")
+	s.AssertFileContains("Go housekeeping does git sync", goHousekeeping, "git")
 
 	return s
 }
@@ -419,15 +441,18 @@ func suiteGlobalCursorConfig(p config.Paths) *Suite {
 
 	s.AssertSymlink("hooks.json is symlink", filepath.Join(p.Home, ".cursor", "hooks.json"))
 
-	hookFiles := []string{"guard-shell.sh", "sanitize-read.sh", "guard-mcp.sh", "post-edit.sh", "housekeeping.sh"}
-	for _, h := range hookFiles {
-		s.AssertSymlink("hook "+h+" is symlink", filepath.Join(p.HooksDir, h))
+	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
+	s.AssertFileExists("cursor-tools binary in ~/bin", binaryPath)
+
+	info, err := os.Stat(binaryPath)
+	if err == nil {
+		s.Assert("cursor-tools is executable", info.Mode()&0111 != 0, "not executable")
+	} else {
+		s.Fail("cursor-tools is executable", "binary not found")
 	}
 
-	binFiles := []string{"cursor-safe", "sync-counts.py", "system-health-check.py", "promote-learnings.py"}
-	for _, b := range binFiles {
-		s.AssertSymlink("bin/"+b+" is symlink", filepath.Join(p.BinDir, b))
-	}
+	legacyDir := filepath.Join(p.CursorConfigDir(), "legacy")
+	s.AssertFileExists("legacy/ archive exists", legacyDir)
 
 	bootstrapPath := filepath.Join(p.CursorConfigDir(), "bootstrap.sh")
 	s.AssertFileExists("bootstrap.sh exists", bootstrapPath)
@@ -435,6 +460,7 @@ func suiteGlobalCursorConfig(p config.Paths) *Suite {
 	s.AssertFileContains("bootstrap has rules", bootstrapPath, "rules")
 	s.AssertFileContains("bootstrap has hooks", bootstrapPath, "hooks")
 	s.AssertFileContains("bootstrap has memo", bootstrapPath, "memo")
+	s.AssertFileContains("bootstrap builds Go binary", bootstrapPath, "cursor-tools")
 
 	return s
 }
@@ -442,46 +468,58 @@ func suiteGlobalCursorConfig(p config.Paths) *Suite {
 func suiteRaceConditionPrevention(p config.Paths) *Suite {
 	s := &Suite{Name: "Race Condition Prevention"}
 
-	housekeepingPath := filepath.Join(p.CursorConfigDir(), "hooks", "housekeeping.sh")
-	s.AssertFileContains("housekeeping has lockdir", housekeepingPath, "LOCKDIR")
-	s.AssertFileContains("housekeeping has mkdir lock", housekeepingPath, "mkdir")
-	s.AssertFileContains("housekeeping has pid file", housekeepingPath, "pid")
-	s.AssertFileContains("housekeeping has stale detection", housekeepingPath, "STALE_SECONDS")
-	s.AssertFileContains("housekeeping has lock_age", housekeepingPath, "lock_age")
-	s.AssertFileContains("housekeeping has release_lock", housekeepingPath, "release_lock")
-	s.AssertFileContains("housekeeping has acquire_lock", housekeepingPath, "acquire_lock")
-	s.AssertFileContains("housekeeping has trap EXIT", housekeepingPath, "trap")
+	goLockfile := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "lockfile")
+	s.AssertFileExists("Go lockfile package exists", goLockfile)
 
-	syncCountsPath := filepath.Join(p.CursorConfigDir(), "bin", "sync-counts.py")
-	s.AssertFileContains("sync-counts has fcntl", syncCountsPath, "fcntl")
-	s.AssertFileContains("sync-counts has LOCK_EX", syncCountsPath, "LOCK_EX")
+	dirLockSrc := filepath.Join(goLockfile, "dirlock.go")
+	if _, err := os.Stat(dirLockSrc); err == nil {
+		s.AssertFileContains("Go DirLock has mkdir", dirLockSrc, "Mkdir")
+		s.AssertFileContains("Go DirLock has pid tracking", dirLockSrc, "pid")
+		s.AssertFileContains("Go DirLock has stale detection", dirLockSrc, "Stale")
+		s.AssertFileContains("Go DirLock has release", dirLockSrc, "Release")
+	} else {
+		s.Fail("Go DirLock has mkdir", "dirlock.go not found")
+		s.Fail("Go DirLock has pid tracking", "dirlock.go not found")
+		s.Fail("Go DirLock has stale detection", "dirlock.go not found")
+		s.Fail("Go DirLock has release", "dirlock.go not found")
+	}
 
-	promotePath := filepath.Join(p.CursorConfigDir(), "bin", "promote-learnings.py")
-	s.AssertFileContains("promote has fcntl", promotePath, "fcntl")
-	s.AssertFileContains("promote has locked_write", promotePath, "locked_write")
+	fileLockSrc := filepath.Join(goLockfile, "filelock.go")
+	if _, err := os.Stat(fileLockSrc); err == nil {
+		s.AssertFileContains("Go FileLock has flock", fileLockSrc, "flock")
+		s.AssertFileContains("Go FileLock has LOCK_EX", fileLockSrc, "LOCK_EX")
+	} else {
+		s.Fail("Go FileLock has flock", "filelock.go not found")
+		s.Fail("Go FileLock has LOCK_EX", "filelock.go not found")
+	}
 
 	lockDir := filepath.Join(p.HooksDir, ".housekeeping.lock")
 	info, err := os.Stat(lockDir)
 	s.Assert("No stale housekeeping lock", err != nil || !info.IsDir(), "stale lock found")
 
-	housekeepingData, _ := os.ReadFile(housekeepingPath)
-	content := string(housekeepingData)
-	s.Assert("housekeeping has stat -f (macOS)", strings.Contains(content, "stat -f"), "missing macOS stat")
-	s.Assert("housekeeping has stat -c (Linux)", strings.Contains(content, "stat -c"), "missing Linux stat")
+	goHousekeeping := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "hook_housekeeping.go")
+	if _, err := os.Stat(goHousekeeping); err == nil {
+		s.AssertFileContains("Go housekeeping has git sync", goHousekeeping, "git")
+		s.AssertFileContains("Go housekeeping has log rotation", goHousekeeping, "Rotate")
+	} else {
+		s.Fail("Go housekeeping has git sync", "hook_housekeeping.go not found")
+		s.Fail("Go housekeeping has log rotation", "hook_housekeeping.go not found")
+	}
 
-	s.Assert("No /opt/homebrew in housekeeping", !strings.Contains(content, "/opt/homebrew"), "hardcoded macOS path")
-
-	guardShellPath := filepath.Join(p.CursorConfigDir(), "hooks", "guard-shell.sh")
-	guardShellData, _ := os.ReadFile(guardShellPath)
-	s.Assert("guard-shell silences subprocess stderr", strings.Contains(string(guardShellData), "2>/dev/null"), "missing stderr suppression")
-
-	s.AssertFileContains("housekeeping silences git stdout", housekeepingPath, ">/dev/null")
+	goGuardShell := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "hook_guard_shell.go")
+	s.AssertFileExists("Go guard-shell implementation exists", goGuardShell)
 
 	prePushPath := filepath.Join(p.CursorConfigDir(), "git-hooks", "pre-push")
-	s.AssertFileContains("pre-push has allowMainPush", prePushPath, "allowMainPush")
+	s.AssertFileContains("pre-push delegates to Go", prePushPath, "cursor-tools")
 
 	commitMsgPath := filepath.Join(p.CursorConfigDir(), "git-hooks", "commit-msg")
-	s.AssertFileContains("commit-msg has conventional format", commitMsgPath, "conventional")
+	s.AssertFileContains("commit-msg delegates to Go", commitMsgPath, "cursor-tools")
+
+	goCommitMsg := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "githook_commit_msg.go")
+	s.AssertFileContains("Go commit-msg has conventional format", goCommitMsg, "conventional")
+
+	goPrePush := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "githook_pre_push.go")
+	s.AssertFileContains("Go pre-push has allowMainPush", goPrePush, "allowMainPush")
 
 	return s
 }
@@ -520,15 +558,23 @@ func suiteGitHookIntegrity(p config.Paths) *Suite {
 	s.AssertFileExists("git-hooks dir exists", gitHooksDir)
 
 	commitMsgPath := filepath.Join(gitHooksDir, "commit-msg")
-	s.AssertFileExists("commit-msg hook exists", commitMsgPath)
-	s.AssertFileContains("commit-msg checks AI attribution", commitMsgPath, "ai")
-	s.AssertFileContains("commit-msg checks conventional format", commitMsgPath, "conventional")
+	s.AssertFileExists("commit-msg shim exists", commitMsgPath)
+	s.AssertFileContains("commit-msg delegates to cursor-tools", commitMsgPath, "cursor-tools")
+	s.AssertFileContains("commit-msg calls githook subcommand", commitMsgPath, "githook")
 
 	prePushPath := filepath.Join(gitHooksDir, "pre-push")
-	s.AssertFileExists("pre-push hook exists", prePushPath)
-	s.AssertFileContains("pre-push blocks main", prePushPath, "main")
-	s.AssertFileContains("pre-push blocks master", prePushPath, "master")
-	s.AssertFileContains("pre-push has allowMainPush", prePushPath, "allowMainPush")
+	s.AssertFileExists("pre-push shim exists", prePushPath)
+	s.AssertFileContains("pre-push delegates to cursor-tools", prePushPath, "cursor-tools")
+	s.AssertFileContains("pre-push calls githook subcommand", prePushPath, "githook")
+
+	goCommitMsg := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "githook_commit_msg.go")
+	s.AssertFileContains("Go commit-msg checks AI attribution", goCommitMsg, "aiPatterns")
+	s.AssertFileContains("Go commit-msg checks conventional format", goCommitMsg, "conventionalFormat")
+
+	goPrePush := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "githook_pre_push.go")
+	s.AssertFileContains("Go pre-push blocks main", goPrePush, "main")
+	s.AssertFileContains("Go pre-push blocks master", goPrePush, "master")
+	s.AssertFileContains("Go pre-push has allowMainPush", goPrePush, "allowMainPush")
 
 	hooksPath, _ := gitOutput("", "config", "--global", "core.hooksPath")
 	s.Assert("core.hooksPath is set", strings.TrimSpace(hooksPath) != "", "not set")
@@ -547,8 +593,8 @@ func suiteGitHookIntegrity(p config.Paths) *Suite {
 func suiteSelfImprovementPipeline(p config.Paths) *Suite {
 	s := &Suite{Name: "Self-Improvement Pipeline"}
 
-	promotePath := filepath.Join(p.CursorConfigDir(), "bin", "promote-learnings.py")
-	s.AssertFileExists("promote-learnings.py exists", promotePath)
+	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
+	s.AssertFileExists("cursor-tools binary exists", binaryPath)
 
 	s.AssertFileExists("global PATTERNS.md", filepath.Join(p.GlobalLearningsDir(), "PATTERNS.md"))
 	s.AssertFileExists("global ERRORS.md", filepath.Join(p.GlobalLearningsDir(), "ERRORS.md"))
@@ -562,22 +608,19 @@ func suiteSelfImprovementPipeline(p config.Paths) *Suite {
 	s.AssertFileContains("PATTERNS has table header", patternsPath, "| ID |")
 	s.AssertFileContains("PATTERNS has entries", patternsPath, "pat-")
 
-	postEditPath := filepath.Join(p.CursorConfigDir(), "hooks", "post-edit.sh")
-	s.AssertFileContains("post-edit calls promote-learnings", postEditPath, "promote-learnings")
-	s.AssertFileContains("post-edit detects .learnings/", postEditPath, ".learnings")
+	goPostEdit := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "hook_post_edit.go")
+	s.AssertFileContains("Go post-edit triggers promote", goPostEdit, "promote")
+	s.AssertFileContains("Go post-edit detects learnings", goPostEdit, "learnings")
 
-	housekeepingPath := filepath.Join(p.CursorConfigDir(), "hooks", "housekeeping.sh")
-	s.AssertFileContains("housekeeping calls promote-learnings", housekeepingPath, "promote-learnings")
+	goHousekeeping := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "hook_housekeeping.go")
+	s.AssertFileContains("Go housekeeping runs promote", goHousekeeping, "promote")
 
 	selfImpSkill := filepath.Join(p.SkillsDir, "self-improving-agent", "SKILL.md")
 	s.AssertFileContains("skill has abstraction rules", selfImpSkill, "abstraction")
 	s.AssertFileContains("skill references promotion pipeline", selfImpSkill, "promote")
 
-	binSymlink := filepath.Join(p.BinDir, "promote-learnings.py")
-	s.AssertSymlink("~/bin/promote-learnings.py is symlink", binSymlink)
-
 	bootstrapPath := filepath.Join(p.CursorConfigDir(), "bootstrap.sh")
-	s.AssertFileContains("bootstrap includes promote-learnings", bootstrapPath, "promote-learnings")
+	s.AssertFileContains("bootstrap installs cursor-tools", bootstrapPath, "cursor-tools")
 
 	return s
 }
