@@ -96,23 +96,32 @@ func WriteStdout(resp *Response) error {
 	return WriteResponse(os.Stdout, resp)
 }
 
-// Run reads input from stdin, passes it to the handler, and writes the response to stdout.
-// On handler error it writes an empty response. On deny it exits with code 2.
-func Run(h Handler) {
-	input, err := ReadStdin()
+// RunWithIO reads input from r, passes it to the handler, writes the response to w,
+// and returns exit code 2 for deny, 0 otherwise.
+func RunWithIO(h Handler, r io.Reader, w io.Writer) int {
+	input, err := ReadInput(r)
 	if err != nil {
-		_ = WriteStdout(Allow())
-		return
+		_ = WriteResponse(w, Allow())
+		return 0
 	}
 
 	resp, err := h.Handle(context.Background(), input)
 	if err != nil {
-		_ = WriteStdout(Allow())
-		return
+		_ = WriteResponse(w, Allow())
+		return 0
 	}
 
-	_ = WriteStdout(resp)
+	_ = WriteResponse(w, resp)
 	if resp.Permission == "deny" {
-		os.Exit(2)
+		return 2
+	}
+	return 0
+}
+
+// Run reads input from stdin, passes it to the handler, and writes the response to stdout.
+// On handler error it writes an empty response. On deny it exits with code 2.
+func Run(h Handler) {
+	if code := RunWithIO(h, os.Stdin, os.Stdout); code != 0 {
+		os.Exit(code)
 	}
 }
