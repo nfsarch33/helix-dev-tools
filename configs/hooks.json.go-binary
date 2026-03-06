@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "hooks": {
+    "beforeShellExecution": [
+      {
+        "command": "~/bin/cursor-tools hook guard-shell"
+      }
+    ],
+    "beforeReadFile": [
+      {
+        "command": "~/bin/cursor-tools hook sanitize-read"
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "~/bin/cursor-tools hook guard-mcp"
+      }
+    ],
+    "afterFileEdit": [
+      {
+        "command": "~/bin/cursor-tools hook post-edit"
+      }
+    ],
+    "stop": [
+      {
+        "command": "~/bin/cursor-tools hook housekeeping"
+      }
+    ]
+  }
+}

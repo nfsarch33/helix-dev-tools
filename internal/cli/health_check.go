@@ -2,15 +2,35 @@ package cli
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/health"
 )
 
 var healthCheckCmd = &cobra.Command{
 	Use:   "health-check",
-	Short: "Run 19-suite integration test (replaces system-health-check.py)",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("health-check: not yet implemented (Phase 3)")
-		return nil
-	},
+	Short: "Run 19-suite integration health check",
+	RunE:  runHealthCheck,
+}
+
+func runHealthCheck(_ *cobra.Command, _ []string) error {
+	fmt.Println("============================================================")
+	fmt.Println("  cursor-tools health-check")
+	fmt.Println("============================================================")
+
+	p := config.DefaultPaths()
+	runner := health.NewRunner()
+
+	for _, s := range health.BuildAllSuites(p) {
+		runner.Add(s)
+	}
+
+	pass, total := runner.Run()
+	if pass < total {
+		os.Exit(1)
+	}
+	return nil
 }

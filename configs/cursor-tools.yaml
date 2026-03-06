@@ -1,0 +1,9 @@
+global_kb: ~/Code/global-kb
+memo: ~/memo
+hooks_dir: ~/.cursor/hooks
+stale_lock_seconds: 300
+log_max_bytes: 512000
+
+promote:
+  l1_threshold: 3
+  l2_threshold: 5
