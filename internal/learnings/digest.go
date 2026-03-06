@@ -51,12 +51,7 @@ func GenerateL1Digest(learningsDir, pepperDir string, dryRun bool) int {
 		return 0
 	}
 
-	var qualifying []Pattern
-	for _, p := range pats {
-		if p.Applications >= 3 {
-			qualifying = append(qualifying, p)
-		}
-	}
+	qualifying := patternsAboveThreshold(pats, 3)
 	if len(qualifying) == 0 {
 		return 0
 	}
@@ -64,9 +59,7 @@ func GenerateL1Digest(learningsDir, pepperDir string, dryRun bool) int {
 		return len(qualifying)
 	}
 
-	sort.Slice(qualifying, func(i, j int) bool {
-		return qualifying[i].Applications > qualifying[j].Applications
-	})
+	sortPatternsDeterministic(qualifying)
 
 	var buf strings.Builder
 	buf.WriteString("# Learnings Digest (Auto-Generated)\n\n")
@@ -115,12 +108,7 @@ func GenerateL2SOP(learningsDir, sopDir string, dryRun bool) int {
 		return 0
 	}
 
-	var qualifying []Pattern
-	for _, p := range pats {
-		if p.Applications >= 5 {
-			qualifying = append(qualifying, p)
-		}
-	}
+	qualifying := patternsAboveThreshold(pats, 5)
 	if len(qualifying) == 0 {
 		return 0
 	}
@@ -148,9 +136,7 @@ func GenerateL2SOP(learningsDir, sopDir string, dryRun bool) int {
 	for _, cat := range cats {
 		buf.WriteString(fmt.Sprintf("## %s\n\n", strings.Title(cat)))
 		pats := byCategory[cat]
-		sort.Slice(pats, func(i, j int) bool {
-			return pats[i].Confidence > pats[j].Confidence
-		})
+		sortPatternsDeterministic(pats)
 		for _, p := range pats {
 			buf.WriteString(fmt.Sprintf("- **%s** (%.1f confidence): %s\n", p.ID, p.Confidence, p.Description))
 		}
@@ -160,4 +146,26 @@ func GenerateL2SOP(learningsDir, sopDir string, dryRun bool) int {
 	sopPath := filepath.Join(sopDir, "learned-patterns.md")
 	_ = lockfile.LockedWrite(lockFilePath(), sopPath, buf.String())
 	return len(qualifying)
+}
+
+func patternsAboveThreshold(pats map[string]Pattern, minApps int) []Pattern {
+	var result []Pattern
+	for _, p := range pats {
+		if p.Applications >= minApps {
+			result = append(result, p)
+		}
+	}
+	return result
+}
+
+func sortPatternsDeterministic(pats []Pattern) {
+	sort.Slice(pats, func(i, j int) bool {
+		if pats[i].Applications != pats[j].Applications {
+			return pats[i].Applications > pats[j].Applications
+		}
+		if pats[i].Confidence != pats[j].Confidence {
+			return pats[i].Confidence > pats[j].Confidence
+		}
+		return pats[i].ID < pats[j].ID
+	})
 }
