@@ -83,6 +83,18 @@ func (p Paths) LockFile(name string) string {
 	return filepath.Join(p.HooksDir, "."+name+".lock")
 }
 
+// SSHKeyPath returns the path to the SSH private key used for GitHub.
+// Checks for ~/.ssh/agtc first (macOS), falls back to ~/.ssh/wsl_ubuntu (WSL).
+func (p Paths) SSHKeyPath() string {
+	for _, name := range []string{"agtc", "wsl_ubuntu"} {
+		path := filepath.Join(p.Home, ".ssh", name)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return filepath.Join(p.Home, ".ssh", "agtc")
+}
+
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v

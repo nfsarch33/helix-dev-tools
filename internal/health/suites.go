@@ -299,7 +299,8 @@ func suiteCrossMachineSync(p config.Paths) *Suite {
 	s.AssertFileExists("legacy/ archive exists", legacyDir)
 	s.AssertFileExists("legacy README exists", filepath.Join(legacyDir, "README.md"))
 
-	s.AssertFileExists("SSH key exists", filepath.Join(p.Home, ".ssh", "agtc"))
+	sshKey := p.SSHKeyPath()
+	s.AssertFileExists("SSH key exists -- "+filepath.Base(sshKey), sshKey)
 
 	return s
 }
