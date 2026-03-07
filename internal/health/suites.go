@@ -308,6 +308,10 @@ func suiteCrossMachineSync(p config.Paths) *Suite {
 func suiteProgrammaticCounts(p config.Paths) *Suite {
 	s := &Suite{Name: "Programmatic Count Verification"}
 
+	// Note: The total number of assertions in this health check (currently 246)
+	// is documented in ~/memo/global-memories/daily-startup-prompt.md.
+	// If you add or remove assertions, update the count in that file.
+
 	cursorCount := countDirsWithFile(p.SkillsDir, "SKILL.md", map[string]bool{"00-index": true})
 	agentsCount := countDirsWithFile(p.AgentsSkillsDir, "SKILL.md", nil)
 	total := cursorCount + agentsCount
