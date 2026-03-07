@@ -120,23 +120,41 @@ func (h *postEditHandler) runSyncCounts() {
 	_ = cmd.Run()
 }
 
+type learningsAction int
+
+const (
+	learningsNone   learningsAction = iota
+	learningsLocal                  // workspace .learnings/ edit
+	learningsGlobal                 // global learnings edit (via ~/memo or ~/Code/global-kb)
+)
+
+func classifyLearningsPath(filePath string) (learningsAction, string) {
+	if strings.Contains(filePath, "/.learnings/") {
+		workspaceDir := filePath[:strings.Index(filePath, "/.learnings/")]
+		return learningsLocal, workspaceDir
+	}
+	if strings.Contains(filePath, "/memo/learnings/") ||
+		strings.Contains(filePath, "/global-kb/learnings/") {
+		return learningsGlobal, ""
+	}
+	return learningsNone, ""
+}
+
 func (h *postEditHandler) promoteLearningsIfNeeded(filePath string) {
 	selfBin, err := os.Executable()
 	if err != nil {
 		return
 	}
 
-	if strings.Contains(filePath, "/.learnings/") {
-		workspaceDir := filePath[:strings.Index(filePath, "/.learnings/")]
-		if isDir(filepath.Join(workspaceDir, ".learnings")) {
-			cmd := exec.Command(selfBin, "promote", "--workspace", workspaceDir)
+	action, wsDir := classifyLearningsPath(filePath)
+	switch action {
+	case learningsLocal:
+		if isDir(filepath.Join(wsDir, ".learnings")) {
+			cmd := exec.Command(selfBin, "promote", "--workspace", wsDir)
 			_ = cmd.Run()
-			h.log.Log(fmt.Sprintf("PROMOTE: learnings from %s", workspaceDir))
+			h.log.Log(fmt.Sprintf("PROMOTE: learnings from %s", wsDir))
 		}
-		return
-	}
-
-	if strings.Contains(filePath, "/memo/learnings/") {
+	case learningsGlobal:
 		cmd := exec.Command(selfBin, "promote")
 		_ = cmd.Run()
 		h.log.Log("PROMOTE: consolidated L1/L2 digests")
