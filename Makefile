@@ -3,7 +3,19 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 BINARY  := cursor-tools
 GOFLAGS := -race
 
-.PHONY: build test test-all lint install docker release clean
+HOST_OS   := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+HOST_ARCH := $(shell uname -m)
+ifeq ($(HOST_ARCH),x86_64)
+  HOST_GOARCH := amd64
+else ifeq ($(HOST_ARCH),aarch64)
+  HOST_GOARCH := arm64
+else ifeq ($(HOST_ARCH),arm64)
+  HOST_GOARCH := arm64
+else
+  HOST_GOARCH := $(HOST_ARCH)
+endif
+
+.PHONY: build test test-cover lint install docker docker-native release clean
 
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) ./cmd/cursor-tools/
@@ -23,12 +35,25 @@ install: build
 	@echo "Installed to ~/bin/$(BINARY)"
 
 docker:
-	docker build -f build/package/Dockerfile -t $(BINARY):$(VERSION) .
+	docker buildx build \
+	  --platform linux/amd64,linux/arm64 \
+	  --build-arg VERSION=$(VERSION) \
+	  -f build/package/Dockerfile \
+	  -t $(BINARY):$(VERSION) \
+	  .
+
+docker-native:
+	docker build \
+	  --build-arg VERSION=$(VERSION) \
+	  -f build/package/Dockerfile \
+	  -t $(BINARY):$(VERSION) \
+	  .
 
 release:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY)-darwin-arm64 ./cmd/cursor-tools/
 	CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY)-linux-amd64  ./cmd/cursor-tools/
-	@echo "Built: bin/$(BINARY)-darwin-arm64, bin/$(BINARY)-linux-amd64"
+	CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY)-linux-arm64  ./cmd/cursor-tools/
+	@echo "Built: darwin-arm64, linux-amd64, linux-arm64"
 
 clean:
 	rm -rf bin/ coverage.out
