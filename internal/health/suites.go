@@ -41,14 +41,14 @@ func suiteL0Rules(p config.Paths) *Suite {
 	rulesDir := p.RulesDir
 
 	expectedRules := []string{
-		"00-capabilities", "engineering-standards", "self-improvement",
-		"subagents", "template.rules", "zendesk-workspace.rules",
+		"00-capabilities", "devcontainer-execution", "engineering-standards",
+		"self-improvement", "subagents", "template.rules", "zendesk-workspace.rules",
 	}
 	s.AssertFileExists("Rules directory exists", rulesDir)
 
 	entries, err := os.ReadDir(rulesDir)
 	if err == nil {
-		s.Assert("Rules dir has files", len(entries) >= 6, "expected >= 6 rule files")
+		s.Assert("Rules dir has files", len(entries) >= 7, "expected >= 7 rule files")
 		nameSet := make(map[string]bool)
 		for _, e := range entries {
 			nameSet[strings.TrimSuffix(e.Name(), ".md")] = true
