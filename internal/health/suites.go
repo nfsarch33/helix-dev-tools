@@ -308,7 +308,7 @@ func suiteCrossMachineSync(p config.Paths) *Suite {
 func suiteProgrammaticCounts(p config.Paths) *Suite {
 	s := &Suite{Name: "Programmatic Count Verification"}
 
-	// Note: The total number of assertions in this health check (currently 246)
+	// Note: The total number of assertions in this health check (currently 250)
 	// is documented in ~/memo/global-memories/daily-startup-prompt.md.
 	// If you add or remove assertions, update the count in that file.
 
@@ -406,6 +406,11 @@ func suiteAutomationPipeline(p config.Paths) *Suite {
 
 	goHousekeeping := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "hook_housekeeping.go")
 	s.AssertFileContains("Go housekeeping does git sync", goHousekeeping, "git")
+
+	goDailyRefresh := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "daily_refresh.go")
+	s.AssertFileExists("Go daily-refresh exists", goDailyRefresh)
+	s.AssertFileContains("Go daily-refresh has MCP step", goDailyRefresh, "stepMCPIndex")
+	s.AssertFileContains("Go daily-refresh has git sync", goDailyRefresh, "stepGitSync")
 
 	return s
 }

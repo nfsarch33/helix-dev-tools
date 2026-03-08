@@ -27,6 +27,7 @@ func init() {
 	rootCmd.AddCommand(healthCheckCmd)
 	rootCmd.AddCommand(selftestCmd)
 	rootCmd.AddCommand(bootstrapCmd)
+	rootCmd.AddCommand(dailyRefreshCmd)
 	rootCmd.AddCommand(safeCmd)
 	rootCmd.AddCommand(versionCmd)
 }

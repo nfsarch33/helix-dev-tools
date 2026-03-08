@@ -68,6 +68,11 @@ func (p Paths) SOPDir() string {
 	return filepath.Join(p.GlobalKB, "sop")
 }
 
+// ToolsDir returns the tools directory within memo (~/memo/tools).
+func (p Paths) ToolsDir() string {
+	return filepath.Join(p.Memo, "tools")
+}
+
 // LogFile returns the log file path for a named hook.
 func (p Paths) LogFile(name string) string {
 	return filepath.Join(p.HooksDir, name+".log")
