@@ -1,3 +1,4 @@
 bin/
+cursor-tools
 coverage.out
 *.test
