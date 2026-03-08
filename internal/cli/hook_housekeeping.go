@@ -100,7 +100,12 @@ func (h *housekeepingHandler) syncRepo() {
 
 	if hasChanges(repoPath) {
 		gitCmd(repoPath, "add", "-A")
-		gitCmd(repoPath, "commit", "-m", "auto: session sync")
+		hostname, err := os.Hostname()
+		if err != nil {
+			hostname = "unknown"
+		}
+		commitMsg := fmt.Sprintf("auto: session sync [%s]", hostname)
+		gitCmd(repoPath, "commit", "-m", commitMsg)
 		h.log.Log("committed: unified-memory")
 	}
 
