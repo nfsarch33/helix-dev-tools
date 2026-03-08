@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
@@ -24,19 +26,33 @@ var sanitizeReadCmd = &cobra.Command{
 }
 
 type sanitizeReadHandler struct {
-	log *logger.Logger
+	log         *logger.Logger
+	metricsPath string
 }
 
 func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
+	start := time.Now()
 	if input.FilePath == "" {
 		return hookio.Allow(), nil
 	}
 
 	basename := filepath.Base(input.FilePath)
 
+	record := func(action, detail string) {
+		if h.metricsPath != "" {
+			_ = metrics.Record(h.metricsPath, metrics.Event{
+				Hook:      "sanitize-read",
+				Action:    action,
+				LatencyMs: time.Since(start).Milliseconds(),
+				Detail:    detail,
+			})
+		}
+	}
+
 	for _, blocked := range patterns.BlockedFilenames {
 		if basename == blocked {
 			h.log.Log(fmt.Sprintf("BLOCKED file=%q match=%q", input.FilePath, blocked))
+			record("deny", basename)
 			return hookio.Deny(
 				fmt.Sprintf("BLOCKED: '%s' likely contains secrets", basename),
 				fmt.Sprintf("File '%s' was blocked by sanitize-read because it likely contains secrets. Never read secret files.", basename),
@@ -46,6 +62,7 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 
 	if patterns.ContainsAny(input.FilePath, patterns.BlockedDirs) {
 		h.log.Log(fmt.Sprintf("BLOCKED file=%q dir=secrets", input.FilePath))
+		record("deny", input.FilePath)
 		return hookio.Deny(
 			fmt.Sprintf("BLOCKED: path contains secrets directory"),
 			fmt.Sprintf("Path '%s' is in a secrets directory and was blocked. Do not access secret directories.", input.FilePath),
@@ -55,6 +72,7 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	for _, ext := range patterns.BlockedExtensions {
 		if strings.HasSuffix(strings.ToLower(basename), ext) {
 			h.log.Log(fmt.Sprintf("BLOCKED file=%q ext=%q", input.FilePath, ext))
+			record("deny", basename)
 			return hookio.Deny(
 				fmt.Sprintf("BLOCKED: '%s' is a key/certificate file", basename),
 				"Key and certificate files are blocked by sanitize-read.",
@@ -62,12 +80,16 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 		}
 	}
 
+	record("allow", basename)
 	return hookio.Allow(), nil
 }
 
 func runSanitizeRead(stdin *os.File, stdout *os.File) error {
 	paths := config.DefaultPaths()
-	handler := &sanitizeReadHandler{log: logger.New(paths.LogFile("sanitize-read"))}
+	handler := &sanitizeReadHandler{
+		log:         logger.New(paths.LogFile("sanitize-read")),
+		metricsPath: paths.MetricsFile(),
+	}
 
 	input, err := hookio.ReadInput(stdin)
 	if err != nil {

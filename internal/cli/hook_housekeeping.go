@@ -56,6 +56,7 @@ func (h *housekeepingHandler) rotateAllLogs() {
 		"guard-shell.log",
 		"sanitize-read.log",
 		"post-edit.log",
+		"metrics.jsonl",
 	})
 }
 

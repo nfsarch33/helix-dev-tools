@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/lockfile"
 )
@@ -92,11 +93,11 @@ func runSyncCounts(_ *cobra.Command, _ []string) error {
 	p := config.DefaultPaths()
 	counts := getDiskCounts(p)
 
-	fmt.Printf("Disk counts:\n")
-	fmt.Printf("  Skills: %d (%d cursor + %d agents)\n", counts.TotalSkills, counts.CursorSkills, counts.AgentsSkills)
-	fmt.Printf("  Hooks: %d\n", counts.Hooks)
-	fmt.Printf("  Sub-agents: %d\n", counts.Agents)
-	fmt.Printf("  Commands: %d\n", counts.Commands)
+	fmt.Println("Disk counts:")
+	clilog.Info("Skills: %d (%d cursor + %d agents)", counts.TotalSkills, counts.CursorSkills, counts.AgentsSkills)
+	clilog.Info("Hooks: %d", counts.Hooks)
+	clilog.Info("Sub-agents: %d", counts.Agents)
+	clilog.Info("Commands: %d", counts.Commands)
 	fmt.Println()
 
 	indexFiles := map[string]string{
@@ -125,7 +126,7 @@ func runSyncCounts(_ *cobra.Command, _ []string) error {
 		}
 		data, err := os.ReadFile(fpath)
 		if err != nil {
-			fmt.Printf("  ERROR: file not found: %s\n", fpath)
+			clilog.Error("file not found: %s", fpath)
 			errors++
 			continue
 		}
@@ -133,38 +134,38 @@ func runSyncCounts(_ *cobra.Command, _ []string) error {
 		re := regexp.MustCompile(r.pattern)
 		match := re.FindString(content)
 		if match == "" {
-			fmt.Printf("  WARN: pattern not found in %s: %s\n", r.file, r.pattern)
+			clilog.Warn("pattern not found in %s: %s", r.file, r.pattern)
 			continue
 		}
 		if match == r.template {
-			fmt.Printf("  OK    %s: %s\n", r.file, match)
+			clilog.Success("%s: %s", r.file, match)
 			continue
 		}
-		fmt.Printf("  DRIFT %s:\n         was: %s\n         now: %s\n", r.file, match, r.template)
+		clilog.Warn("DRIFT %s:\n         was: %s\n         now: %s", r.file, match, r.template)
 		changes++
 
 		if syncCountsApply {
 			updated := strings.Replace(content, match, r.template, 1)
 			if err := lockfile.LockedWrite(lockPath, fpath, updated); err != nil {
-				fmt.Printf("         ERROR: %v\n", err)
+				clilog.Error("write failed: %v", err)
 				errors++
 			} else {
-				fmt.Printf("         APPLIED\n")
+				clilog.Success("APPLIED")
 			}
 		}
 	}
 
 	fmt.Println()
 	if changes == 0 {
-		fmt.Println("No drift detected. All counts match disk.")
+		clilog.Success("No drift detected. All counts match disk.")
 	} else if syncCountsApply {
-		fmt.Printf("%d file(s) updated.\n", changes)
+		clilog.Info("%d file(s) updated.", changes)
 	} else {
-		fmt.Printf("%d drift(s) found. Run with --apply to fix.\n", changes)
+		clilog.Warn("%d drift(s) found. Run with --apply to fix.", changes)
 	}
 
 	if errors > 0 {
-		fmt.Printf("%d error(s) encountered.\n", errors)
+		clilog.Error("%d error(s) encountered.", errors)
 		return fmt.Errorf("%d errors", errors)
 	}
 	return nil

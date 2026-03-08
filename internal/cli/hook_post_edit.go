@@ -8,12 +8,14 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
 
 var postEditCmd = &cobra.Command{
@@ -30,6 +32,7 @@ type postEditHandler struct {
 }
 
 func (h *postEditHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
+	start := time.Now()
 	if input.FilePath == "" {
 		return hookio.Empty(), nil
 	}
@@ -37,6 +40,13 @@ func (h *postEditHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 	h.formatFile(input.FilePath)
 	h.syncCountsIfNeeded(input.FilePath)
 	h.promoteLearningsIfNeeded(input.FilePath)
+
+	_ = metrics.Record(h.paths.MetricsFile(), metrics.Event{
+		Hook:      "post-edit",
+		Action:    "format",
+		LatencyMs: time.Since(start).Milliseconds(),
+		Detail:    filepath.Base(input.FilePath),
+	})
 
 	return hookio.Empty(), nil
 }

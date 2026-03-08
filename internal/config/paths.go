@@ -88,6 +88,11 @@ func (p Paths) LockFile(name string) string {
 	return filepath.Join(p.HooksDir, "."+name+".lock")
 }
 
+// MetricsFile returns the path to the JSONL metrics file.
+func (p Paths) MetricsFile() string {
+	return filepath.Join(p.HooksDir, "metrics.jsonl")
+}
+
 // SSHKeyPath returns the path to the SSH private key used for GitHub.
 // Checks for ~/.ssh/agtc first (macOS), falls back to ~/.ssh/wsl_ubuntu (WSL).
 func (p Paths) SSHKeyPath() string {

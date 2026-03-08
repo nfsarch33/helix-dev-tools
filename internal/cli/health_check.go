@@ -1,11 +1,11 @@
 package cli
 
 import (
-	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/health"
 )
@@ -17,9 +17,7 @@ var healthCheckCmd = &cobra.Command{
 }
 
 func runHealthCheck(_ *cobra.Command, _ []string) error {
-	fmt.Println("============================================================")
-	fmt.Println("  cursor-tools health-check")
-	fmt.Println("============================================================")
+	clilog.Header("cursor-tools health-check")
 
 	p := config.DefaultPaths()
 	runner := health.NewRunner()

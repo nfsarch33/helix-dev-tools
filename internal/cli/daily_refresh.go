@@ -11,7 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
 
 var dailyRefreshDryRun bool
@@ -32,20 +34,7 @@ const dailyLogPrefix = "[pepper-daily]"
 type dailyRefresher struct {
 	paths  config.Paths
 	dryRun bool
-	errors int
-}
-
-func (d *dailyRefresher) log(msg string) {
-	fmt.Printf("%s %s\n", dailyLogPrefix, msg)
-}
-
-func (d *dailyRefresher) warn(msg string) {
-	fmt.Fprintf(os.Stderr, "%s WARN: %s\n", dailyLogPrefix, msg)
-}
-
-func (d *dailyRefresher) fail(msg string) {
-	fmt.Fprintf(os.Stderr, "%s ERROR: %s\n", dailyLogPrefix, msg)
-	d.errors++
+	out    *clilog.Prefixed
 }
 
 func (d *dailyRefresher) setSSHCommand() {
@@ -56,32 +45,32 @@ func (d *dailyRefresher) setSSHCommand() {
 }
 
 func (d *dailyRefresher) stepMCPIndex() {
-	d.log("step 1/4: MCP index")
+	d.out.Info("step 1/5: MCP index")
 	mcpJSON := filepath.Join(d.paths.Home, ".cursor", "mcp.json")
 	outPath := filepath.Join(d.paths.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
 
 	if _, err := os.Stat(mcpJSON); err != nil {
-		d.warn("~/.cursor/mcp.json not found")
+		d.out.Warn("~/.cursor/mcp.json not found")
 		return
 	}
 	if d.dryRun {
-		d.log("[dry-run] would refresh MCP index: " + outPath)
+		d.out.Info("[dry-run] would refresh MCP index: %s", outPath)
 		return
 	}
 	updated, err := refreshMCPIndex(mcpJSON, outPath)
 	if err != nil {
-		d.fail("MCP index refresh failed: " + err.Error())
+		d.out.Error("MCP index refresh failed: %s", err.Error())
 		return
 	}
 	if updated {
-		d.log("MCP index: updated")
+		d.out.Info("MCP index: updated")
 	} else {
-		d.log("MCP index: no changes")
+		d.out.Info("MCP index: no changes")
 	}
 }
 
 func (d *dailyRefresher) stepRepoMemories() {
-	d.log("step 2/4: repo memories")
+	d.out.Info("step 2/5: repo memories")
 	listFile := filepath.Join(d.paths.ToolsDir(), "repos-to-sync.txt")
 	f, err := os.Open(listFile)
 	if err != nil {
@@ -101,12 +90,12 @@ func (d *dailyRefresher) stepRepoMemories() {
 			continue
 		}
 		if d.dryRun {
-			d.log("[dry-run] would sync repo: " + line)
+			d.out.Info("[dry-run] would sync repo: %s", line)
 			continue
 		}
 		counts := syncRepoMemories(line, dstDir)
-		d.log(fmt.Sprintf("repo %s: added=%d updated=%d skipped=%d",
-			filepath.Base(line), counts.added, counts.updated, counts.skipped))
+		d.out.Info("repo %s: added=%d updated=%d skipped=%d",
+			filepath.Base(line), counts.added, counts.updated, counts.skipped)
 	}
 }
 
@@ -158,11 +147,43 @@ func syncRepoMemories(srcDir, dstDir string) syncCounts {
 	return c
 }
 
+func (d *dailyRefresher) stepMetricsReport() {
+	d.out.Info("step 3/5: metrics report")
+	metricsPath := d.paths.MetricsFile()
+	outPath := filepath.Join(d.paths.GlobalMemoriesDir(), "system-performance.md")
+
+	events, err := metrics.Load(metricsPath)
+	if err != nil {
+		d.out.Warn("metrics load failed: %s", err.Error())
+		return
+	}
+
+	if len(events) == 0 {
+		d.out.Info("metrics: no data yet")
+		return
+	}
+
+	if d.dryRun {
+		d.out.Info("[dry-run] would generate metrics report: %s", outPath)
+		return
+	}
+
+	since := time.Now().UTC().Add(-7 * 24 * time.Hour)
+	summary := metrics.Summarise(events, since)
+	md := summary.Markdown()
+
+	if err := os.WriteFile(outPath, []byte(md), 0o644); err != nil {
+		d.out.Error("metrics report write failed: %s", err.Error())
+		return
+	}
+	d.out.Info("metrics: report updated (%d events)", summary.TotalEvents)
+}
+
 func (d *dailyRefresher) stepGitSync() {
-	d.log("step 3/4: git unified-memory")
+	d.out.Info("step 4/5: git unified-memory")
 	repoPath := d.paths.GlobalKB
 	if !isDir(repoPath + "/.git") {
-		d.warn("unified-memory repo not found")
+		d.out.Warn("unified-memory repo not found")
 		return
 	}
 	d.setSSHCommand()
@@ -173,12 +194,12 @@ func (d *dailyRefresher) stepGitSync() {
 	}
 
 	if d.dryRun {
-		d.log("[dry-run] would git sync: " + repoPath)
+		d.out.Info("[dry-run] would git sync: %s", repoPath)
 		return
 	}
 
 	if err := gitCmd(repoPath, "pull", "--rebase", "--autostash", "origin", "main"); err != nil {
-		d.warn("unified-memory: pull failed (offline?)")
+		d.out.Warn("unified-memory: pull failed (offline?)")
 	}
 
 	if hasChanges(repoPath) {
@@ -189,15 +210,15 @@ func (d *dailyRefresher) stepGitSync() {
 		}
 		commitMsg := fmt.Sprintf("auto: daily sync %s [%s]", time.Now().Format("2006-01-02"), hostname)
 		if err := gitCmd(repoPath, "commit", "-m", commitMsg); err != nil {
-			d.warn("unified-memory: commit failed")
+			d.out.Warn("unified-memory: commit failed")
 		} else {
-			d.log("unified-memory: committed and pushed")
+			d.out.Info("unified-memory: committed and pushed")
 		}
 		if err := gitCmd(repoPath, "push", "origin", "main"); err != nil {
-			d.warn("unified-memory: push failed (offline?)")
+			d.out.Warn("unified-memory: push failed (offline?)")
 		}
 	} else {
-		d.log("unified-memory: clean")
+		d.out.Info("unified-memory: clean")
 	}
 }
 
@@ -245,23 +266,23 @@ func (d *dailyRefresher) syncFile(label, src, dst string) {
 
 	dstData, err := os.ReadFile(dst)
 	if err == nil && bytes.Equal(srcData, dstData) {
-		d.log(label + ": up to date")
+		d.out.Info("%s: up to date", label)
 		return
 	}
 
 	if d.dryRun {
-		d.log("[dry-run] would sync " + label)
+		d.out.Info("[dry-run] would sync %s", label)
 		return
 	}
 	if err := os.WriteFile(dst, srcData, 0o644); err != nil {
-		d.warn(label + ": write failed")
+		d.out.Warn("%s: write failed", label)
 	} else {
-		d.log(label + ": synced")
+		d.out.Info("%s: synced", label)
 	}
 }
 
 func (d *dailyRefresher) stepSkillsSync() {
-	d.log("step 4/4: skills")
+	d.out.Info("step 5/5: skills")
 	skillsSrc := filepath.Join(d.paths.Memo, "skills")
 	skillsDst := d.paths.SkillsDir
 
@@ -294,12 +315,12 @@ func (d *dailyRefresher) stepSkillsSync() {
 
 		dstData, _ := os.ReadFile(dstSkill)
 		if bytes.Equal(srcData, dstData) {
-			d.log("skill " + name + ": up to date")
+			d.out.Info("skill %s: up to date", name)
 			continue
 		}
 
 		if d.dryRun {
-			d.log("[dry-run] would sync skill: " + name)
+			d.out.Info("[dry-run] would sync skill: %s", name)
 			continue
 		}
 
@@ -314,30 +335,33 @@ func (d *dailyRefresher) stepSkillsSync() {
 			dst := filepath.Join(dstDir, filepath.Base(md))
 			_ = os.WriteFile(dst, data, 0o644)
 		}
-		d.log("skill " + name + ": synced")
+		d.out.Info("skill %s: synced", name)
 	}
 }
 
 func runDailyRefresh(_ *cobra.Command, _ []string) error {
 	p := config.DefaultPaths()
+	out := clilog.NewPrefixed(dailyLogPrefix)
 	d := &dailyRefresher{
 		paths:  p,
 		dryRun: dailyRefreshDryRun,
+		out:    out,
 	}
 
 	if d.dryRun {
-		d.log("DRY-RUN MODE: no changes will be made")
+		d.out.Info("DRY-RUN MODE: no changes will be made")
 	}
 
 	d.stepMCPIndex()
 	d.stepRepoMemories()
+	d.stepMetricsReport()
 	d.stepGitSync()
 	d.stepSkillsSync()
 
-	if d.errors > 0 {
-		d.log(fmt.Sprintf("done with %d error(s)", d.errors))
-		return fmt.Errorf("%d error(s) during daily refresh", d.errors)
+	if out.Errors() > 0 {
+		d.out.Info("done with %d error(s)", out.Errors())
+		return fmt.Errorf("%d error(s) during daily refresh", out.Errors())
 	}
-	d.log("done")
+	d.out.Info("done")
 	return nil
 }

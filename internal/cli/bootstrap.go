@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
 
@@ -27,22 +28,23 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 	globalKB := p.GlobalKB
 	cursorConfig := p.CursorConfigDir()
 
+	out := clilog.NewPrefixed("[bootstrap]")
 	if bootstrapDryRun {
-		fmt.Println("[bootstrap] DRY-RUN MODE: no changes will be made")
+		out.Info("DRY-RUN MODE: no changes will be made")
 	}
-	fmt.Printf("[bootstrap] unified-memory: %s\n", globalKB)
+	out.Info("unified-memory: %s", globalKB)
 
 	// ~/memo symlink
 	memoLink := filepath.Join(p.Home, "memo")
 	if info, err := os.Lstat(memoLink); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			target, _ := os.Readlink(memoLink)
-			fmt.Printf("[bootstrap] ~/memo symlink already exists -> %s\n", target)
+			out.Info("~/memo symlink already exists -> %s", target)
 		} else if info.IsDir() {
-			fmt.Println("[bootstrap] WARN: ~/memo is a real directory (legacy). Back up and replace.")
+			out.Warn("~/memo is a real directory (legacy). Back up and replace.")
 		}
 	} else {
-		fmt.Printf("[bootstrap] Creating ~/memo symlink -> %s\n", globalKB)
+		out.Info("Creating ~/memo symlink -> %s", globalKB)
 		if !bootstrapDryRun {
 			_ = os.Symlink(globalKB, memoLink)
 		}
@@ -61,8 +63,7 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Directory-level symlinks
-	fmt.Println("[bootstrap] Creating directory-level symlinks...")
+	out.Info("Creating directory-level symlinks...")
 	dirLinks := [][2]string{
 		{p.SkillsDir, filepath.Join(cursorConfig, "skills")},
 		{p.RulesDir, filepath.Join(cursorConfig, "rules")},
@@ -74,8 +75,7 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 		safeSymlink(pair[0], pair[1], bootstrapDryRun)
 	}
 
-	// Hook file-level symlinks
-	fmt.Println("[bootstrap] Note: hooks are now handled by cursor-tools binary")
+	out.Info("Note: hooks are now handled by cursor-tools binary")
 
 	// hooks.json symlink
 	hooksJSON := filepath.Join(p.Home, ".cursor", "hooks.json")
@@ -86,7 +86,7 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 	selfBin, err := os.Executable()
 	if err == nil {
 		destBin := filepath.Join(p.BinDir, "cursor-tools")
-		fmt.Printf("[bootstrap] Installing binary: %s -> %s\n", selfBin, destBin)
+		out.Info("Installing binary: %s -> %s", selfBin, destBin)
 		if !bootstrapDryRun {
 			data, err := os.ReadFile(selfBin)
 			if err == nil {
@@ -98,7 +98,7 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 	// Git hooks path
 	gitHooksDir := filepath.Join(cursorConfig, "git-hooks")
 	if isDir(gitHooksDir) {
-		fmt.Printf("[bootstrap] Setting core.hooksPath -> %s\n", gitHooksDir)
+		out.Info("Setting core.hooksPath -> %s", gitHooksDir)
 		if !bootstrapDryRun {
 			gitCmd("", "config", "--global", "core.hooksPath", gitHooksDir)
 		}
@@ -106,7 +106,7 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 
 	// Allow main push for personal repo
 	if isDir(filepath.Join(globalKB, ".git")) {
-		fmt.Printf("[bootstrap] hooks.allowMainPush = true for %s\n", globalKB)
+		out.Info("hooks.allowMainPush = true for %s", globalKB)
 		if !bootstrapDryRun {
 			gitCmd(globalKB, "config", "hooks.allowMainPush", "true")
 		}
@@ -117,8 +117,8 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 		chmodDir(filepath.Join(cursorConfig, "git-hooks"), 0o755)
 	}
 
-	fmt.Println("[bootstrap] Restore complete.")
-	fmt.Println("[bootstrap] Verify: cursor-tools health-check")
+	out.Info("Restore complete.")
+	out.Info("Verify: cursor-tools health-check")
 	return nil
 }
 

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
 
@@ -141,20 +142,18 @@ func (r *Runner) Run() (int, int) {
 		fmt.Printf("  Suite %d: %s\n", i+1, s.Name)
 		for _, res := range s.Results {
 			if res.Passed {
-				fmt.Printf("  PASS  %s\n", res.Name)
+				clilog.Pass("%s", res.Name)
 			} else {
-				fmt.Printf("  FAIL  %s -- %s\n", res.Name, res.Detail)
+				clilog.Fail("%s -- %s", res.Name, res.Detail)
 			}
 		}
 		fmt.Println()
 	}
 
-	fmt.Println("============================================================")
-	fmt.Println("  RESULTS")
-	fmt.Println("============================================================")
+	clilog.Header("RESULTS")
 	fmt.Println()
 	fmt.Printf("%-52s %s\n", "Suite", "Pass  Total")
-	fmt.Println("--------------------------------------------------------------")
+	clilog.Divider()
 
 	totalPass := 0
 	totalCount := 0
@@ -170,19 +169,7 @@ func (r *Runner) Run() (int, int) {
 		fmt.Printf("  Suite %d: %-42s %d/%d   %s\n", i+1, s.Name, pass, total, status)
 	}
 
-	fmt.Println("--------------------------------------------------------------")
-	fmt.Printf("  %-50s %d/%d\n", "TOTAL", totalPass, totalCount)
-	fmt.Println()
-	fmt.Printf("  %d/%d assertions passed (%.0f%%)\n", totalPass, totalCount,
-		float64(totalPass)/float64(totalCount)*100)
-	fmt.Println()
-
-	if totalPass == totalCount {
-		fmt.Println("  ALL TESTS PASSED. System is healthy.")
-	} else {
-		fmt.Printf("  %d FAILURES detected.\n", totalCount-totalPass)
-	}
-	fmt.Println()
+	clilog.Summary(totalPass, totalCount)
 
 	return totalPass, totalCount
 }

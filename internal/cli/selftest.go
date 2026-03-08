@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
@@ -22,9 +23,7 @@ var selftestCmd = &cobra.Command{
 }
 
 func runSelftest(_ *cobra.Command, _ []string) error {
-	fmt.Println("============================================================")
-	fmt.Println("  cursor-tools selftest")
-	fmt.Println("============================================================")
+	clilog.Header("cursor-tools selftest")
 	fmt.Println()
 
 	pass, fail := 0, 0
@@ -47,10 +46,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 	for _, cmd := range testCmds {
 		action, _ := matcher.Match(cmd)
 		if action == patterns.ActionDeny {
-			fmt.Printf("    PASS  deny: %s\n", truncate(cmd, 60))
+			clilog.Pass("deny: %s", truncate(cmd, 60))
 			pass++
 		} else {
-			fmt.Printf("    FAIL  deny: %s (got %d)\n", truncate(cmd, 60), action)
+			clilog.Fail("deny: %s (got %d)", truncate(cmd, 60), action)
 			fail++
 		}
 	}
@@ -66,10 +65,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 	for _, cmd := range warnCmds {
 		action, _ := matcher.Match(cmd)
 		if action == patterns.ActionWarn {
-			fmt.Printf("    PASS  warn: %s\n", truncate(cmd, 60))
+			clilog.Pass("warn: %s", truncate(cmd, 60))
 			pass++
 		} else {
-			fmt.Printf("    FAIL  warn: %s (got %d)\n", truncate(cmd, 60), action)
+			clilog.Fail("warn: %s (got %d)", truncate(cmd, 60), action)
 			fail++
 		}
 	}
@@ -84,10 +83,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 	for _, cmd := range allowCmds {
 		action, _ := matcher.Match(cmd)
 		if action == patterns.ActionAllow {
-			fmt.Printf("    PASS  allow: %s\n", truncate(cmd, 60))
+			clilog.Pass("allow: %s", truncate(cmd, 60))
 			pass++
 		} else {
-			fmt.Printf("    FAIL  allow: %s (got %d)\n", truncate(cmd, 60), action)
+			clilog.Fail("allow: %s (got %d)", truncate(cmd, 60), action)
 			fail++
 		}
 	}
@@ -106,10 +105,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 		input := &hookio.Input{FilePath: fp}
 		resp, _ := handler.Handle(context.Background(), input)
 		if resp.Permission == "deny" {
-			fmt.Printf("    PASS  block: %s\n", fp)
+			clilog.Pass("block: %s", fp)
 			pass++
 		} else {
-			fmt.Printf("    FAIL  block: %s (got %s)\n", fp, resp.Permission)
+			clilog.Fail("block: %s (got %s)", fp, resp.Permission)
 			fail++
 		}
 	}
@@ -124,10 +123,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 		input := &hookio.Input{FilePath: fp}
 		resp, _ := handler.Handle(context.Background(), input)
 		if resp.Permission != "deny" {
-			fmt.Printf("    PASS  allow: %s\n", fp)
+			clilog.Pass("allow: %s", fp)
 			pass++
 		} else {
-			fmt.Printf("    FAIL  allow: %s (got deny)\n", fp)
+			clilog.Fail("allow: %s (got deny)", fp)
 			fail++
 		}
 	}
@@ -136,10 +135,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 	fmt.Println("  guard-mcp deny tests:")
 	for _, tool := range patterns.MCPDenyTools {
 		if patterns.MatchExact(tool, patterns.MCPDenyTools) {
-			fmt.Printf("    PASS  deny: %s\n", tool)
+			clilog.Pass("deny: %s", tool)
 			pass++
 		} else {
-			fmt.Printf("    FAIL  deny: %s\n", tool)
+			clilog.Fail("deny: %s", tool)
 			fail++
 		}
 	}
@@ -148,10 +147,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 	fmt.Println("  guard-mcp warn tests:")
 	for _, tool := range patterns.MCPWarnTools {
 		if patterns.MatchExact(tool, patterns.MCPWarnTools) {
-			fmt.Printf("    PASS  warn: %s\n", tool)
+			clilog.Pass("warn: %s", tool)
 			pass++
 		} else {
-			fmt.Printf("    FAIL  warn: %s\n", tool)
+			clilog.Fail("warn: %s", tool)
 			fail++
 		}
 	}
@@ -161,10 +160,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 	safeTools := []string{"search", "list_issues", "get_file_contents", "resolve_library_id"}
 	for _, tool := range safeTools {
 		if !patterns.MatchExact(tool, patterns.MCPDenyTools) && !patterns.MatchExact(tool, patterns.MCPWarnTools) {
-			fmt.Printf("    PASS  allow: %s\n", tool)
+			clilog.Pass("allow: %s", tool)
 			pass++
 		} else {
-			fmt.Printf("    FAIL  allow: %s\n", tool)
+			clilog.Fail("allow: %s", tool)
 			fail++
 		}
 	}
@@ -185,7 +184,7 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 	} {
 		input, err := hookio.ReadInput(strings.NewReader(tc.input))
 		if err != nil {
-			fmt.Printf("    FAIL  %s: parse error\n", tc.name)
+			clilog.Fail("%s: parse error", tc.name)
 			fail++
 			continue
 		}
@@ -203,10 +202,10 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 			ok = true
 		}
 		if ok {
-			fmt.Printf("    PASS  %s\n", tc.name)
+			clilog.Pass("%s", tc.name)
 			pass++
 		} else {
-			fmt.Printf("    FAIL  %s\n", tc.name)
+			clilog.Fail("%s", tc.name)
 			fail++
 		}
 	}
@@ -228,25 +227,20 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 		var parsed hookio.Response
 		_ = json.Unmarshal(buf.Bytes(), &parsed)
 		if parsed.Permission == tc.perm {
-			fmt.Printf("    PASS  %s\n", tc.name)
+			clilog.Pass("%s", tc.name)
 			pass++
 		} else {
-			fmt.Printf("    FAIL  %s (got %s)\n", tc.name, parsed.Permission)
+			clilog.Fail("%s (got %s)", tc.name, parsed.Permission)
 			fail++
 		}
 	}
 
 	fmt.Println()
-	fmt.Println("============================================================")
 	total := pass + fail
-	fmt.Printf("  %d/%d assertions passed (%.0f%%)\n", pass, total, float64(pass)/float64(total)*100)
+	clilog.Summary(pass, total)
 	if fail > 0 {
-		fmt.Printf("  %d FAILURES\n", fail)
 		os.Exit(1)
-	} else {
-		fmt.Println("  ALL TESTS PASSED")
 	}
-	fmt.Println("============================================================")
 	return nil
 }
 

@@ -308,7 +308,7 @@ func suiteCrossMachineSync(p config.Paths) *Suite {
 func suiteProgrammaticCounts(p config.Paths) *Suite {
 	s := &Suite{Name: "Programmatic Count Verification"}
 
-	// Note: The total number of assertions in this health check (currently 254)
+	// Note: The total number of assertions in this health check (currently 262)
 	// is documented in ~/memo/global-memories/daily-startup-prompt.md.
 	// If you add or remove assertions, update the count in that file.
 
@@ -418,6 +418,20 @@ func suiteAutomationPipeline(p config.Paths) *Suite {
 	s.AssertFileContains("Go mcp-index renders markdown", goMCPIndex, "renderMCPIndex")
 	s.AssertFileContains("Go mcp-index redacts env", goMCPIndex, "values redacted")
 
+	goMetricsStore := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "metrics", "store.go")
+	s.AssertFileExists("Go metrics store exists", goMetricsStore)
+	s.AssertFileContains("Go metrics has JSONL recording", goMetricsStore, "Record")
+	s.AssertFileContains("Go metrics has summarise", goMetricsStore, "Summarise")
+
+	goMetricsCmd := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "metrics_cmd.go")
+	s.AssertFileExists("Go metrics command exists", goMetricsCmd)
+
+	goClilog := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "clilog", "clilog.go")
+	s.AssertFileExists("Go clilog package exists", goClilog)
+	s.AssertFileContains("Go clilog has colour support", goClilog, "colorEnabled")
+
+	s.AssertFileContains("Go daily-refresh has metrics step", goDailyRefresh, "stepMetricsReport")
+
 	return s
 }
 
@@ -524,6 +538,7 @@ func suiteRaceConditionPrevention(p config.Paths) *Suite {
 
 	goGuardShell := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "hook_guard_shell.go")
 	s.AssertFileExists("Go guard-shell implementation exists", goGuardShell)
+	s.AssertFileContains("Go guard-shell records metrics", goGuardShell, "metrics.Record")
 
 	prePushPath := filepath.Join(p.CursorConfigDir(), "git-hooks", "pre-push")
 	s.AssertFileContains("pre-push delegates to Go", prePushPath, "cursor-tools")

@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
@@ -22,8 +24,9 @@ var guardShellCmd = &cobra.Command{
 }
 
 type guardShellHandler struct {
-	matcher *patterns.Matcher
-	log     *logger.Logger
+	matcher     *patterns.Matcher
+	log         *logger.Logger
+	metricsPath string
 }
 
 func newGuardShellHandler() (*guardShellHandler, error) {
@@ -33,12 +36,14 @@ func newGuardShellHandler() (*guardShellHandler, error) {
 	}
 	paths := config.DefaultPaths()
 	return &guardShellHandler{
-		matcher: m,
-		log:     logger.New(paths.LogFile("guard-shell")),
+		matcher:     m,
+		log:         logger.New(paths.LogFile("guard-shell")),
+		metricsPath: paths.MetricsFile(),
 	}, nil
 }
 
 func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
+	start := time.Now()
 	if input.Command == "" {
 		return hookio.Allow(), nil
 	}
@@ -54,26 +59,41 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 		patternShort = patternShort[:30]
 	}
 
+	var actionStr string
+	var resp *hookio.Response
+
 	switch action {
 	case patterns.ActionDeny:
+		actionStr = "deny"
 		h.log.Log(fmt.Sprintf("BLOCKED cmd=%q pattern=%q", cmdShort, patternShort))
-		return hookio.Deny(
+		resp = hookio.Deny(
 			fmt.Sprintf("BLOCKED: dangerous command detected (pattern: %s...)", patternShort),
 			"This command was BLOCKED by guard-shell because it matched a dangerous pattern. Do NOT attempt workarounds. Use a safe alternative.",
-		), nil
+		)
 	case patterns.ActionWarn:
+		actionStr = "warn"
 		h.log.Log(fmt.Sprintf("WARN cmd=%q pattern=%q", cmdShort, matchedPattern))
 		cmdDisplay := input.Command
 		if len(cmdDisplay) > 80 {
 			cmdDisplay = cmdDisplay[:80]
 		}
-		return hookio.Ask(
+		resp = hookio.Ask(
 			fmt.Sprintf("Requires confirmation: %s", cmdDisplay),
 			"This command requires user confirmation. Ask the user before proceeding.",
-		), nil
+		)
 	default:
-		return hookio.Allow(), nil
+		actionStr = "allow"
+		resp = hookio.Allow()
 	}
+
+	_ = metrics.Record(h.metricsPath, metrics.Event{
+		Hook:      "guard-shell",
+		Action:    actionStr,
+		LatencyMs: time.Since(start).Milliseconds(),
+		Detail:    cmdShort,
+	})
+
+	return resp, nil
 }
 
 func runGuardShell(stdin *os.File, stdout *os.File) error {

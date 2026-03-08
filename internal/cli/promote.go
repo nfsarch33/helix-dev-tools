@@ -1,10 +1,9 @@
 package cli
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/learnings"
 )
@@ -41,9 +40,9 @@ func runPromote(_ *cobra.Command, _ []string) error {
 		if promoteDryRun {
 			prefix = "[DRY-RUN] "
 		}
-		fmt.Printf("%sPromoted: %s\n", prefix, results.Summary())
+		clilog.Success("%sPromoted: %s", prefix, results.Summary())
 	} else {
-		fmt.Println("No promotions needed.")
+		clilog.Info("No promotions needed.")
 	}
 
 	return nil

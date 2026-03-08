@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
 
@@ -198,9 +199,9 @@ func runMCPIndex(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	if updated {
-		fmt.Printf("OK: updated %s\n", mcpIndexFlags.out)
+		clilog.Success("updated %s", mcpIndexFlags.out)
 	} else {
-		fmt.Printf("OK: no changes (%s)\n", mcpIndexFlags.out)
+		clilog.Success("no changes (%s)", mcpIndexFlags.out)
 	}
 	return nil
 }

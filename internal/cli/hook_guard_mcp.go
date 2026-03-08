@@ -4,12 +4,14 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
@@ -22,10 +24,12 @@ var guardMcpCmd = &cobra.Command{
 }
 
 type guardMcpHandler struct {
-	log *logger.Logger
+	log         *logger.Logger
+	metricsPath string
 }
 
 func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
+	start := time.Now()
 	if input.ToolName == "" {
 		return &hookio.Response{Permission: "allow"}, nil
 	}
@@ -36,26 +40,42 @@ func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 	}
 	h.log.Log(fmt.Sprintf("MCP: %s input=%q", input.ToolName, toolInputShort))
 
+	var actionStr string
+	var resp *hookio.Response
+
 	if patterns.MatchExact(input.ToolName, patterns.MCPDenyTools) {
-		return hookio.Deny(
+		actionStr = "deny"
+		resp = hookio.Deny(
 			fmt.Sprintf("BLOCKED: MCP tool '%s' is destructive", input.ToolName),
 			fmt.Sprintf("Tool '%s' is blocked by guard-mcp hook. Use a non-destructive alternative.", input.ToolName),
-		), nil
-	}
-
-	if patterns.MatchExact(input.ToolName, patterns.MCPWarnTools) {
-		return hookio.Ask(
+		)
+	} else if patterns.MatchExact(input.ToolName, patterns.MCPWarnTools) {
+		actionStr = "warn"
+		resp = hookio.Ask(
 			fmt.Sprintf("MCP '%s' modifies state. Confirm?", input.ToolName),
 			fmt.Sprintf("Tool '%s' requires user confirmation as it modifies external state.", input.ToolName),
-		), nil
+		)
+	} else {
+		actionStr = "allow"
+		resp = &hookio.Response{Permission: "allow"}
 	}
 
-	return &hookio.Response{Permission: "allow"}, nil
+	_ = metrics.Record(h.metricsPath, metrics.Event{
+		Hook:      "guard-mcp",
+		Action:    actionStr,
+		LatencyMs: time.Since(start).Milliseconds(),
+		Detail:    input.ToolName,
+	})
+
+	return resp, nil
 }
 
 func runGuardMcp(stdin *os.File, stdout *os.File) error {
 	paths := config.DefaultPaths()
-	handler := &guardMcpHandler{log: logger.New(paths.LogFile("mcp-audit"))}
+	handler := &guardMcpHandler{
+		log:         logger.New(paths.LogFile("mcp-audit")),
+		metricsPath: paths.MetricsFile(),
+	}
 
 	input, err := hookio.ReadInput(stdin)
 	if err != nil {
