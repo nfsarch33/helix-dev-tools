@@ -148,6 +148,136 @@ var _ = Describe("Metrics Store", func() {
 		})
 	})
 
+	Describe("effectiveDuration", func() {
+		It("prefers DurationMs when set", func() {
+			e := metrics.Event{DurationMs: 500, LatencyMs: 2}
+			Expect(metrics.EffectiveDuration(e)).To(Equal(int64(500)))
+		})
+
+		It("falls back to LatencyMs when DurationMs is zero", func() {
+			e := metrics.Event{DurationMs: 0, LatencyMs: 3}
+			Expect(metrics.EffectiveDuration(e)).To(Equal(int64(3)))
+		})
+
+		It("returns zero when both are zero", func() {
+			e := metrics.Event{}
+			Expect(metrics.EffectiveDuration(e)).To(Equal(int64(0)))
+		})
+	})
+
+	Describe("buildCategoryStats with hook events", func() {
+		now := time.Now().UTC()
+
+		It("counts hook events with Category set", func() {
+			events := []metrics.Event{
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 1},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 0},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", LatencyMs: 1},
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			Expect(summary.Categories).To(HaveLen(2))
+		})
+
+		It("uses LatencyMs for hook events without DurationMs", func() {
+			events := []metrics.Event{
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 5},
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			Expect(summary.Categories).To(HaveLen(1))
+			Expect(summary.Categories[0].AvgDuration).To(BeNumerically("==", 5))
+		})
+
+		It("mixed tracked and hook events both appear in categories", func() {
+			events := []metrics.Event{
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 1},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "shell", DurationMs: 2000},
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			Expect(summary.Categories).To(HaveLen(1))
+			Expect(summary.Categories[0].Count).To(Equal(2))
+		})
+	})
+
+	Describe("Summary.Analyse", func() {
+		now := time.Now().UTC()
+
+		It("flags high intervention rate", func() {
+			events := []metrics.Event{
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "deny", Category: "shell", LatencyMs: 1, Detail: "rm -rf /"},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "deny", Category: "shell", LatencyMs: 1, Detail: "rm -rf /tmp"},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 0},
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			recs := summary.Analyse()
+			found := false
+			for _, r := range recs {
+				if r.Severity == "warn" && r.Category == "intervention" {
+					found = true
+				}
+			}
+			Expect(found).To(BeTrue(), "expected intervention rate recommendation")
+		})
+
+		It("flags slow hooks", func() {
+			events := []metrics.Event{
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "post-edit", Action: "format", Category: "tool", LatencyMs: 200},
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			recs := summary.Analyse()
+			found := false
+			for _, r := range recs {
+				if r.Severity == "warn" && r.Category == "latency" {
+					found = true
+				}
+			}
+			Expect(found).To(BeTrue(), "expected slow hook recommendation")
+		})
+
+		It("flags degrading trend", func() {
+			events := []metrics.Event{
+				{Timestamp: now.Add(-48 * time.Hour), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 1},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "deny", Category: "shell", LatencyMs: 100, Detail: "rm -rf /"},
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			recs := summary.Analyse()
+			Expect(recs).NotTo(BeEmpty())
+		})
+
+		It("returns empty for healthy system", func() {
+			events := []metrics.Event{
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 0},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "sanitize-read", Action: "allow", Category: "tool", LatencyMs: 0},
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			recs := summary.Analyse()
+			Expect(recs).To(BeEmpty())
+		})
+
+		It("flags high P95 in tracked category", func() {
+			var events []metrics.Event
+			for i := 0; i < 20; i++ {
+				events = append(events, metrics.Event{
+					Timestamp:  now.Add(-1 * time.Hour),
+					Hook:       "track",
+					Action:     "record",
+					Category:   "mcp",
+					DurationMs: int64(2000 + i*100),
+				})
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			Expect(summary.Categories).NotTo(BeEmpty())
+			Expect(summary.Categories[0].P95Duration).To(BeNumerically(">", 2000))
+			recs := summary.Analyse()
+			found := false
+			for _, r := range recs {
+				if r.Category == "performance" {
+					found = true
+				}
+			}
+			Expect(found).To(BeTrue(), "expected P95 performance recommendation")
+		})
+	})
+
 	Describe("Summary.Markdown", func() {
 		It("renders valid markdown with hook table", func() {
 			events := []metrics.Event{

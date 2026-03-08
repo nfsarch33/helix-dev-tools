@@ -43,6 +43,7 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 			_ = metrics.Record(h.metricsPath, metrics.Event{
 				Hook:      "sanitize-read",
 				Action:    action,
+				Category:  "tool",
 				LatencyMs: time.Since(start).Milliseconds(),
 				Detail:    detail,
 			})

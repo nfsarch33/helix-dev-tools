@@ -44,6 +44,7 @@ func (h *postEditHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 	_ = metrics.Record(h.paths.MetricsFile(), metrics.Event{
 		Hook:      "post-edit",
 		Action:    "format",
+		Category:  "tool",
 		LatencyMs: time.Since(start).Milliseconds(),
 		Detail:    filepath.Base(input.FilePath),
 	})

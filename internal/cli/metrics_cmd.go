@@ -16,6 +16,7 @@ var metricsFlags struct {
 	days    int
 	export  string
 	compact bool
+	analyse bool
 }
 
 var metricsCmd = &cobra.Command{
@@ -29,6 +30,7 @@ func init() {
 	metricsCmd.Flags().IntVar(&metricsFlags.days, "days", 7, "Number of days to include in the report")
 	metricsCmd.Flags().StringVar(&metricsFlags.export, "export", "", "Export markdown report to file (e.g. ~/memo/global-memories/system-performance.md)")
 	metricsCmd.Flags().BoolVar(&metricsFlags.compact, "compact", false, "Single-line output for embedding in prompts")
+	metricsCmd.Flags().BoolVar(&metricsFlags.analyse, "analyse", false, "Show actionable recommendations from data patterns")
 }
 
 func runMetrics(_ *cobra.Command, _ []string) error {
@@ -101,6 +103,26 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 		}
 	}
 	fmt.Println()
+
+	recs := summary.Analyse()
+	if metricsFlags.analyse || len(recs) > 0 {
+		if len(recs) > 0 {
+			fmt.Println("  Recommendations:")
+			for _, r := range recs {
+				icon := "  INFO "
+				if r.Severity == "warn" {
+					icon = "  WARN "
+				} else if r.Severity == "critical" {
+					icon = "  CRIT "
+				}
+				fmt.Printf("  %s [%s] %s\n", icon, r.Category, r.Message)
+			}
+			fmt.Println()
+		} else if metricsFlags.analyse {
+			clilog.Success("No recommendations. System is healthy.")
+			fmt.Println()
+		}
+	}
 
 	if metricsFlags.export != "" {
 		md := summary.Markdown()

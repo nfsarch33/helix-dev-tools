@@ -89,6 +89,7 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 	_ = metrics.Record(h.metricsPath, metrics.Event{
 		Hook:      "guard-shell",
 		Action:    actionStr,
+		Category:  "shell",
 		LatencyMs: time.Since(start).Milliseconds(),
 		Detail:    cmdShort,
 		BytesIn:   int64(len(input.Command)),

@@ -92,15 +92,15 @@ var _ = Describe("CategoryStats in Summarise", func() {
 		Expect(summary.Categories[0].Category).To(Equal("mcp"))
 	})
 
-	It("excludes events with zero duration", func() {
+	It("counts zero-duration events (hook events with 0ms latency)", func() {
 		events := []metrics.Event{
-			{Timestamp: now.Add(-1 * hour), Hook: "track", Action: "record", Category: "mcp", Detail: "test", DurationMs: 0},
-			{Timestamp: now.Add(-1 * hour), Hook: "track", Action: "record", Category: "mcp", Detail: "test2", DurationMs: 100},
+			{Timestamp: now.Add(-1 * hour), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 0},
+			{Timestamp: now.Add(-1 * hour), Hook: "track", Action: "record", Category: "shell", DurationMs: 100},
 		}
 
 		summary := metrics.Summarise(events, now.Add(-24*hour))
 		Expect(summary.Categories).To(HaveLen(1))
-		Expect(summary.Categories[0].Count).To(Equal(1))
+		Expect(summary.Categories[0].Count).To(Equal(2))
 	})
 
 	It("returns empty categories for no tracked events", func() {

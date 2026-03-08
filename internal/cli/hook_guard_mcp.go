@@ -63,6 +63,7 @@ func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 	_ = metrics.Record(h.metricsPath, metrics.Event{
 		Hook:      "guard-mcp",
 		Action:    actionStr,
+		Category:  "mcp",
 		LatencyMs: time.Since(start).Milliseconds(),
 		Detail:    input.ToolName,
 		BytesIn:   int64(len(input.ToolName) + len(input.ToolInput)),

@@ -222,6 +222,82 @@ func Summarise(events []Event, since time.Time) *Summary {
 	return s
 }
 
+// Recommendation is an actionable insight derived from metrics analysis.
+type Recommendation struct {
+	Severity string // "info", "warn", "critical"
+	Category string // "intervention", "latency", "performance", "trend"
+	Message  string
+}
+
+// Analyse examines the summary data and returns actionable recommendations.
+func (s *Summary) Analyse() []Recommendation {
+	var recs []Recommendation
+
+	totalDeny, totalWarn, totalAll := 0, 0, 0
+	for _, h := range s.Hooks {
+		totalDeny += h.DenyCount
+		totalWarn += h.WarnCount
+		totalAll += h.Total
+	}
+
+	if totalAll > 0 {
+		rate := float64(totalDeny+totalWarn) / float64(totalAll) * 100
+		if rate > 10 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "intervention",
+				Message:  fmt.Sprintf("High intervention rate (%.1f%%). Review deny patterns for false positives.", rate),
+			})
+		}
+	}
+
+	for _, h := range s.Hooks {
+		if h.AvgLatency > 50 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "latency",
+				Message:  fmt.Sprintf("Hook '%s' avg latency %.0fms exceeds 50ms threshold. Profile for optimisation.", h.Hook, h.AvgLatency),
+			})
+		}
+		if h.MaxLatency > 500 {
+			recs = append(recs, Recommendation{
+				Severity: "info",
+				Category: "latency",
+				Message:  fmt.Sprintf("Hook '%s' max latency %dms. Likely cold-start; monitor if recurring.", h.Hook, h.MaxLatency),
+			})
+		}
+	}
+
+	for _, c := range s.Categories {
+		if c.P95Duration > 2000 && c.Count >= 5 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "performance",
+				Message:  fmt.Sprintf("Category '%s' P95=%dms (n=%d). Investigate slow operations.", c.Category, c.P95Duration, c.Count),
+			})
+		}
+	}
+
+	if s.Trend.HasPrev {
+		if s.Trend.IntervRateDelta > 5 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "trend",
+				Message:  fmt.Sprintf("Intervention rate increasing by %.1f%% period-over-period.", s.Trend.IntervRateDelta),
+			})
+		}
+		if s.Trend.AvgLatDelta > 20 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "trend",
+				Message:  fmt.Sprintf("Average latency increasing by %.1fms period-over-period.", s.Trend.AvgLatDelta),
+			})
+		}
+	}
+
+	return recs
+}
+
 // Markdown renders the summary as a Markdown report.
 func (s *Summary) Markdown() string {
 	var b strings.Builder
@@ -438,13 +514,24 @@ func (a *hookAccumulator) stats() HookStats {
 	}
 }
 
+// EffectiveDuration returns the best timing value for an event: DurationMs for
+// tracked operations, LatencyMs for hook events (hook overhead), or 0 if no
+// timing data is available.
+func EffectiveDuration(e Event) int64 {
+	if e.DurationMs > 0 {
+		return e.DurationMs
+	}
+	return e.LatencyMs
+}
+
 func buildCategoryStats(events []Event, since time.Time) []CategoryStats {
 	catDurations := make(map[string][]int64)
 	for _, e := range events {
-		if e.Timestamp.Before(since) || e.Category == "" || e.DurationMs <= 0 {
+		if e.Timestamp.Before(since) || e.Category == "" {
 			continue
 		}
-		catDurations[e.Category] = append(catDurations[e.Category], e.DurationMs)
+		dur := EffectiveDuration(e)
+		catDurations[e.Category] = append(catDurations[e.Category], dur)
 	}
 
 	stats := make([]CategoryStats, 0, len(catDurations))
