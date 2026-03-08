@@ -89,16 +89,22 @@ type replacement struct {
 	template string
 }
 
-func runSyncCounts(_ *cobra.Command, _ []string) error {
+// SyncCountsApply counts skills/hooks on disk and updates index files.
+// When apply is true, files are rewritten in place. When quiet is true,
+// only drift and errors are printed (used by health-check).
+// Returns (changes, errors).
+func SyncCountsApply(apply, quiet bool) (int, int) {
 	p := config.DefaultPaths()
 	counts := getDiskCounts(p)
 
-	fmt.Println("Disk counts:")
-	clilog.Info("Skills: %d (%d cursor + %d agents)", counts.TotalSkills, counts.CursorSkills, counts.AgentsSkills)
-	clilog.Info("Hooks: %d", counts.Hooks)
-	clilog.Info("Sub-agents: %d", counts.Agents)
-	clilog.Info("Commands: %d", counts.Commands)
-	fmt.Println()
+	if !quiet {
+		fmt.Println("Disk counts:")
+		clilog.Info("Skills: %d (%d cursor + %d agents)", counts.TotalSkills, counts.CursorSkills, counts.AgentsSkills)
+		clilog.Info("Hooks: %d", counts.Hooks)
+		clilog.Info("Sub-agents: %d", counts.Agents)
+		clilog.Info("Commands: %d", counts.Commands)
+		fmt.Println()
+	}
 
 	indexFiles := map[string]string{
 		"daily-startup-prompt": filepath.Join(p.GlobalMemoriesDir(), "daily-startup-prompt.md"),
@@ -126,7 +132,9 @@ func runSyncCounts(_ *cobra.Command, _ []string) error {
 		}
 		data, err := os.ReadFile(fpath)
 		if err != nil {
-			clilog.Error("file not found: %s", fpath)
+			if !quiet {
+				clilog.Error("file not found: %s", fpath)
+			}
 			errors++
 			continue
 		}
@@ -134,38 +142,52 @@ func runSyncCounts(_ *cobra.Command, _ []string) error {
 		re := regexp.MustCompile(r.pattern)
 		match := re.FindString(content)
 		if match == "" {
-			clilog.Warn("pattern not found in %s: %s", r.file, r.pattern)
+			if !quiet {
+				clilog.Warn("pattern not found in %s: %s", r.file, r.pattern)
+			}
 			continue
 		}
 		if match == r.template {
-			clilog.Success("%s: %s", r.file, match)
+			if !quiet {
+				clilog.Success("%s: %s", r.file, match)
+			}
 			continue
 		}
-		clilog.Warn("DRIFT %s:\n         was: %s\n         now: %s", r.file, match, r.template)
+		if !quiet {
+			clilog.Warn("DRIFT %s:\n         was: %s\n         now: %s", r.file, match, r.template)
+		}
 		changes++
 
-		if syncCountsApply {
+		if apply {
 			updated := strings.Replace(content, match, r.template, 1)
 			if err := lockfile.LockedWrite(lockPath, fpath, updated); err != nil {
-				clilog.Error("write failed: %v", err)
+				if !quiet {
+					clilog.Error("write failed: %v", err)
+				}
 				errors++
-			} else {
+			} else if !quiet {
 				clilog.Success("APPLIED")
 			}
 		}
 	}
 
-	fmt.Println()
-	if changes == 0 {
-		clilog.Success("No drift detected. All counts match disk.")
-	} else if syncCountsApply {
-		clilog.Info("%d file(s) updated.", changes)
-	} else {
-		clilog.Warn("%d drift(s) found. Run with --apply to fix.", changes)
+	if !quiet {
+		fmt.Println()
+		if changes == 0 {
+			clilog.Success("No drift detected. All counts match disk.")
+		} else if apply {
+			clilog.Info("%d file(s) updated.", changes)
+		} else {
+			clilog.Warn("%d drift(s) found. Run with --apply to fix.", changes)
+		}
 	}
 
+	return changes, errors
+}
+
+func runSyncCounts(_ *cobra.Command, _ []string) error {
+	_, errors := SyncCountsApply(syncCountsApply, false)
 	if errors > 0 {
-		clilog.Error("%d error(s) encountered.", errors)
 		return fmt.Errorf("%d errors", errors)
 	}
 	return nil

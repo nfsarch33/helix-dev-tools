@@ -19,6 +19,11 @@ var healthCheckCmd = &cobra.Command{
 func runHealthCheck(_ *cobra.Command, _ []string) error {
 	clilog.Header("cursor-tools health-check")
 
+	changes, _ := SyncCountsApply(true, true)
+	if changes > 0 {
+		clilog.Info("sync-counts: fixed %d index drift(s)", changes)
+	}
+
 	p := config.DefaultPaths()
 	runner := health.NewRunner()
 
