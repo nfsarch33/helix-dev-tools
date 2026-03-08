@@ -30,6 +30,7 @@ func init() {
 	rootCmd.AddCommand(dailyRefreshCmd)
 	rootCmd.AddCommand(mcpIndexCmd)
 	rootCmd.AddCommand(metricsCmd)
+	rootCmd.AddCommand(trackCmd)
 	rootCmd.AddCommand(safeCmd)
 	rootCmd.AddCommand(versionCmd)
 }

@@ -77,6 +77,16 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 			totalDeny+totalWarn, totalAll, rate)
 	}
 
+	if len(summary.Categories) > 0 {
+		fmt.Println("\n  Operation Timing by Category:")
+		fmt.Printf("  %-12s %6s %10s %10s %10s %10s\n", "Category", "Count", "Avg(ms)", "P95(ms)", "Max(ms)", "Total(s)")
+		clilog.Divider()
+		for _, c := range summary.Categories {
+			fmt.Printf("  %-12s %6d %10.0f %10d %10d %10.1f\n",
+				c.Category, c.Count, c.AvgDuration, c.P95Duration, c.MaxDuration, float64(c.TotalMs)/1000)
+		}
+	}
+
 	if len(summary.TopDenied) > 0 {
 		fmt.Println("\n  Top blocked (deny):")
 		for i, d := range summary.TopDenied {

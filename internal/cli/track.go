@@ -1,0 +1,140 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+	"time"
+
+	"github.com/spf13/cobra"
+
+	"github.com/nfsarch33/cursor-tools/internal/clilog"
+	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
+)
+
+var trackFlags struct {
+	category   string
+	name       string
+	durationMs int64
+}
+
+var trackCmd = &cobra.Command{
+	Use:   "track [--cat CATEGORY] --name NAME [--ms DURATION] [-- COMMAND...]",
+	Short: "Record timed operation metrics for analytics",
+	Long: `Record execution timing for any operation: MCP tools, skills, subagents, scripts.
+
+Two modes:
+  Manual:  cursor-tools track --cat mcp --name context7.resolve --ms 1234
+  Wrapper: cursor-tools track --cat skill --name ui-ux-pro-max -- uiux search grid
+
+Categories: mcp, shell, skill, subagent, script, tool, custom
+When --cat is omitted, defaults to "custom".`,
+	RunE:               runTrack,
+	DisableFlagParsing: false,
+}
+
+func init() {
+	trackCmd.Flags().StringVar(&trackFlags.category, "cat", "custom", "Operation category (mcp, shell, skill, subagent, script, tool, custom)")
+	trackCmd.Flags().StringVar(&trackFlags.name, "name", "", "Operation name (required)")
+	trackCmd.Flags().Int64Var(&trackFlags.durationMs, "ms", 0, "Pre-measured duration in milliseconds (manual mode)")
+	_ = trackCmd.MarkFlagRequired("name")
+}
+
+// ValidCategories lists accepted category values.
+var ValidCategories = []string{"mcp", "shell", "skill", "subagent", "script", "tool", "custom"}
+
+func isValidCategory(cat string) bool {
+	for _, v := range ValidCategories {
+		if v == cat {
+			return true
+		}
+	}
+	return false
+}
+
+func runTrack(cmd *cobra.Command, args []string) error {
+	if !isValidCategory(trackFlags.category) {
+		return fmt.Errorf("invalid category %q; valid: %s", trackFlags.category, strings.Join(ValidCategories, ", "))
+	}
+	if trackFlags.name == "" {
+		return fmt.Errorf("--name is required")
+	}
+
+	p := config.DefaultPaths()
+	metricsPath := p.MetricsFile()
+
+	if trackFlags.durationMs > 0 {
+		return recordManual(metricsPath)
+	}
+
+	if len(args) == 0 {
+		return fmt.Errorf("provide --ms for manual mode or a command after -- for wrapper mode")
+	}
+
+	return recordWrapper(metricsPath, args)
+}
+
+func recordManual(metricsPath string) error {
+	evt := metrics.Event{
+		Hook:       "track",
+		Action:     "record",
+		Category:   trackFlags.category,
+		Detail:     trackFlags.name,
+		DurationMs: trackFlags.durationMs,
+		LatencyMs:  0,
+	}
+	if err := metrics.Record(metricsPath, evt); err != nil {
+		return fmt.Errorf("recording metric: %w", err)
+	}
+	clilog.Success("tracked %s/%s = %dms", trackFlags.category, trackFlags.name, trackFlags.durationMs)
+	return nil
+}
+
+func recordWrapper(metricsPath string, args []string) error {
+	cmdName := args[0]
+	cmdArgs := args[1:]
+
+	start := time.Now()
+	c := exec.Command(cmdName, cmdArgs...)
+	c.Stdin = os.Stdin
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+
+	err := c.Run()
+	dur := time.Since(start).Milliseconds()
+
+	exitCode := 0
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			exitCode = exitErr.ExitCode()
+		} else {
+			exitCode = -1
+		}
+	}
+
+	evt := metrics.Event{
+		Hook:       "track",
+		Action:     "record",
+		Category:   trackFlags.category,
+		Detail:     trackFlags.name,
+		DurationMs: dur,
+		LatencyMs:  0,
+		ExitCode:   exitCode,
+	}
+	if recErr := metrics.Record(metricsPath, evt); recErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to record metric: %v\n", recErr)
+	}
+
+	actionWord := "completed"
+	if exitCode != 0 {
+		actionWord = fmt.Sprintf("failed (exit %d)", exitCode)
+	}
+	clilog.Info("tracked %s/%s = %dms [%s]", trackFlags.category, trackFlags.name, dur, actionWord)
+
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+	return nil
+}

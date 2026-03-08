@@ -13,13 +13,16 @@ import (
 
 // Event represents a single hook or command execution metric.
 type Event struct {
-	Timestamp time.Time `json:"ts"`
-	Hook      string    `json:"hook"`
-	Action    string    `json:"action"`
-	LatencyMs int64     `json:"latency_ms"`
-	Detail    string    `json:"detail,omitempty"`
-	BytesIn   int64     `json:"bytes_in,omitempty"`
-	BytesOut  int64     `json:"bytes_out,omitempty"`
+	Timestamp  time.Time `json:"ts"`
+	Hook       string    `json:"hook"`
+	Action     string    `json:"action"`
+	LatencyMs  int64     `json:"latency_ms"`
+	Detail     string    `json:"detail,omitempty"`
+	BytesIn    int64     `json:"bytes_in,omitempty"`
+	BytesOut   int64     `json:"bytes_out,omitempty"`
+	Category   string    `json:"cat,omitempty"`
+	DurationMs int64     `json:"dur_ms,omitempty"`
+	ExitCode   int       `json:"exit,omitempty"`
 }
 
 // Record appends an event as a JSONL line. Uses O_APPEND for atomic writes.
@@ -93,6 +96,17 @@ type FreqEntry struct {
 	Count  int
 }
 
+// CategoryStats holds timing analytics for a single category (mcp, shell, skill, etc.).
+type CategoryStats struct {
+	Category    string
+	Count       int
+	AvgDuration float64
+	MaxDuration int64
+	MinDuration int64
+	P95Duration int64
+	TotalMs     int64
+}
+
 // Trend holds period-over-period comparison data.
 type Trend struct {
 	PrevEvents      int
@@ -120,6 +134,7 @@ type Summary struct {
 	Until       time.Time
 	TotalEvents int
 	Hooks       []HookStats
+	Categories  []CategoryStats
 	TopDenied   []FreqEntry
 	Trend       Trend
 }
@@ -172,6 +187,7 @@ func Summarise(events []Event, since time.Time) *Summary {
 	})
 
 	s.TopDenied = topN(denyFreq, 10)
+	s.Categories = buildCategoryStats(events, since)
 
 	if prevTotal > 0 {
 		prevRate := float64(prevDeny+prevWarn) / float64(prevTotal) * 100
@@ -244,6 +260,16 @@ func (s *Summary) Markdown() string {
 		b.WriteString("\n## Top Blocked Commands/Paths\n\n")
 		for i, d := range s.TopDenied {
 			b.WriteString(fmt.Sprintf("%d. `%s` (%dx)\n", i+1, d.Detail, d.Count))
+		}
+	}
+
+	if len(s.Categories) > 0 {
+		b.WriteString("\n## Operation Timing by Category\n\n")
+		b.WriteString("| Category | Count | Avg (ms) | P95 (ms) | Max (ms) | Total (s) |\n")
+		b.WriteString("|----------|-------|----------|----------|----------|-----------|\n")
+		for _, c := range s.Categories {
+			b.WriteString(fmt.Sprintf("| %s | %d | %.0f | %d | %d | %.1f |\n",
+				c.Category, c.Count, c.AvgDuration, c.P95Duration, c.MaxDuration, float64(c.TotalMs)/1000))
 		}
 	}
 
@@ -327,8 +353,16 @@ func (s *Summary) Compact(days int) string {
 	} else {
 		trend = "no-baseline"
 	}
-	return fmt.Sprintf("metrics: %d events %dd | deny=%d warn=%d | avg_lat=%dms | trend=%s",
-		s.TotalEvents, days, deny, warn, avgLat, trend)
+	catPart := ""
+	if len(s.Categories) > 0 {
+		parts := make([]string, 0, len(s.Categories))
+		for _, c := range s.Categories {
+			parts = append(parts, fmt.Sprintf("%s=%d@%.0fms", c.Category, c.Count, c.AvgDuration))
+		}
+		catPart = " | " + strings.Join(parts, " ")
+	}
+	return fmt.Sprintf("metrics: %d events %dd | deny=%d warn=%d | avg_lat=%dms | trend=%s%s",
+		s.TotalEvents, days, deny, warn, avgLat, trend, catPart)
 }
 
 func humanBytes(b int64) string {
@@ -402,6 +436,41 @@ func (a *hookAccumulator) stats() HookStats {
 		TotalBytesOut: a.sumBytesOut,
 		TopDenied:     topN(a.denyFreq, 5),
 	}
+}
+
+func buildCategoryStats(events []Event, since time.Time) []CategoryStats {
+	catDurations := make(map[string][]int64)
+	for _, e := range events {
+		if e.Timestamp.Before(since) || e.Category == "" || e.DurationMs <= 0 {
+			continue
+		}
+		catDurations[e.Category] = append(catDurations[e.Category], e.DurationMs)
+	}
+
+	stats := make([]CategoryStats, 0, len(catDurations))
+	for cat, durations := range catDurations {
+		sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+		var total int64
+		for _, d := range durations {
+			total += d
+		}
+		cs := CategoryStats{
+			Category:    cat,
+			Count:       len(durations),
+			TotalMs:     total,
+			AvgDuration: float64(total) / float64(len(durations)),
+			MinDuration: durations[0],
+			MaxDuration: durations[len(durations)-1],
+		}
+		p95Idx := int(float64(len(durations)) * 0.95)
+		if p95Idx >= len(durations) {
+			p95Idx = len(durations) - 1
+		}
+		cs.P95Duration = durations[p95Idx]
+		stats = append(stats, cs)
+	}
+	sort.Slice(stats, func(i, j int) bool { return stats[i].Count > stats[j].Count })
+	return stats
 }
 
 func topN(freq map[string]int, n int) []FreqEntry {
