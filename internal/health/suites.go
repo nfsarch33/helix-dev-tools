@@ -308,7 +308,7 @@ func suiteCrossMachineSync(p config.Paths) *Suite {
 func suiteProgrammaticCounts(p config.Paths) *Suite {
 	s := &Suite{Name: "Programmatic Count Verification"}
 
-	// Note: The total number of assertions in this health check (currently 250)
+	// Note: The total number of assertions in this health check (currently 254)
 	// is documented in ~/memo/global-memories/daily-startup-prompt.md.
 	// If you add or remove assertions, update the count in that file.
 
@@ -411,6 +411,12 @@ func suiteAutomationPipeline(p config.Paths) *Suite {
 	s.AssertFileExists("Go daily-refresh exists", goDailyRefresh)
 	s.AssertFileContains("Go daily-refresh has MCP step", goDailyRefresh, "stepMCPIndex")
 	s.AssertFileContains("Go daily-refresh has git sync", goDailyRefresh, "stepGitSync")
+	s.AssertFileContains("Go daily-refresh has inline repo sync", goDailyRefresh, "syncRepoMemories")
+
+	goMCPIndex := filepath.Join(p.CursorConfigDir(), "cursor-tools", "internal", "cli", "mcp_index.go")
+	s.AssertFileExists("Go mcp-index exists", goMCPIndex)
+	s.AssertFileContains("Go mcp-index renders markdown", goMCPIndex, "renderMCPIndex")
+	s.AssertFileContains("Go mcp-index redacts env", goMCPIndex, "values redacted")
 
 	return s
 }

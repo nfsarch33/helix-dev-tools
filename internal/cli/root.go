@@ -28,6 +28,7 @@ func init() {
 	rootCmd.AddCommand(selftestCmd)
 	rootCmd.AddCommand(bootstrapCmd)
 	rootCmd.AddCommand(dailyRefreshCmd)
+	rootCmd.AddCommand(mcpIndexCmd)
 	rootCmd.AddCommand(safeCmd)
 	rootCmd.AddCommand(versionCmd)
 }

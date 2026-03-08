@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -58,20 +57,26 @@ func (d *dailyRefresher) setSSHCommand() {
 
 func (d *dailyRefresher) stepMCPIndex() {
 	d.log("step 1/4: MCP index")
-	script := filepath.Join(d.paths.ToolsDir(), "refresh_mcp_index.py")
-	if _, err := os.Stat(script); err != nil {
-		d.warn("refresh_mcp_index.py not found")
+	mcpJSON := filepath.Join(d.paths.Home, ".cursor", "mcp.json")
+	outPath := filepath.Join(d.paths.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
+
+	if _, err := os.Stat(mcpJSON); err != nil {
+		d.warn("~/.cursor/mcp.json not found")
 		return
 	}
 	if d.dryRun {
-		d.log("[dry-run] would run: " + script)
+		d.log("[dry-run] would refresh MCP index: " + outPath)
 		return
 	}
-	cmd := exec.Command("python3", script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		d.fail("MCP index refresh failed")
+	updated, err := refreshMCPIndex(mcpJSON, outPath)
+	if err != nil {
+		d.fail("MCP index refresh failed: " + err.Error())
+		return
+	}
+	if updated {
+		d.log("MCP index: updated")
+	} else {
+		d.log("MCP index: no changes")
 	}
 }
 
@@ -84,11 +89,7 @@ func (d *dailyRefresher) stepRepoMemories() {
 	}
 	defer f.Close()
 
-	syncScript := filepath.Join(d.paths.ToolsDir(), "sync_repo_memories_to_pepper.py")
-	if _, err := os.Stat(syncScript); err != nil {
-		d.warn("sync_repo_memories_to_pepper.py not found")
-		return
-	}
+	dstDir := d.paths.GlobalMemoriesDir()
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -103,13 +104,58 @@ func (d *dailyRefresher) stepRepoMemories() {
 			d.log("[dry-run] would sync repo: " + line)
 			continue
 		}
-		cmd := exec.Command("python3", syncScript, "--src-dir", line)
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			d.warn("sync failed: " + line)
-		}
+		counts := syncRepoMemories(line, dstDir)
+		d.log(fmt.Sprintf("repo %s: added=%d updated=%d skipped=%d",
+			filepath.Base(line), counts.added, counts.updated, counts.skipped))
 	}
+}
+
+type syncCounts struct {
+	added   int
+	updated int
+	skipped int
+}
+
+// syncRepoMemories copies *.md files from srcDir to dstDir, backing up changed files.
+func syncRepoMemories(srcDir, dstDir string) syncCounts {
+	var c syncCounts
+	_ = os.MkdirAll(dstDir, 0o755)
+
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		return c
+	}
+
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		srcPath := filepath.Join(srcDir, e.Name())
+		dstPath := filepath.Join(dstDir, e.Name())
+
+		srcData, err := os.ReadFile(srcPath)
+		if err != nil {
+			continue
+		}
+
+		dstData, err := os.ReadFile(dstPath)
+		if err == nil {
+			if bytes.Equal(srcData, dstData) {
+				c.skipped++
+				continue
+			}
+			ts := time.Now().Format("20060102-150405")
+			backupPath := filepath.Join(dstDir, e.Name()+".bak."+ts)
+			_ = os.WriteFile(backupPath, dstData, 0o644)
+			c.updated++
+		} else {
+			c.added++
+		}
+
+		_ = os.WriteFile(dstPath, srcData, 0o644)
+	}
+
+	return c
 }
 
 func (d *dailyRefresher) stepGitSync() {
