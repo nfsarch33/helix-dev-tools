@@ -91,6 +91,7 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 		Action:    actionStr,
 		LatencyMs: time.Since(start).Milliseconds(),
 		Detail:    cmdShort,
+		BytesIn:   int64(len(input.Command)),
 	})
 
 	return resp, nil

@@ -1,16 +1,9 @@
 package cli
 
 import (
-	"testing"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
-
-func TestPostEdit(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "PostEdit Suite")
-}
 
 var _ = Describe("classifyLearningsPath", func() {
 	It("detects workspace .learnings/ edits", func() {

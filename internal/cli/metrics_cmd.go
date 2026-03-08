@@ -13,8 +13,9 @@ import (
 )
 
 var metricsFlags struct {
-	days   int
-	export string
+	days    int
+	export  string
+	compact bool
 }
 
 var metricsCmd = &cobra.Command{
@@ -27,6 +28,7 @@ var metricsCmd = &cobra.Command{
 func init() {
 	metricsCmd.Flags().IntVar(&metricsFlags.days, "days", 7, "Number of days to include in the report")
 	metricsCmd.Flags().StringVar(&metricsFlags.export, "export", "", "Export markdown report to file (e.g. ~/memo/global-memories/system-performance.md)")
+	metricsCmd.Flags().BoolVar(&metricsFlags.compact, "compact", false, "Single-line output for embedding in prompts")
 }
 
 func runMetrics(_ *cobra.Command, _ []string) error {
@@ -40,6 +42,11 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 
 	since := time.Now().UTC().Add(-time.Duration(metricsFlags.days) * 24 * time.Hour)
 	summary := metrics.Summarise(events, since)
+
+	if metricsFlags.compact {
+		fmt.Println(summary.Compact(metricsFlags.days))
+		return nil
+	}
 
 	clilog.Header("cursor-tools metrics")
 	fmt.Printf("\n  Period: last %d days (%s to %s)\n", metricsFlags.days,

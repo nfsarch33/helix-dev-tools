@@ -18,6 +18,8 @@ type Event struct {
 	Action    string    `json:"action"`
 	LatencyMs int64     `json:"latency_ms"`
 	Detail    string    `json:"detail,omitempty"`
+	BytesIn   int64     `json:"bytes_in,omitempty"`
+	BytesOut  int64     `json:"bytes_out,omitempty"`
 }
 
 // Record appends an event as a JSONL line. Uses O_APPEND for atomic writes.
@@ -72,21 +74,44 @@ func Load(path string) ([]Event, error) {
 
 // HookStats holds aggregated statistics for a single hook.
 type HookStats struct {
-	Hook       string
-	Total      int
-	DenyCount  int
-	WarnCount  int
-	AllowCount int
-	OtherCount int
-	AvgLatency float64
-	MaxLatency int64
-	TopDenied  []FreqEntry
+	Hook          string
+	Total         int
+	DenyCount     int
+	WarnCount     int
+	AllowCount    int
+	OtherCount    int
+	AvgLatency    float64
+	MaxLatency    int64
+	TotalBytesIn  int64
+	TotalBytesOut int64
+	TopDenied     []FreqEntry
 }
 
 // FreqEntry pairs a detail string with a count.
 type FreqEntry struct {
 	Detail string
 	Count  int
+}
+
+// Trend holds period-over-period comparison data.
+type Trend struct {
+	PrevEvents      int
+	PrevIntervRate  float64
+	PrevAvgLatency  float64
+	EventsDelta     int
+	IntervRateDelta float64
+	AvgLatDelta     float64
+	HasPrev         bool
+}
+
+func (t Trend) arrow(delta float64) string {
+	if delta > 0.5 {
+		return "^"
+	}
+	if delta < -0.5 {
+		return "v"
+	}
+	return "="
 }
 
 // Summary holds the full metrics report.
@@ -96,30 +121,46 @@ type Summary struct {
 	TotalEvents int
 	Hooks       []HookStats
 	TopDenied   []FreqEntry
+	Trend       Trend
 }
 
-// Summarise aggregates events since the given time.
+// Summarise aggregates events since the given time and computes period-over-period trend.
 func Summarise(events []Event, since time.Time) *Summary {
-	s := &Summary{Since: since, Until: time.Now().UTC()}
+	now := time.Now().UTC()
+	s := &Summary{Since: since, Until: now}
+
+	duration := now.Sub(since)
+	prevStart := since.Add(-duration)
 
 	hookMap := make(map[string]*hookAccumulator)
 	denyFreq := make(map[string]int)
 
+	var prevTotal, prevDeny, prevWarn int
+	var prevSumLatency int64
+	var prevCount int
+
 	for _, e := range events {
-		if e.Timestamp.Before(since) {
-			continue
-		}
-		s.TotalEvents++
-
-		acc, ok := hookMap[e.Hook]
-		if !ok {
-			acc = &hookAccumulator{hook: e.Hook}
-			hookMap[e.Hook] = acc
-		}
-		acc.add(e)
-
-		if e.Action == "deny" && e.Detail != "" {
-			denyFreq[e.Detail]++
+		if !e.Timestamp.Before(since) {
+			s.TotalEvents++
+			acc, ok := hookMap[e.Hook]
+			if !ok {
+				acc = &hookAccumulator{hook: e.Hook}
+				hookMap[e.Hook] = acc
+			}
+			acc.add(e)
+			if e.Action == "deny" && e.Detail != "" {
+				denyFreq[e.Detail]++
+			}
+		} else if !e.Timestamp.Before(prevStart) {
+			prevTotal++
+			prevSumLatency += e.LatencyMs
+			prevCount++
+			switch e.Action {
+			case "deny":
+				prevDeny++
+			case "warn":
+				prevWarn++
+			}
 		}
 	}
 
@@ -131,6 +172,37 @@ func Summarise(events []Event, since time.Time) *Summary {
 	})
 
 	s.TopDenied = topN(denyFreq, 10)
+
+	if prevTotal > 0 {
+		prevRate := float64(prevDeny+prevWarn) / float64(prevTotal) * 100
+		prevAvg := float64(prevSumLatency) / float64(prevCount)
+
+		curDeny, curWarn, curAll := 0, 0, 0
+		var curSumLat int64
+		for _, h := range s.Hooks {
+			curDeny += h.DenyCount
+			curWarn += h.WarnCount
+			curAll += h.Total
+			curSumLat += int64(h.AvgLatency * float64(h.Total))
+		}
+		curRate := float64(0)
+		curAvg := float64(0)
+		if curAll > 0 {
+			curRate = float64(curDeny+curWarn) / float64(curAll) * 100
+			curAvg = float64(curSumLat) / float64(curAll)
+		}
+
+		s.Trend = Trend{
+			HasPrev:         true,
+			PrevEvents:      prevTotal,
+			PrevIntervRate:  prevRate,
+			PrevAvgLatency:  prevAvg,
+			EventsDelta:     s.TotalEvents - prevTotal,
+			IntervRateDelta: curRate - prevRate,
+			AvgLatDelta:     curAvg - prevAvg,
+		}
+	}
+
 	return s
 }
 
@@ -175,6 +247,25 @@ func (s *Summary) Markdown() string {
 		}
 	}
 
+	var totalBytesIn, totalBytesOut int64
+	for _, h := range s.Hooks {
+		totalBytesIn += h.TotalBytesIn
+		totalBytesOut += h.TotalBytesOut
+	}
+	if totalBytesIn > 0 || totalBytesOut > 0 {
+		b.WriteString("\n## Data Throughput\n\n")
+		b.WriteString(fmt.Sprintf("- Bytes in: %s\n", humanBytes(totalBytesIn)))
+		b.WriteString(fmt.Sprintf("- Bytes out: %s\n", humanBytes(totalBytesOut)))
+	}
+
+	if s.Trend.HasPrev {
+		b.WriteString("\n## Period-over-Period Trend\n\n")
+		b.WriteString(fmt.Sprintf("- Events: %d vs %d (prev) %s\n",
+			s.TotalEvents, s.Trend.PrevEvents, s.Trend.arrow(float64(s.Trend.EventsDelta))))
+		b.WriteString(fmt.Sprintf("- Intervention rate delta: %+.1f%%\n", s.Trend.IntervRateDelta))
+		b.WriteString(fmt.Sprintf("- Avg latency delta: %+.1fms\n", s.Trend.AvgLatDelta))
+	}
+
 	b.WriteString("\n## Reflection / Self-Improvement Signals\n\n")
 	if totalAll > 0 {
 		rate := float64(totalDeny+totalWarn) / float64(totalAll) * 100
@@ -201,21 +292,70 @@ func (s *Summary) Markdown() string {
 	if maxAvg > 50 {
 		b.WriteString(fmt.Sprintf("- SLOW hook: %s (avg %.0fms). Investigate for optimisation.\n", slowHook, maxAvg))
 	}
+	if s.Trend.HasPrev && s.Trend.IntervRateDelta > 5 {
+		b.WriteString("- Intervention rate INCREASING. Review recent deny pattern changes.\n")
+	}
+	if s.Trend.HasPrev && s.Trend.AvgLatDelta > 20 {
+		b.WriteString("- Average latency INCREASING. Profile slow hooks.\n")
+	}
 
 	b.WriteString(fmt.Sprintf("\n*Generated: %s*\n", time.Now().UTC().Format(time.RFC3339)))
 	return b.String()
 }
 
+// Compact returns a single-line summary for embedding in prompts (token-efficient).
+func (s *Summary) Compact(days int) string {
+	deny, warn, total := 0, 0, 0
+	var sumLat int64
+	for _, h := range s.Hooks {
+		deny += h.DenyCount
+		warn += h.WarnCount
+		total += h.Total
+		sumLat += int64(h.AvgLatency * float64(h.Total))
+	}
+	avgLat := int64(0)
+	if total > 0 {
+		avgLat = sumLat / int64(total)
+	}
+	trend := "stable"
+	if s.Trend.HasPrev {
+		if s.Trend.IntervRateDelta > 5 || s.Trend.AvgLatDelta > 20 {
+			trend = "degrading"
+		} else if s.Trend.IntervRateDelta < -5 || s.Trend.AvgLatDelta < -20 {
+			trend = "improving"
+		}
+	} else {
+		trend = "no-baseline"
+	}
+	return fmt.Sprintf("metrics: %d events %dd | deny=%d warn=%d | avg_lat=%dms | trend=%s",
+		s.TotalEvents, days, deny, warn, avgLat, trend)
+}
+
+func humanBytes(b int64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+	div, exp := int64(unit), 0
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(b)/float64(div), "KMG"[exp])
+}
+
 type hookAccumulator struct {
-	hook       string
-	total      int
-	deny       int
-	warn       int
-	allow      int
-	other      int
-	sumLatency int64
-	maxLatency int64
-	denyFreq   map[string]int
+	hook        string
+	total       int
+	deny        int
+	warn        int
+	allow       int
+	other       int
+	sumLatency  int64
+	maxLatency  int64
+	sumBytesIn  int64
+	sumBytesOut int64
+	denyFreq    map[string]int
 }
 
 func (a *hookAccumulator) add(e Event) {
@@ -224,6 +364,8 @@ func (a *hookAccumulator) add(e Event) {
 	if e.LatencyMs > a.maxLatency {
 		a.maxLatency = e.LatencyMs
 	}
+	a.sumBytesIn += e.BytesIn
+	a.sumBytesOut += e.BytesOut
 	switch e.Action {
 	case "deny":
 		a.deny++
@@ -248,15 +390,17 @@ func (a *hookAccumulator) stats() HookStats {
 		avg = float64(a.sumLatency) / float64(a.total)
 	}
 	return HookStats{
-		Hook:       a.hook,
-		Total:      a.total,
-		DenyCount:  a.deny,
-		WarnCount:  a.warn,
-		AllowCount: a.allow,
-		OtherCount: a.other,
-		AvgLatency: avg,
-		MaxLatency: a.maxLatency,
-		TopDenied:  topN(a.denyFreq, 5),
+		Hook:          a.hook,
+		Total:         a.total,
+		DenyCount:     a.deny,
+		WarnCount:     a.warn,
+		AllowCount:    a.allow,
+		OtherCount:    a.other,
+		AvgLatency:    avg,
+		MaxLatency:    a.maxLatency,
+		TotalBytesIn:  a.sumBytesIn,
+		TotalBytesOut: a.sumBytesOut,
+		TopDenied:     topN(a.denyFreq, 5),
 	}
 }
 
