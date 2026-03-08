@@ -15,7 +15,7 @@ else
   HOST_GOARCH := $(HOST_ARCH)
 endif
 
-.PHONY: build test test-cover lint install docker docker-native release clean
+.PHONY: build test test-cover lint install docker docker-native test-docker release clean
 
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) ./cmd/cursor-tools/
@@ -48,6 +48,10 @@ docker-native:
 	  -f build/package/Dockerfile \
 	  -t $(BINARY):$(VERSION) \
 	  .
+
+test-docker:
+	docker build -f build/package/Dockerfile.dev -t $(BINARY)-dev:latest .
+	docker run --rm $(BINARY)-dev:latest
 
 release:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY)-darwin-arm64 ./cmd/cursor-tools/

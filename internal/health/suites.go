@@ -11,7 +11,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
 
-// BuildAllSuites creates all 19 health check suites.
+// BuildAllSuites creates all 20 health check suites.
 func BuildAllSuites(p config.Paths) []*Suite {
 	return []*Suite{
 		suiteL0Rules(p),
@@ -33,6 +33,7 @@ func BuildAllSuites(p config.Paths) []*Suite {
 		suiteDataIntegrity(p),
 		suiteGitHookIntegrity(p),
 		suiteSelfImprovementPipeline(p),
+		suiteDevContainerCompliance(p),
 	}
 }
 
@@ -653,6 +654,22 @@ func suiteSelfImprovementPipeline(p config.Paths) *Suite {
 	bootstrapPath := filepath.Join(p.CursorConfigDir(), "bootstrap.sh")
 	s.AssertFileContains("bootstrap installs cursor-tools", bootstrapPath, "cursor-tools")
 
+	return s
+}
+
+func suiteDevContainerCompliance(p config.Paths) *Suite {
+	s := &Suite{Name: "DevContainer Compliance"}
+	ccDir := p.CursorConfigDir()
+	templatesDir := filepath.Join(ccDir, "devcontainer-templates")
+
+	s.AssertFileExists("devcontainer-templates dir exists", templatesDir)
+	s.AssertFileExists("go-workspace Dockerfile exists", filepath.Join(templatesDir, "go-workspace", "Dockerfile"))
+	s.AssertFileExists("go-workspace devcontainer.json", filepath.Join(templatesDir, "go-workspace", "devcontainer.json"))
+	s.AssertFileExists("cursor-tools .devcontainer exists", filepath.Join(ccDir, "cursor-tools", ".devcontainer", "devcontainer.json"))
+	s.AssertFileExists("cursor-tools Dockerfile exists", filepath.Join(ccDir, "cursor-tools", "build", "package", "Dockerfile"))
+	s.AssertFileExists("cursor-tools Dockerfile.dev exists", filepath.Join(ccDir, "cursor-tools", "build", "package", "Dockerfile.dev"))
+	s.AssertFileContains("Makefile has docker target", filepath.Join(ccDir, "cursor-tools", "Makefile"), "docker-native")
+	s.AssertFileContains("Makefile has test-docker target", filepath.Join(ccDir, "cursor-tools", "Makefile"), "test-docker")
 	return s
 }
 

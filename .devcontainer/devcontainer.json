@@ -1,0 +1,31 @@
+{
+  "build": {
+    "args": {
+      "GO_VERSION": "1.24"
+    },
+    "dockerfile": "../../../devcontainer-templates/go-workspace/Dockerfile"
+  },
+  "customizations": {
+    "cursor": {
+      "extensions": [
+        "golang.go"
+      ],
+      "settings": {
+        "go.lintTool": "golangci-lint",
+        "go.testFlags": [
+          "-race",
+          "-count=1"
+        ],
+        "go.useLanguageServer": true
+      }
+    }
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/git:1": {}
+  },
+  "name": "cursor-tools Go",
+  "postCreateCommand": "go mod download \u0026\u0026 go install github.com/onsi/ginkgo/v2/ginkgo@latest",
+  "remoteUser": "vscode"
+}
+
