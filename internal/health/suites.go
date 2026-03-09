@@ -11,7 +11,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
 
-// BuildAllSuites creates all 20 health check suites.
+// BuildAllSuites creates all 21 health check suites.
 func BuildAllSuites(p config.Paths) []*Suite {
 	return []*Suite{
 		suiteL0Rules(p),
@@ -34,6 +34,7 @@ func BuildAllSuites(p config.Paths) []*Suite {
 		suiteGitHookIntegrity(p),
 		suiteSelfImprovementPipeline(p),
 		suiteDevContainerCompliance(p),
+		suiteRTKTokenOptimization(p),
 	}
 }
 
@@ -719,6 +720,22 @@ func gitOutput(repoPath string, args ...string) (string, error) {
 	cmd := exec.Command("git", fullArgs...)
 	out, err := cmd.Output()
 	return string(out), err
+}
+
+func suiteRTKTokenOptimization(p config.Paths) *Suite {
+	s := &Suite{Name: "rtk Token Optimization"}
+
+	rtkBinary, err := exec.LookPath("rtk")
+	s.Assert("rtk binary on PATH", err == nil, "rtk not found; install via brew (macOS) or curl installer (Linux)")
+	_ = rtkBinary
+
+	rtkRule := filepath.Join(p.RulesDir, "rtk-token-optimization.md")
+	s.AssertFileExists("L0 rule rtk-token-optimization.md exists", rtkRule)
+
+	rtkSkill := filepath.Join(p.SkillsDir, "rtk-integration", "SKILL.md")
+	s.AssertFileExists("rtk-integration skill exists", rtkSkill)
+
+	return s
 }
 
 func itoa(n int) string {
