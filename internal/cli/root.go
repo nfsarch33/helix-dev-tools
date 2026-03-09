@@ -32,6 +32,7 @@ func init() {
 	rootCmd.AddCommand(metricsCmd)
 	rootCmd.AddCommand(trackCmd)
 	rootCmd.AddCommand(safeCmd)
+	rootCmd.AddCommand(skillvetAuditCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 
