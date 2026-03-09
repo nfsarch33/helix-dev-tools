@@ -88,7 +88,7 @@ func ScanSkill(skillPath string) (Result, error) {
 			return nil
 		}
 		relPath, _ := filepath.Rel(skillPath, path)
-		data, readErr := os.ReadFile(path)
+		data, readErr := os.ReadFile(path) // #nosec G122 -- read-only scan callback; TOCTOU risk accepted for security audit
 		if readErr != nil {
 			return nil
 		}

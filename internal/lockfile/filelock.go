@@ -27,13 +27,13 @@ func (fl *FileLock) Lock() error {
 		return err
 	}
 	fl.file = f
-	return syscall.Flock(int(f.Fd()), syscall.LOCK_EX)
+	return syscall.Flock(int(f.Fd()), syscall.LOCK_EX) // #nosec G115 -- fd fits in int on all 64-bit platforms
 }
 
 // Unlock releases the flock and closes the file.
 func (fl *FileLock) Unlock() {
 	if fl.file != nil {
-		_ = syscall.Flock(int(fl.file.Fd()), syscall.LOCK_UN)
+		_ = syscall.Flock(int(fl.file.Fd()), syscall.LOCK_UN) // #nosec G115 -- fd fits in int on all 64-bit platforms
 		_ = fl.file.Close()
 		fl.file = nil
 	}

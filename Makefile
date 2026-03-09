@@ -15,7 +15,7 @@ else
   HOST_GOARCH := $(HOST_ARCH)
 endif
 
-.PHONY: build test test-cover lint install docker docker-native test-docker release clean
+.PHONY: build test test-cover lint vuln security fuzz install docker docker-native test-docker release clean
 
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) ./cmd/cursor-tools/
@@ -29,6 +29,17 @@ test-cover:
 
 lint:
 	go vet ./...
+	golangci-lint run --timeout 2m
+
+vuln:
+	govulncheck ./...
+
+security: lint vuln
+	gosec -severity high -quiet ./...
+	@echo "Security scan complete"
+
+fuzz:
+	go test -fuzz=FuzzPatternMatcher -fuzztime=30s ./internal/patterns/
 
 install: build
 	cp bin/$(BINARY) ~/bin/$(BINARY)

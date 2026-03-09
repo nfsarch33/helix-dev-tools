@@ -90,7 +90,7 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 		if !bootstrapDryRun {
 			data, err := os.ReadFile(selfBin)
 			if err == nil {
-				_ = os.WriteFile(destBin, data, 0o755)
+				_ = os.WriteFile(destBin, data, 0o755) // #nosec G703 -- path from trusted config
 			}
 		}
 	}

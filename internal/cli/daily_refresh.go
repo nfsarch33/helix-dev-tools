@@ -135,13 +135,13 @@ func syncRepoMemories(srcDir, dstDir string) syncCounts {
 			}
 			ts := time.Now().Format("20060102-150405")
 			backupPath := filepath.Join(dstDir, e.Name()+".bak."+ts)
-			_ = os.WriteFile(backupPath, dstData, 0o644)
+			_ = os.WriteFile(backupPath, dstData, 0o644) // #nosec G703 -- path from trusted config
 			c.updated++
 		} else {
 			c.added++
 		}
 
-		_ = os.WriteFile(dstPath, srcData, 0o644)
+		_ = os.WriteFile(dstPath, srcData, 0o644) // #nosec G703 -- path from trusted config
 	}
 
 	return c
@@ -274,7 +274,7 @@ func (d *dailyRefresher) syncFile(label, src, dst string) {
 		d.out.Info("[dry-run] would sync %s", label)
 		return
 	}
-	if err := os.WriteFile(dst, srcData, 0o644); err != nil {
+	if err := os.WriteFile(dst, srcData, 0o644); err != nil { // #nosec G703 -- path from trusted config
 		d.out.Warn("%s: write failed", label)
 	} else {
 		d.out.Info("%s: synced", label)
@@ -333,7 +333,7 @@ func (d *dailyRefresher) stepSkillsSync() {
 				continue
 			}
 			dst := filepath.Join(dstDir, filepath.Base(md))
-			_ = os.WriteFile(dst, data, 0o644)
+			_ = os.WriteFile(dst, data, 0o644) // #nosec G703 -- path from trusted config
 		}
 		d.out.Info("skill %s: synced", name)
 	}

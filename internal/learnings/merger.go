@@ -59,7 +59,7 @@ func PromoteWorkspace(workspacePath, globalLearningsDir string, dryRun bool) Wor
 				if !dryRun {
 					data, err := os.ReadFile(filepath.Join(srcEpisodes, e.Name()))
 					if err == nil {
-						_ = os.WriteFile(tgtPath, data, 0o644)
+						_ = os.WriteFile(tgtPath, data, 0o644) // #nosec G703 -- path from trusted config, not user input
 					}
 				}
 				result.Episodes++

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -77,12 +78,13 @@ func (h *housekeepingHandler) runPromoteLearnings() {
 		return
 	}
 	workspaceDir := os.Getenv("CURSOR_WORKSPACE")
-	if workspaceDir == "" {
+	if workspaceDir == "" || !filepath.IsAbs(workspaceDir) {
 		workspaceDir, _ = os.Getwd()
 	}
+	workspaceDir = filepath.Clean(workspaceDir)
 	learningsDir := workspaceDir + "/.learnings"
 	if isDir(learningsDir) {
-		cmd := exec.Command(selfBin, "promote", "--workspace", workspaceDir)
+		cmd := exec.Command(selfBin, "promote", "--workspace", workspaceDir) // #nosec G702 -- workspaceDir validated as absolute + cleaned
 		_ = cmd.Run()
 		h.log.Log(fmt.Sprintf("promoted learnings from %s", workspaceDir))
 	} else {
