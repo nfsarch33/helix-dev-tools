@@ -28,10 +28,10 @@ func TestSmallHelpers(t *testing.T) {
 func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	now := time.Now().UTC()
 	events := []Event{
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 20},
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 40},
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "perplexity:perplexity_search", LatencyMs: 15},
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "subagent", Detail: "go-architect", DurationMs: 5},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 20, TurnID: "task-1"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 40, TurnID: "task-1"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "perplexity:perplexity_search", LatencyMs: 15, TurnID: "task-1"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "subagent", Detail: "go-architect", DurationMs: 5, TurnID: "task-2"},
 	}
 
 	skills, mcpServers, subagents := buildAdoptionStats(events, now.Add(-24*time.Hour))
@@ -46,17 +46,84 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	}
 
 	summary := Summarise(events, now.Add(-24*time.Hour))
+	if summary.Tasks.Total != 2 || summary.Tasks.SkillTasks != 1 || summary.Tasks.MCPTasks != 1 || summary.Tasks.SubagentTasks != 1 {
+		t.Fatalf("unexpected task coverage: %+v", summary.Tasks)
+	}
 	md := summary.Markdown()
-	if !strings.Contains(md, "System Performance Report") || !strings.Contains(md, "Operation Timing by Category") {
+	if !strings.Contains(md, "System Performance Report") || !strings.Contains(md, "Operation Timing by Category") || !strings.Contains(md, "Task Adoption Coverage") {
 		t.Fatalf("Markdown() output missing sections: %q", md)
 	}
 	compact := summary.Compact(7)
-	if !strings.Contains(compact, "events 7d") {
+	if !strings.Contains(compact, "events 7d") || !strings.Contains(compact, "tasks=") {
 		t.Fatalf("Compact() output = %q", compact)
 	}
 
 	top := topN(map[string]int{"b": 1, "a": 3, "c": 2}, 2)
 	if len(top) != 2 || top[0].Detail != "a" || top[1].Detail != "c" {
 		t.Fatalf("topN() = %+v", top)
+	}
+}
+
+func TestAnalyseFlagsLowAdoption(t *testing.T) {
+	now := time.Now().UTC()
+	events := []Event{
+		{Timestamp: now.Add(-50 * time.Minute), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 1, TurnID: "task-1"},
+		{Timestamp: now.Add(-40 * time.Minute), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 1, TurnID: "task-2"},
+		{Timestamp: now.Add(-30 * time.Minute), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 1, TurnID: "task-3"},
+		{Timestamp: now.Add(-20 * time.Minute), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "perplexity:perplexity_search", LatencyMs: 1, TurnID: "task-4"},
+		{Timestamp: now.Add(-10 * time.Minute), Hook: "guard-shell", Action: "allow", Category: "shell", LatencyMs: 1, TurnID: "task-5"},
+	}
+
+	summary := Summarise(events, now.Add(-24*time.Hour))
+	recs := summary.Analyse()
+	joined := make([]string, 0, len(recs))
+	for _, rec := range recs {
+		joined = append(joined, rec.Category+":"+rec.Message)
+	}
+	text := strings.Join(joined, "\n")
+	for _, want := range []string{
+		"adoption:Low skill task coverage",
+		"adoption:Low MCP task coverage",
+		"adoption:No subagent usage recorded",
+		"adoption:Low MCP diversity",
+	} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("Analyse() missing %q in %q", want, text)
+		}
+	}
+}
+
+func TestAnalyseFlagsHeuristicTrackingGaps(t *testing.T) {
+	now := time.Now().UTC()
+	events := make([]Event, 0, 60)
+	for i := 0; i < 60; i++ {
+		events = append(events, Event{
+			Timestamp: now.Add(-time.Duration(i) * time.Minute),
+			Hook:      "sanitize-read",
+			Action:    "allow",
+			Category:  "tool",
+			LatencyMs: 1,
+			Detail:    "README.md",
+		})
+	}
+
+	summary := Summarise(events, now.Add(-24*time.Hour))
+	if summary.Tasks.ExplicitTasks != 0 {
+		t.Fatalf("expected no explicit tasks, got %+v", summary.Tasks)
+	}
+	recs := summary.Analyse()
+	text := make([]string, 0, len(recs))
+	for _, rec := range recs {
+		text = append(text, rec.Category+":"+rec.Message)
+	}
+	joined := strings.Join(text, "\n")
+	for _, want := range []string{
+		"adoption:Low skill coverage by events",
+		"adoption:No subagent usage recorded",
+		"adoption:Task grouping is still heuristic",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("Analyse() missing %q in %q", want, joined)
+		}
 	}
 }

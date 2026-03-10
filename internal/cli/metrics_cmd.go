@@ -179,8 +179,14 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	for _, sa := range summary.Subagents {
 		subUses += sa.Count
 	}
-	if skillCount > 0 || len(mcpServerSet) > 0 || subCount > 0 {
+	if summary.Tasks.Total > 0 || skillCount > 0 || len(mcpServerSet) > 0 || subCount > 0 {
 		fmt.Println("\n  Adoption Funnel:")
+		if summary.Tasks.Total > 0 {
+			fmt.Printf("    Skill task coverage:    %d of %d tasks (%.1f%%)\n", summary.Tasks.SkillTasks, summary.Tasks.Total, percentage(summary.Tasks.SkillTasks, summary.Tasks.Total))
+			fmt.Printf("    MCP task coverage:      %d of %d tasks (%.1f%%)\n", summary.Tasks.MCPTasks, summary.Tasks.Total, percentage(summary.Tasks.MCPTasks, summary.Tasks.Total))
+			fmt.Printf("    Subagent task coverage: %d of %d tasks (%.1f%%)\n", summary.Tasks.SubagentTasks, summary.Tasks.Total, percentage(summary.Tasks.SubagentTasks, summary.Tasks.Total))
+			fmt.Printf("    Task grouping mode:     explicit turn IDs when present, time clustering otherwise\n")
+		}
 		fmt.Printf("    Skills activated:       %d of %d installed (%.1f%%)\n", skillCount, installedSkills, percentage(skillCount, installedSkills))
 		fmt.Printf("    Skill hit rate:         %d of %d events (%.1f%%)\n", skillUses, summary.TotalEvents, percentage(skillUses, summary.TotalEvents))
 		fmt.Printf("    MCP servers used:       %d of %d always-on (%.1f%%)\n", len(mcpServerSet), len(alwaysOnMCP), percentage(len(mcpServerSet), len(alwaysOnMCP)))

@@ -25,12 +25,16 @@ type Event struct {
 	ExitCode    int       `json:"exit,omitempty"`
 	PassedCount int       `json:"pass_count,omitempty"`
 	TotalCount  int       `json:"total_count,omitempty"`
+	TurnID      string    `json:"turn_id,omitempty"`
 }
 
 // Record appends an event as a JSONL line. Uses O_APPEND for atomic writes.
 func Record(path string, e Event) error {
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now().UTC()
+	}
+	if e.TurnID == "" {
+		e.TurnID = currentTurnID()
 	}
 	data, err := json.Marshal(e)
 	if err != nil {
@@ -48,6 +52,25 @@ func Record(path string, e Event) error {
 	defer f.Close()
 	_, err = f.Write(data)
 	return err
+}
+
+func currentTurnID() string {
+	for _, key := range []string{
+		"CURSOR_AGENT_TURN_ID",
+		"CURSOR_TURN_ID",
+		"CURSOR_TASK_ID",
+		"CLAUDE_CODE_TASK_ID",
+		"CLAUDE_SESSION_ID",
+	} {
+		value := strings.TrimSpace(os.Getenv(key))
+		if value != "" {
+			if len(value) > 120 {
+				value = value[:120]
+			}
+			return value
+		}
+	}
+	return ""
 }
 
 // Load reads all events from a JSONL file.
@@ -181,6 +204,16 @@ type CheckStats struct {
 	AssertionPassRate float64
 }
 
+// TaskCoverage tracks how many turn/task groups used each adoption path.
+type TaskCoverage struct {
+	Total          int
+	SkillTasks     int
+	MCPTasks       int
+	SubagentTasks  int
+	ExplicitTasks  int
+	HeuristicTasks int
+}
+
 // Summary holds the full metrics report.
 type Summary struct {
 	Since       time.Time
@@ -195,6 +228,7 @@ type Summary struct {
 	MCPServers []MCPServerStats
 	Subagents  []FreqEntry
 	Checks     []CheckStats
+	Tasks      TaskCoverage
 }
 
 // Summarise aggregates events since the given time and computes period-over-period trend.
@@ -248,6 +282,7 @@ func Summarise(events []Event, since time.Time) *Summary {
 	s.Categories = buildCategoryStats(events, since)
 	s.Skills, s.MCPServers, s.Subagents = buildAdoptionStats(events, since)
 	s.Checks = buildCheckStats(events, since)
+	s.Tasks = buildTaskCoverage(events, since)
 
 	if prevTotal > 0 {
 		prevRate := float64(prevDeny+prevWarn) / float64(prevTotal) * 100
@@ -355,6 +390,84 @@ func (s *Summary) Analyse() []Recommendation {
 		}
 	}
 
+	if s.Tasks.Total >= 5 {
+		skillCoverage := percentageInt(s.Tasks.SkillTasks, s.Tasks.Total)
+		if skillCoverage < 35 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "adoption",
+				Message:  fmt.Sprintf("Low skill task coverage (%.1f%%). Read and activate domain skills earlier in each task.", skillCoverage),
+			})
+		}
+
+		mcpCoverage := percentageInt(s.Tasks.MCPTasks, s.Tasks.Total)
+		if mcpCoverage < 25 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "adoption",
+				Message:  fmt.Sprintf("Low MCP task coverage (%.1f%%). Route more research/doc tasks through always-on MCP servers.", mcpCoverage),
+			})
+		}
+
+		if s.Tasks.SubagentTasks == 0 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "adoption",
+				Message:  "No subagent usage recorded in this reporting window. Delegate at least one multi-step task to validate routing.",
+			})
+		}
+	}
+
+	skillUses := 0
+	for _, skill := range s.Skills {
+		skillUses += skill.Uses
+	}
+	if s.TotalEvents >= 50 && percentageInt(skillUses, s.TotalEvents) < 10 {
+		recs = append(recs, Recommendation{
+			Severity: "warn",
+			Category: "adoption",
+			Message:  fmt.Sprintf("Low skill coverage by events (%.1f%%). Skill routing is still too easy to bypass.", percentageInt(skillUses, s.TotalEvents)),
+		})
+	}
+
+	if len(s.MCPServers) > 0 {
+		serverSet := make(map[string]bool)
+		for _, entry := range s.MCPServers {
+			if entry.Server != "" {
+				serverSet[CanonicalMCPServerName(entry.Server)] = true
+			}
+		}
+		if len(serverSet) < 5 {
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "adoption",
+				Message:  fmt.Sprintf("Low MCP diversity (%d server(s)). Spread usage across more always-on servers to avoid single-tool habits.", len(serverSet)),
+			})
+		}
+	}
+
+	if s.Tasks.Total >= 5 && len(s.Skills) == 0 {
+		recs = append(recs, Recommendation{
+			Severity: "warn",
+			Category: "adoption",
+			Message:  "No skill activations were recorded. Tracking may be incomplete or routing is bypassing skills entirely.",
+		})
+	}
+	if s.TotalEvents >= 50 && len(s.Subagents) == 0 {
+		recs = append(recs, Recommendation{
+			Severity: "warn",
+			Category: "adoption",
+			Message:  "No subagent usage recorded in this reporting window. Delegate at least one specialised task so the path stays exercised.",
+		})
+	}
+	if s.TotalEvents >= 50 && s.Tasks.ExplicitTasks == 0 {
+		recs = append(recs, Recommendation{
+			Severity: "info",
+			Category: "adoption",
+			Message:  "Task grouping is still heuristic for this window because older events lack explicit turn IDs. Task coverage KPIs will sharpen as new events are recorded.",
+		})
+	}
+
 	return recs
 }
 
@@ -421,6 +534,15 @@ func (s *Summary) Markdown() string {
 			b.WriteString(fmt.Sprintf("| %s | %d | %d | %d | %.1f%% | %.1f%% | %.0f |\n",
 				check.Name, check.Runs, check.Passes, check.Fails, runRate, check.AssertionPassRate, check.AvgMs))
 		}
+	}
+
+	if s.Tasks.Total > 0 {
+		b.WriteString("\n## Task Adoption Coverage\n\n")
+		b.WriteString(fmt.Sprintf("- Skill task coverage: %d / %d = %.1f%%\n", s.Tasks.SkillTasks, s.Tasks.Total, percentageInt(s.Tasks.SkillTasks, s.Tasks.Total)))
+		b.WriteString(fmt.Sprintf("- MCP task coverage: %d / %d = %.1f%%\n", s.Tasks.MCPTasks, s.Tasks.Total, percentageInt(s.Tasks.MCPTasks, s.Tasks.Total)))
+		b.WriteString(fmt.Sprintf("- Subagent task coverage: %d / %d = %.1f%%\n", s.Tasks.SubagentTasks, s.Tasks.Total, percentageInt(s.Tasks.SubagentTasks, s.Tasks.Total)))
+		b.WriteString(fmt.Sprintf("- Explicit task groups: %d, heuristic task groups: %d\n", s.Tasks.ExplicitTasks, s.Tasks.HeuristicTasks))
+		b.WriteString("- Task grouping uses explicit `turn_id` when available and falls back to timestamp clustering for older history.\n")
 	}
 
 	var totalBytesIn, totalBytesOut int64
@@ -521,6 +643,14 @@ func (s *Summary) Compact(days int) string {
 			parts = append(parts, fmt.Sprintf("%s=%.0f%%", check.Name, runRate))
 		}
 		catPart += " | checks=" + strings.Join(parts, ",")
+	}
+	if s.Tasks.Total > 0 {
+		catPart += fmt.Sprintf(" | tasks=%d skill=%.0f%% mcp=%.0f%% sub=%.0f%%",
+			s.Tasks.Total,
+			percentageInt(s.Tasks.SkillTasks, s.Tasks.Total),
+			percentageInt(s.Tasks.MCPTasks, s.Tasks.Total),
+			percentageInt(s.Tasks.SubagentTasks, s.Tasks.Total),
+		)
 	}
 	return fmt.Sprintf("metrics: %d events %dd | deny=%d warn=%d | avg_lat=%dms | trend=%s%s",
 		s.TotalEvents, days, deny, warn, avgLat, trend, catPart)
@@ -781,6 +911,102 @@ func buildCheckStats(events []Event, since time.Time) []CheckStats {
 	}
 	sort.Slice(stats, func(i, j int) bool { return stats[i].Name < stats[j].Name })
 	return stats
+}
+
+func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
+	type taskSignals struct {
+		skill    bool
+		mcp      bool
+		subagent bool
+		explicit bool
+	}
+
+	recent := make([]Event, 0, len(events))
+	for _, e := range events {
+		if e.Timestamp.Before(since) {
+			continue
+		}
+		recent = append(recent, e)
+	}
+	if len(recent) == 0 {
+		return TaskCoverage{}
+	}
+
+	sort.Slice(recent, func(i, j int) bool {
+		if recent[i].Timestamp.Equal(recent[j].Timestamp) {
+			return recent[i].Hook < recent[j].Hook
+		}
+		return recent[i].Timestamp.Before(recent[j].Timestamp)
+	})
+
+	tasks := make(map[string]*taskSignals)
+	bucketCounter := 0
+	lastBucketTime := time.Time{}
+	currentBucketKey := ""
+
+	for idx, e := range recent {
+		key := strings.TrimSpace(e.TurnID)
+		if key == "" {
+			switch {
+			case e.Timestamp.IsZero():
+				key = fmt.Sprintf("event:%d", idx)
+			case currentBucketKey == "" || e.Timestamp.Sub(lastBucketTime) > 10*time.Minute:
+				bucketCounter++
+				currentBucketKey = fmt.Sprintf("bucket:%d", bucketCounter)
+				lastBucketTime = e.Timestamp
+				key = currentBucketKey
+			default:
+				lastBucketTime = e.Timestamp
+				key = currentBucketKey
+			}
+		} else {
+			key = "turn:" + key
+		}
+
+		entry := tasks[key]
+		if entry == nil {
+			entry = &taskSignals{}
+			tasks[key] = entry
+		}
+		if strings.HasPrefix(key, "turn:") {
+			entry.explicit = true
+		}
+		switch e.Category {
+		case "skill":
+			entry.skill = true
+		case "mcp":
+			entry.mcp = true
+		case "subagent":
+			entry.subagent = true
+		}
+	}
+
+	var coverage TaskCoverage
+	coverage.Total = len(tasks)
+	for _, task := range tasks {
+		if task.skill {
+			coverage.SkillTasks++
+		}
+		if task.mcp {
+			coverage.MCPTasks++
+		}
+		if task.subagent {
+			coverage.SubagentTasks++
+		}
+		if task.explicit {
+			coverage.ExplicitTasks++
+		} else {
+			coverage.HeuristicTasks++
+		}
+	}
+	return coverage
+}
+
+func percentageInt(numerator, denominator int) float64 {
+	if denominator <= 0 {
+		return 0
+	}
+	return float64(numerator) / float64(denominator) * 100
 }
 
 func topN(freq map[string]int, n int) []FreqEntry {

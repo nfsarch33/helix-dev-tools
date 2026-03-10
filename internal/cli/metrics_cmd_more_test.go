@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -72,6 +73,16 @@ func TestRunMetricsRicherBranches(t *testing.T) {
 	metricsFlags.export = filepath.Join(exportDir, "report.md")
 	if err := runMetrics(nil, nil); err != nil {
 		t.Fatalf("runMetrics() export error = %v", err)
+	}
+	report, err := os.ReadFile(metricsFlags.export)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reportText := string(report)
+	for _, want := range []string{"Task Adoption Coverage", "Skill task coverage", "MCP task coverage"} {
+		if !strings.Contains(reportText, want) {
+			t.Fatalf("export missing %q in %q", want, reportText)
+		}
 	}
 
 	metricsFlags.export = filepath.Join("/proc", "report.md")
