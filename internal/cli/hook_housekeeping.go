@@ -125,7 +125,8 @@ func (h *housekeepingHandler) syncRepo() {
 		if err != nil {
 			hostname = "unknown"
 		}
-		commitMsg := fmt.Sprintf("auto: session sync [%s]", hostname)
+		summary := changedFileSummary(repoPath)
+		commitMsg := fmt.Sprintf("auto: session sync [%s]%s", hostname, summary)
 		gitCmd(repoPath, "commit", "-m", commitMsg)
 		h.log.Log("committed: unified-memory")
 	}
@@ -163,6 +164,41 @@ func hasChanges(repoPath string) bool {
 	cmd := exec.Command("git", "-C", repoPath, "status", "--porcelain")
 	out, err := cmd.Output()
 	return err == nil && len(out) > 0
+}
+
+// changedFileSummary returns a compact body line describing what changed,
+// grouped by top-level directory (e.g. "cursor-config/", "global-memories/").
+// Appended to auto commit messages so WSL↔macOS syncs are searchable.
+func changedFileSummary(repoPath string) string {
+	cmd := exec.Command("git", "-C", repoPath, "diff", "--cached", "--name-only")
+	out, err := cmd.Output()
+	if err != nil || len(out) == 0 {
+		return ""
+	}
+	seen := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "/", 2)
+		seen[parts[0]] = true
+	}
+	if len(seen) == 0 {
+		return ""
+	}
+	dirs := make([]string, 0, len(seen))
+	for d := range seen {
+		dirs = append(dirs, d)
+	}
+	// stable sort
+	for i := 0; i < len(dirs)-1; i++ {
+		for j := i + 1; j < len(dirs); j++ {
+			if dirs[j] < dirs[i] {
+				dirs[i], dirs[j] = dirs[j], dirs[i]
+			}
+		}
+	}
+	return "\n\nChanged: " + strings.Join(dirs, ", ")
 }
 
 func gitCmd(repoPath string, args ...string) error {
