@@ -26,6 +26,16 @@ Skips if today's file already exists unless --force is given.`,
 	RunE: runSessionHandoff,
 }
 
+var handoffReviewCmd = &cobra.Command{
+	Use:   "handoff-review",
+	Short: "Fetch and display session handoffs from other machines before pulling",
+	Long: `Fetches origin without merging, finds new/changed session-handoff-*.md files
+on the remote, displays their content, and records the check in
+~/.cursor/hooks/handoff-last-check.txt. Run this before git pull to be aware
+of what other machines have been doing.`,
+	RunE: runHandoffReview,
+}
+
 func init() {
 	sessionHandoffCmd.Flags().BoolVar(&sessionHandoffForce, "force", false, "Overwrite today's handoff file if it already exists")
 	sessionHandoffCmd.Flags().BoolVar(&sessionHandoffDryRun, "dry-run", false, "Show what would be written without creating the file")
@@ -158,4 +168,107 @@ func gitOutputStr(repoPath string, args ...string) string {
 		return "(unavailable)"
 	}
 	return strings.TrimSpace(string(out))
+}
+
+// HandoffCheckStateFile returns the path of the state file that records the last
+// successful handoff-review run.
+func HandoffCheckStateFile(p config.Paths) string {
+	return filepath.Join(p.HooksDir, "handoff-last-check.txt")
+}
+
+func runHandoffReview(_ *cobra.Command, _ []string) error {
+	p := config.DefaultPaths()
+	out := clilog.NewPrefixed("[handoff-review]")
+	found, err := previewRemoteHandoffs(p, out)
+	if err != nil {
+		return err
+	}
+	if !found {
+		out.Info("no new handoffs from other machines (remote is up-to-date or offline)")
+	}
+	return nil
+}
+
+// previewRemoteHandoffs is the testable core of the handoff-review command.
+// It fetches origin, finds new/changed session-handoff-*.md files on the remote
+// relative to the local HEAD, displays them, and records the check in the state file.
+// Returns true if at least one remote handoff was found and displayed.
+func previewRemoteHandoffs(p config.Paths, out *clilog.Prefixed) (bool, error) {
+	repoPath := p.GlobalKB
+
+	// Fetch without merging so we can inspect what's coming.
+	if err := gitCmd(repoPath, "fetch", "origin", "--quiet"); err != nil {
+		out.Warn("fetch failed (offline?): %v", err)
+		return false, nil
+	}
+
+	// Find files that exist on origin/main but differ from HEAD.
+	diffOut, err := exec.Command("git", "-C", repoPath,
+		"diff", "HEAD..origin/main", "--name-only").Output()
+	if err != nil {
+		// No commits ahead — nothing to review.
+		return false, nil
+	}
+
+	var handoffFiles []string
+	for _, line := range strings.Split(strings.TrimSpace(string(diffOut)), "\n") {
+		line = strings.TrimSpace(line)
+		// Match global-memories/session-handoff-*.md
+		if strings.HasPrefix(line, "global-memories/session-handoff-") &&
+			strings.HasSuffix(line, ".md") {
+			handoffFiles = append(handoffFiles, line)
+		}
+	}
+
+	checkedAt := time.Now().UTC().Format(time.RFC3339)
+	if err := recordHandoffCheck(p, checkedAt, handoffFiles); err != nil {
+		out.Warn("could not write state file: %v", err)
+	}
+
+	if len(handoffFiles) == 0 {
+		return false, nil
+	}
+
+	out.Info("=== %d remote handoff(s) from other machines ===", len(handoffFiles))
+	for _, f := range handoffFiles {
+		out.Info("--- %s ---", f)
+		content, showErr := exec.Command("git", "-C", repoPath,
+			"show", "origin/main:"+f).Output()
+		if showErr != nil {
+			out.Warn("could not read %s: %v", f, showErr)
+			continue
+		}
+		// Print only the first 60 lines to keep output manageable.
+		lines := strings.Split(string(content), "\n")
+		limit := 60
+		if len(lines) < limit {
+			limit = len(lines)
+		}
+		fmt.Println(strings.Join(lines[:limit], "\n"))
+		if len(lines) > 60 {
+			out.Info("... (%d more lines — read %s after pull for full content)", len(lines)-60, f)
+		}
+	}
+	out.Info("=== end of remote handoffs ===")
+	return true, nil
+}
+
+// recordHandoffCheck writes the state file so suiteHandoffAcknowledgement can verify
+// the review ran today.
+func recordHandoffCheck(p config.Paths, checkedAt string, files []string) error {
+	stateFile := HandoffCheckStateFile(p)
+	if err := os.MkdirAll(filepath.Dir(stateFile), 0o755); err != nil {
+		return err
+	}
+	var sb strings.Builder
+	sb.WriteString("checked: " + checkedAt + "\n")
+	if len(files) > 0 {
+		sb.WriteString("files:\n")
+		for _, f := range files {
+			sb.WriteString("  " + f + "\n")
+		}
+	} else {
+		sb.WriteString("files: none\n")
+	}
+	return os.WriteFile(stateFile, []byte(sb.String()), 0o644) // #nosec G306 -- personal state file
 }

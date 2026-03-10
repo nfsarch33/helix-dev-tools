@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
@@ -45,6 +46,7 @@ func BuildAllSuites(p config.Paths) []*Suite {
 		suiteRTKTokenOptimization(p),
 		suiteToolchainFreshness(p),
 		suiteToolchainCrossPlatform(p),
+		suiteHandoffAcknowledgement(p),
 	}
 }
 
@@ -93,6 +95,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"MCP Readiness":                   true,
 			"Toolchain Freshness":             true,
 			"Toolchain Cross-Platform":        true,
+			"Handoff Acknowledgement":         true,
 		}
 	default:
 		return BuildAllSuites(p)
@@ -1124,4 +1127,32 @@ func isWSLEnv() bool {
 		return false
 	}
 	return strings.Contains(strings.ToLower(string(data)), "microsoft")
+}
+
+// suiteHandoffAcknowledgement verifies that the pre-pull handoff review has run today.
+// The review is recorded by `cursor-tools handoff-review` (or via daily-refresh step 6/8)
+// in ~/.cursor/hooks/handoff-last-check.txt.
+func suiteHandoffAcknowledgement(p config.Paths) *Suite {
+	s := &Suite{Name: "Handoff Acknowledgement"}
+
+	stateFile := filepath.Join(p.HooksDir, "handoff-last-check.txt")
+	info, err := os.Stat(stateFile)
+	exists := err == nil
+	s.Assert("handoff-last-check.txt exists", exists,
+		"run 'cursor-tools handoff-review' or 'cursor-tools daily-refresh' to create it")
+	if !exists {
+		return s
+	}
+
+	withinDay := info.ModTime().After(time.Now().UTC().Add(-24 * time.Hour))
+	s.Assert("handoff review ran within last 24h", withinDay,
+		fmt.Sprintf("last check: %s — run 'cursor-tools handoff-review'", info.ModTime().Format("2006-01-02 15:04 UTC")))
+
+	data, err := os.ReadFile(stateFile)
+	if err == nil {
+		s.Assert("state file has checked timestamp", strings.Contains(string(data), "checked:"),
+			"state file malformed — run 'cursor-tools handoff-review' to regenerate")
+	}
+
+	return s
 }

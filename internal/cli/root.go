@@ -38,6 +38,7 @@ func init() {
 	rootCmd.AddCommand(worktreeCmd)
 	rootCmd.AddCommand(openclawCmd)
 	rootCmd.AddCommand(sessionHandoffCmd)
+	rootCmd.AddCommand(handoffReviewCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 
