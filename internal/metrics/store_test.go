@@ -92,6 +92,46 @@ var _ = Describe("Metrics Store", func() {
 		})
 	})
 
+	Describe("LoadAll", func() {
+		It("reads base file and rotated files", func() {
+			err := metrics.Record(metricsPath, metrics.Event{
+				Hook: "guard-shell", Action: "allow", LatencyMs: 1,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			rotated := metricsPath + ".1"
+			err = metrics.Record(rotated, metrics.Event{
+				Hook: "guard-mcp", Action: "allow", LatencyMs: 2,
+			})
+			Expect(err).NotTo(HaveOccurred())
+			err = metrics.Record(rotated, metrics.Event{
+				Hook: "sanitize-read", Action: "deny", LatencyMs: 0, Detail: ".env",
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			events, err := metrics.LoadAll(metricsPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(events).To(HaveLen(3))
+		})
+
+		It("returns nil when no files exist", func() {
+			events, err := metrics.LoadAll(filepath.Join(tmpDir, "nonexistent.jsonl"))
+			Expect(err).NotTo(HaveOccurred())
+			Expect(events).To(BeNil())
+		})
+
+		It("works with only the base file", func() {
+			err := metrics.Record(metricsPath, metrics.Event{
+				Hook: "test", Action: "allow", LatencyMs: 0,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			events, err := metrics.LoadAll(metricsPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(events).To(HaveLen(1))
+		})
+	})
+
 	Describe("Summarise", func() {
 		var events []metrics.Event
 		now := time.Now().UTC()

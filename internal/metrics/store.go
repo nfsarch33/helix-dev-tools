@@ -75,6 +75,32 @@ func Load(path string) ([]Event, error) {
 	return events, scanner.Err()
 }
 
+// LoadAll reads events from a metrics file and any rotated variants
+// (e.g. metrics.jsonl.1, metrics.jsonl.2). This ensures the rolling
+// window includes data that survived log rotation.
+func LoadAll(path string) ([]Event, error) {
+	pattern := path + "*"
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("glob rotated metrics: %w", err)
+	}
+	if len(matches) == 0 {
+		return nil, nil
+	}
+	// Sort so the base file comes first, then .1, .2, etc.
+	sort.Strings(matches)
+
+	var all []Event
+	for _, m := range matches {
+		events, err := Load(m)
+		if err != nil {
+			continue
+		}
+		all = append(all, events...)
+	}
+	return all, nil
+}
+
 // HookStats holds aggregated statistics for a single hook.
 type HookStats struct {
 	Hook          string
