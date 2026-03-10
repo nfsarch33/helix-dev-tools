@@ -13,6 +13,7 @@ import (
 
 	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/debuglog"
 )
 
 var mcpIndexFlags struct {
@@ -69,6 +70,31 @@ func loadMCPServers(path string) (map[string]mcpServerSpec, error) {
 	if cfg.MCPServers == nil {
 		cfg.MCPServers = make(map[string]mcpServerSpec)
 	}
+	names := make([]string, 0, len(cfg.MCPServers))
+	disabled := 0
+	perplexityName := "missing"
+	for name, spec := range cfg.MCPServers {
+		names = append(names, name)
+		if strings.Contains(strings.ToLower(string(data)), `"`+name+`":{"disabled":true`) {
+			disabled++
+		}
+		if strings.Contains(name, "perplexity") {
+			perplexityName = name
+		}
+		_ = spec
+	}
+	sort.Strings(names)
+	// #region agent log
+	debuglog.Write("mcp-index", "H1", "internal/cli/mcp_index.go:72", "loaded mcp servers", map[string]interface{}{
+		"path":             path,
+		"serverCount":      len(cfg.MCPServers),
+		"serverNames":      names,
+		"perplexityName":   perplexityName,
+		"hasPerplexityAsk": cfg.MCPServers["perplexity-ask"].Command != "",
+		"hasPerplexity":    cfg.MCPServers["perplexity"].Command != "",
+		"disabledGuess":    disabled,
+	})
+	// #endregion
 	return cfg.MCPServers, nil
 }
 
@@ -172,6 +198,13 @@ func refreshMCPIndex(mcpJSONPath, outPath string) (bool, error) {
 		// Compare ignoring the "Last generated:" timestamp line to avoid
 		// needless rewrites when nothing else changed.
 		if stripTimestamp(string(current)) == stripTimestamp(rendered) {
+			// #region agent log
+			debuglog.Write("mcp-index", "H1", "internal/cli/mcp_index.go:176", "mcp index unchanged", map[string]interface{}{
+				"mcpJSONPath": mcpJSONPath,
+				"outPath":     outPath,
+				"serverCount": len(servers),
+			})
+			// #endregion
 			return false, nil
 		}
 	}
@@ -179,6 +212,13 @@ func refreshMCPIndex(mcpJSONPath, outPath string) (bool, error) {
 	if err := os.WriteFile(outPath, []byte(rendered), 0o644); err != nil {
 		return false, fmt.Errorf("writing index: %w", err)
 	}
+	// #region agent log
+	debuglog.Write("mcp-index", "H1", "internal/cli/mcp_index.go:186", "mcp index updated", map[string]interface{}{
+		"mcpJSONPath": mcpJSONPath,
+		"outPath":     outPath,
+		"serverCount": len(servers),
+	})
+	// #endregion
 	return true, nil
 }
 

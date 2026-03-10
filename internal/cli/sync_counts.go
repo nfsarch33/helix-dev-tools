@@ -11,6 +11,7 @@ import (
 
 	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/debuglog"
 	"github.com/nfsarch33/cursor-tools/internal/lockfile"
 )
 
@@ -96,6 +97,18 @@ type replacement struct {
 func SyncCountsApply(apply, quiet bool) (int, int) {
 	p := config.DefaultPaths()
 	counts := getDiskCounts(p)
+	// #region agent log
+	debuglog.Write("health-check", "H2", "internal/cli/sync_counts.go:100", "calculated disk inventory", map[string]interface{}{
+		"apply":        apply,
+		"quiet":        quiet,
+		"cursorSkills": counts.CursorSkills,
+		"agentSkills":  counts.AgentsSkills,
+		"totalSkills":  counts.TotalSkills,
+		"hooks":        counts.Hooks,
+		"agents":       counts.Agents,
+		"commands":     counts.Commands,
+	})
+	// #endregion
 
 	if !quiet {
 		fmt.Println("Disk counts:")
@@ -182,6 +195,14 @@ func SyncCountsApply(apply, quiet bool) (int, int) {
 		}
 	}
 
+	// #region agent log
+	debuglog.Write("health-check", "H2", "internal/cli/sync_counts.go:196", "sync-counts result", map[string]interface{}{
+		"apply":   apply,
+		"quiet":   quiet,
+		"changes": changes,
+		"errors":  errors,
+	})
+	// #endregion
 	return changes, errors
 }
 
