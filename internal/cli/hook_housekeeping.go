@@ -58,6 +58,7 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	h.log.Log(fmt.Sprintf("stop event: status=%s", input.Status))
 
 	if input.Status == "completed" || input.Status == "aborted" {
+		h.runSessionHandoff()
 		h.runSyncCounts()
 		h.runPromoteLearnings()
 		h.syncRepo()
@@ -77,6 +78,19 @@ func (h *housekeepingHandler) rotateAllLogs() {
 		"post-edit.log",
 		"metrics.jsonl",
 	})
+}
+
+func (h *housekeepingHandler) runSessionHandoff() {
+	selfBin, err := os.Executable()
+	if err != nil {
+		return
+	}
+	cmd := exec.Command(selfBin, "session-handoff")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		h.log.Log(fmt.Sprintf("session-handoff error: %s", string(out)))
+	} else {
+		h.log.Log("session-handoff: ok")
+	}
 }
 
 func (h *housekeepingHandler) runSyncCounts() {
@@ -154,7 +168,7 @@ func (h *housekeepingHandler) pullRepo() {
 }
 
 func (h *housekeepingHandler) setSSHCommand() {
-	keyPath := h.paths.Home + "/.ssh/agtc"
+	keyPath := h.paths.SSHKeyPath()
 	if _, err := os.Stat(keyPath); err == nil {
 		os.Setenv("GIT_SSH_COMMAND", fmt.Sprintf("ssh -i %s -o StrictHostKeyChecking=no", keyPath))
 	}

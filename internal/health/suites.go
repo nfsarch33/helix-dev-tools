@@ -43,6 +43,8 @@ func BuildAllSuites(p config.Paths) []*Suite {
 		suiteSelfImprovementPipeline(p),
 		suiteDevContainerCompliance(p),
 		suiteRTKTokenOptimization(p),
+		suiteToolchainFreshness(p),
+		suiteToolchainCrossPlatform(p),
 	}
 }
 
@@ -89,6 +91,8 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Automation Pipeline":             true,
 			"Data Integrity":                  true,
 			"MCP Readiness":                   true,
+			"Toolchain Freshness":             true,
+			"Toolchain Cross-Platform":        true,
 		}
 	default:
 		return BuildAllSuites(p)
@@ -430,15 +434,16 @@ func suiteResumeReadiness(p config.Paths) *Suite {
 	s := &Suite{Name: "Resume Readiness"}
 
 	dailyPrompt := filepath.Join(p.GlobalMemoriesDir(), "daily-startup-prompt.md")
-	handoff := filepath.Join(p.GlobalMemoriesDir(), "session-handoff-2026-03-10.md")
+	handoff := latestGlobMatch(p.GlobalMemoriesDir(), "session-handoff-*.md")
 	mcpIndex := filepath.Join(p.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
 
 	s.AssertFileExists("daily-startup prompt exists", dailyPrompt)
-	s.AssertFileExists("session handoff exists", handoff)
+	s.Assert("session handoff exists", handoff != "", "no session-handoff-*.md found in "+p.GlobalMemoriesDir())
 	s.AssertFileExists("MCP index exists", mcpIndex)
 	s.AssertFileContains("daily prompt references session handoff", dailyPrompt, "session-handoff")
-	s.AssertFileContains("session handoff has next priorities", handoff, "Next priorities")
-	s.AssertFileContains("session handoff mentions ai-agent-business-stack", handoff, "ai-agent-business-stack")
+	if handoff != "" {
+		s.AssertFileContains("session handoff has section headers", handoff, "## ")
+	}
 
 	status, err := gitOutput(p.GlobalKB, "status", "--short")
 	s.Assert("git status executes", err == nil, "git status failed")
@@ -1017,4 +1022,106 @@ func absArgsExist(args []string) bool {
 		}
 	}
 	return true
+}
+
+// latestGlobMatch returns the lexicographically latest file matching pattern in dir,
+// or empty string if none found. For date-stamped files this yields the most recent.
+func latestGlobMatch(dir, pattern string) string {
+	matches, err := filepath.Glob(filepath.Join(dir, pattern))
+	if err != nil || len(matches) == 0 {
+		return ""
+	}
+	latest := matches[0]
+	for _, m := range matches[1:] {
+		if m > latest {
+			latest = m
+		}
+	}
+	return latest
+}
+
+// suiteToolchainFreshness warns when the cursor-tools binary is older than its source.
+func suiteToolchainFreshness(p config.Paths) *Suite {
+	s := &Suite{Name: "Toolchain Freshness"}
+
+	binPath := filepath.Join(p.BinDir, "cursor-tools")
+	srcRoot := filepath.Join(p.CursorConfigDir(), "cursor-tools")
+
+	binInfo, err := os.Stat(binPath)
+	s.Assert("cursor-tools binary exists", err == nil, binPath+" not found")
+	if err != nil {
+		return s
+	}
+
+	srcInfo, srcErr := os.Stat(srcRoot)
+	srcExists := srcErr == nil && srcInfo.IsDir()
+	s.Assert("cursor-tools source dir exists", srcExists, srcRoot+" not found")
+	if !srcExists {
+		return s
+	}
+
+	newestSrc := binInfo.ModTime()
+	_ = filepath.WalkDir(srcRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		if !strings.HasSuffix(path, ".go") {
+			return nil
+		}
+		info, err := d.Info()
+		if err != nil {
+			return nil
+		}
+		if info.ModTime().After(newestSrc) {
+			newestSrc = info.ModTime()
+		}
+		return nil
+	})
+
+	stale := newestSrc.After(binInfo.ModTime())
+	s.Assert(
+		"binary is up-to-date with source",
+		!stale,
+		fmt.Sprintf("source newer than binary — rebuild: cd %s && go build -o ~/bin/cursor-tools ./cmd/cursor-tools/", srcRoot),
+	)
+
+	return s
+}
+
+// suiteToolchainCrossPlatform verifies the binary can execute on this platform.
+func suiteToolchainCrossPlatform(p config.Paths) *Suite {
+	s := &Suite{Name: "Toolchain Cross-Platform"}
+
+	binPath := filepath.Join(p.BinDir, "cursor-tools")
+	if _, err := os.Stat(binPath); err != nil {
+		s.Assert("cursor-tools binary exists", false, binPath+" not found")
+		return s
+	}
+
+	cmd := exec.Command(binPath, "version")
+	err := cmd.Run()
+	s.Assert(
+		"binary executes on current platform ("+p.PlatformProfile()+")",
+		err == nil,
+		fmt.Sprintf("binary failed to run (%v) — rebuild for %s: cd %s/cursor-tools && go build -o ~/bin/cursor-tools ./cmd/cursor-tools/", err, p.PlatformProfile(), p.CursorConfigDir()),
+	)
+
+	if runtime.GOOS == "darwin" {
+		s.Assert("running on macOS profile", p.PlatformProfile() == "macos", "PlatformProfile mismatch: got "+p.PlatformProfile())
+	} else if isWSLEnv() {
+		s.Assert("running on WSL profile", p.PlatformProfile() == "wsl", "PlatformProfile mismatch: got "+p.PlatformProfile())
+	}
+
+	return s
+}
+
+func isWSLEnv() bool {
+	if os.Getenv("WSL_INTEROP") != "" || os.Getenv("WSL_DISTRO_NAME") != "" {
+		return true
+	}
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(data)), "microsoft")
 }

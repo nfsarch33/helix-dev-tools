@@ -37,6 +37,7 @@ func init() {
 	rootCmd.AddCommand(skillAuditSourcesCmd)
 	rootCmd.AddCommand(worktreeCmd)
 	rootCmd.AddCommand(openclawCmd)
+	rootCmd.AddCommand(sessionHandoffCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 

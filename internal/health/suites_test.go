@@ -18,10 +18,10 @@ func TestHealth(t *testing.T) {
 }
 
 var _ = Describe("BuildAllSuites", func() {
-	It("returns 27 suites", func() {
+	It("returns 29 suites", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites).To(HaveLen(27))
+		Expect(suites).To(HaveLen(29))
 	})
 
 	It("includes Self-Improvement Pipeline as Suite 25", func() {

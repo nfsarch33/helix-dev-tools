@@ -48,7 +48,7 @@ func (d *dailyRefresher) setSSHCommand() {
 }
 
 func (d *dailyRefresher) stepMCPIndex() {
-	d.out.Info("step 1/6: MCP index")
+	d.out.Info("step 1/7: MCP index")
 	mcpJSON := filepath.Join(d.paths.Home, ".cursor", "mcp.json")
 	outPath := filepath.Join(d.paths.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
 
@@ -73,7 +73,7 @@ func (d *dailyRefresher) stepMCPIndex() {
 }
 
 func (d *dailyRefresher) stepRepoMemories() {
-	d.out.Info("step 2/6: repo memories")
+	d.out.Info("step 2/7: repo memories")
 	listFile := filepath.Join(d.paths.ToolsDir(), "repos-to-sync.txt")
 	f, err := os.Open(listFile)
 	if err != nil {
@@ -151,7 +151,7 @@ func syncRepoMemories(srcDir, dstDir string) syncCounts {
 }
 
 func (d *dailyRefresher) stepMetricsReport() {
-	d.out.Info("step 4/6: metrics report")
+	d.out.Info("step 4/7: metrics report")
 	metricsPath := d.paths.MetricsFile()
 	outPath := filepath.Join(d.paths.GlobalMemoriesDir(), "system-performance.md")
 
@@ -183,7 +183,7 @@ func (d *dailyRefresher) stepMetricsReport() {
 }
 
 func (d *dailyRefresher) stepGitSync() {
-	d.out.Info("step 5/6: git unified-memory")
+	d.out.Info("step 5/7: git unified-memory")
 	repoPath := d.paths.GlobalKB
 	if !isDir(repoPath + "/.git") {
 		d.out.Warn("unified-memory repo not found")
@@ -285,7 +285,7 @@ func (d *dailyRefresher) syncFile(label, src, dst string) {
 }
 
 func (d *dailyRefresher) stepSkillsSync() {
-	d.out.Info("step 6/6: skills")
+	d.out.Info("step 6/7: skills")
 	skillsSrc := filepath.Join(d.paths.Memo, "skills")
 	skillsDst := d.paths.SkillsDir
 
@@ -342,6 +342,13 @@ func (d *dailyRefresher) stepSkillsSync() {
 	}
 }
 
+func (d *dailyRefresher) stepSessionHandoff() {
+	d.out.Info("step 7/7: session handoff")
+	if err := generateSessionHandoff(d.paths, d.out, false, d.dryRun); err != nil {
+		d.out.Error("session handoff failed: %s", err.Error())
+	}
+}
+
 func runDailyRefresh(_ *cobra.Command, _ []string) error {
 	p := config.DefaultPaths()
 	out := clilog.NewPrefixed(dailyLogPrefix)
@@ -363,6 +370,7 @@ func runDailyRefresh(_ *cobra.Command, _ []string) error {
 	d.stepMetricsReport()
 	d.stepGitSync()
 	d.stepSkillsSync()
+	d.stepSessionHandoff()
 
 	if out.Errors() > 0 {
 		d.out.Info("done with %d error(s)", out.Errors())
@@ -373,7 +381,7 @@ func runDailyRefresh(_ *cobra.Command, _ []string) error {
 }
 
 func runDailyRefreshVerification(d *dailyRefresher) error {
-	d.out.Info("step 3/6: verification")
+	d.out.Info("step 3/7: verification")
 
 	if d.dryRun {
 		d.out.Info("[dry-run] would run: doctor resume, doctor mcp, health-check, selftest, IronClaw smoke")
