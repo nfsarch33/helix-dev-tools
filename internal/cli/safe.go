@@ -14,16 +14,20 @@ var safeCmd = &cobra.Command{
 	RunE:  runSafe,
 }
 
-func runSafe(_ *cobra.Command, _ []string) error {
-	var cursorPath string
-	switch runtime.GOOS {
-	case "darwin":
-		cursorPath = "/Applications/Cursor.app/Contents/MacOS/Cursor"
-	default:
-		cursorPath = "cursor"
-	}
+var safeCursorPath string // override in tests
 
-	cmd := exec.Command(cursorPath, "--disable-gpu")
+func defaultCursorPath() string {
+	if safeCursorPath != "" {
+		return safeCursorPath
+	}
+	if runtime.GOOS == "darwin" {
+		return "/Applications/Cursor.app/Contents/MacOS/Cursor"
+	}
+	return "cursor"
+}
+
+func runSafe(_ *cobra.Command, _ []string) error {
+	cmd := exec.Command(defaultCursorPath(), "--disable-gpu")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Start()

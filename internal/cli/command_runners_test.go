@@ -384,9 +384,13 @@ func TestRunPromote(t *testing.T) {
 func TestRunSafeStartsCursorBinary(t *testing.T) {
 	binDir := t.TempDir()
 	logPath := filepath.Join(binDir, "cursor.log")
-	writeExecutable(t, binDir, "cursor", "#!/bin/sh\necho \"$@\" > \""+logPath+"\"\n")
+	mockPath := writeExecutable(t, binDir, "cursor", "#!/bin/sh\necho \"$@\" > \""+logPath+"\"\n")
 	restorePath := prependPath(t, binDir)
 	defer restorePath()
+
+	oldPath := safeCursorPath
+	safeCursorPath = mockPath
+	defer func() { safeCursorPath = oldPath }()
 
 	if err := runSafe(nil, nil); err != nil {
 		t.Fatalf("runSafe() error = %v", err)

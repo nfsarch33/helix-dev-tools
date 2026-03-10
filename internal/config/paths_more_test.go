@@ -43,12 +43,19 @@ func TestDerivedPathsAndPlatformBranches(t *testing.T) {
 		t.Fatalf("SSHKeyPath() fallback = %q", got)
 	}
 
-	oldWSL := os.Getenv("WSL_INTEROP")
-	if err := os.Setenv("WSL_INTEROP", "1"); err != nil {
-		t.Fatal(err)
+	if got := p.PlatformProfile(); got == "" {
+		t.Fatal("PlatformProfile() returned empty string")
 	}
-	defer os.Setenv("WSL_INTEROP", oldWSL)
-	if got := p.PlatformProfile(); got != "wsl" {
-		t.Fatalf("PlatformProfile() = %q, want wsl", got)
+	// WSL_INTEROP trick only works on Linux; on macOS the darwin branch
+	// short-circuits, so we just verify non-empty above.
+	if os.Getenv("WSL_INTEROP") != "" || p.PlatformProfile() == "linux" {
+		oldWSL := os.Getenv("WSL_INTEROP")
+		if err := os.Setenv("WSL_INTEROP", "1"); err != nil {
+			t.Fatal(err)
+		}
+		defer os.Setenv("WSL_INTEROP", oldWSL)
+		if got := p.PlatformProfile(); got != "wsl" {
+			t.Fatalf("PlatformProfile() = %q, want wsl", got)
+		}
 	}
 }
