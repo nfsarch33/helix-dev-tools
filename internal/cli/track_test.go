@@ -195,3 +195,58 @@ var _ = Describe("CategoryStats in Summarise", func() {
 		Expect(summary.Categories[1].Category).To(Equal("shell"))
 	})
 })
+
+var _ = Describe("Track execution paths", func() {
+	var oldHome string
+	var tmpDir string
+
+	BeforeEach(func() {
+		oldHome = os.Getenv("HOME")
+		tmpDir = GinkgoT().TempDir()
+		Expect(os.Setenv("HOME", tmpDir)).To(Succeed())
+	})
+
+	AfterEach(func() {
+		Expect(os.Setenv("HOME", oldHome)).To(Succeed())
+		trackFlags.category = "custom"
+		trackFlags.name = ""
+		trackFlags.durationMs = 0
+	})
+
+	It("records manual track events", func() {
+		trackFlags.category = "skill"
+		trackFlags.name = "manual-skill"
+		trackFlags.durationMs = 123
+
+		Expect(runTrack(nil, nil)).To(Succeed())
+
+		events, err := metrics.Load(filepath.Join(tmpDir, ".cursor", "hooks", "metrics.jsonl"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].Category).To(Equal("skill"))
+		Expect(events[0].Detail).To(Equal("manual-skill"))
+		Expect(events[0].DurationMs).To(Equal(int64(123)))
+	})
+
+	It("records wrapper executions", func() {
+		trackFlags.category = "tool"
+		trackFlags.name = "wrapper"
+
+		Expect(runTrack(nil, []string{"sh", "-c", "exit 0"})).To(Succeed())
+
+		events, err := metrics.Load(filepath.Join(tmpDir, ".cursor", "hooks", "metrics.jsonl"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].Category).To(Equal("tool"))
+		Expect(events[0].Detail).To(Equal("wrapper"))
+		Expect(events[0].ExitCode).To(Equal(0))
+	})
+
+	It("rejects invalid categories", func() {
+		trackFlags.category = "bogus"
+		trackFlags.name = "bad"
+		err := runTrack(nil, nil)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid category"))
+	})
+})
