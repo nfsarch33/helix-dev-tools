@@ -85,13 +85,13 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 
 	record("allow", basename)
 
-	// Emit secondary skill-activate event when an Agent Skill is loaded
+	// Record skill file reads separately so they don't inflate material skill usage.
 	if basename == "SKILL.md" && strings.Contains(input.FilePath, "/skills/") {
 		skillName := extractSkillName(input.FilePath)
 		if skillName != "" && h.metricsPath != "" {
 			_ = metrics.Record(h.metricsPath, metrics.Event{
 				Hook:      "skill-activate",
-				Action:    "load",
+				Action:    "read",
 				Category:  "skill",
 				LatencyMs: 0,
 				Detail:    skillName,

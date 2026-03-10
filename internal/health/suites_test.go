@@ -18,22 +18,28 @@ func TestHealth(t *testing.T) {
 }
 
 var _ = Describe("BuildAllSuites", func() {
-	It("returns 26 suites", func() {
+	It("returns 27 suites", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites).To(HaveLen(26))
+		Expect(suites).To(HaveLen(27))
 	})
 
-	It("includes DevContainer Compliance as Suite 25", func() {
+	It("includes Self-Improvement Pipeline as Suite 25", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites[24].Name).To(Equal("DevContainer Compliance"))
+		Expect(suites[24].Name).To(Equal("Self-Improvement Pipeline"))
 	})
 
-	It("includes rtk Token Optimization as Suite 26", func() {
+	It("includes DevContainer Compliance as Suite 26", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites[25].Name).To(Equal("rtk Token Optimization"))
+		Expect(suites[25].Name).To(Equal("DevContainer Compliance"))
+	})
+
+	It("includes rtk Token Optimization as Suite 27", func() {
+		p := config.DefaultPaths()
+		suites := health.BuildAllSuites(p)
+		Expect(suites[26].Name).To(Equal("rtk Token Optimization"))
 	})
 
 	It("builds doctor resume suites from the shared catalog", func() {

@@ -42,7 +42,7 @@ var _ = Describe("sanitizeReadHandler", func() {
 		Expect(resp.Permission).To(Equal("deny"))
 	})
 
-	It("emits skill-activate event when SKILL.md is read", func() {
+	It("emits a skill read event when SKILL.md is read", func() {
 		input := &hookio.Input{FilePath: "/Users/test/.cursor/skills/rust-mastery/SKILL.md"}
 		resp, err := handler.Handle(context.Background(), input)
 		Expect(err).NotTo(HaveOccurred())
@@ -60,6 +60,7 @@ var _ = Describe("sanitizeReadHandler", func() {
 		Expect(lines[1]).To(ContainSubstring("skill-activate"))
 		Expect(lines[1]).To(ContainSubstring("rust-mastery"))
 		Expect(lines[1]).To(ContainSubstring(`"cat":"skill"`))
+		Expect(lines[1]).To(ContainSubstring(`"action":"read"`))
 	})
 
 	It("does not emit skill-activate for non-skill SKILL.md paths", func() {

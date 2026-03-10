@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,6 +18,8 @@ import (
 )
 
 var dailyRefreshDryRun bool
+var dailyRefreshLoadMetrics = metrics.LoadAll
+var dailyRefreshVerify = runDailyRefreshVerification
 
 var dailyRefreshCmd = &cobra.Command{
 	Use:   "daily-refresh",
@@ -45,7 +48,7 @@ func (d *dailyRefresher) setSSHCommand() {
 }
 
 func (d *dailyRefresher) stepMCPIndex() {
-	d.out.Info("step 1/5: MCP index")
+	d.out.Info("step 1/6: MCP index")
 	mcpJSON := filepath.Join(d.paths.Home, ".cursor", "mcp.json")
 	outPath := filepath.Join(d.paths.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
 
@@ -70,7 +73,7 @@ func (d *dailyRefresher) stepMCPIndex() {
 }
 
 func (d *dailyRefresher) stepRepoMemories() {
-	d.out.Info("step 2/5: repo memories")
+	d.out.Info("step 2/6: repo memories")
 	listFile := filepath.Join(d.paths.ToolsDir(), "repos-to-sync.txt")
 	f, err := os.Open(listFile)
 	if err != nil {
@@ -148,11 +151,11 @@ func syncRepoMemories(srcDir, dstDir string) syncCounts {
 }
 
 func (d *dailyRefresher) stepMetricsReport() {
-	d.out.Info("step 3/5: metrics report")
+	d.out.Info("step 4/6: metrics report")
 	metricsPath := d.paths.MetricsFile()
 	outPath := filepath.Join(d.paths.GlobalMemoriesDir(), "system-performance.md")
 
-	events, err := metrics.Load(metricsPath)
+	events, err := dailyRefreshLoadMetrics(metricsPath)
 	if err != nil {
 		d.out.Warn("metrics load failed: %s", err.Error())
 		return
@@ -180,7 +183,7 @@ func (d *dailyRefresher) stepMetricsReport() {
 }
 
 func (d *dailyRefresher) stepGitSync() {
-	d.out.Info("step 4/5: git unified-memory")
+	d.out.Info("step 5/6: git unified-memory")
 	repoPath := d.paths.GlobalKB
 	if !isDir(repoPath + "/.git") {
 		d.out.Warn("unified-memory repo not found")
@@ -282,7 +285,7 @@ func (d *dailyRefresher) syncFile(label, src, dst string) {
 }
 
 func (d *dailyRefresher) stepSkillsSync() {
-	d.out.Info("step 5/5: skills")
+	d.out.Info("step 6/6: skills")
 	skillsSrc := filepath.Join(d.paths.Memo, "skills")
 	skillsDst := d.paths.SkillsDir
 
@@ -354,6 +357,9 @@ func runDailyRefresh(_ *cobra.Command, _ []string) error {
 
 	d.stepMCPIndex()
 	d.stepRepoMemories()
+	if err := dailyRefreshVerify(d); err != nil {
+		d.out.Error("verification failed: %s", err.Error())
+	}
 	d.stepMetricsReport()
 	d.stepGitSync()
 	d.stepSkillsSync()
@@ -364,4 +370,70 @@ func runDailyRefresh(_ *cobra.Command, _ []string) error {
 	}
 	d.out.Info("done")
 	return nil
+}
+
+func runDailyRefreshVerification(d *dailyRefresher) error {
+	d.out.Info("step 3/6: verification")
+
+	if d.dryRun {
+		d.out.Info("[dry-run] would run: doctor resume, doctor mcp, health-check, selftest, IronClaw smoke")
+		return nil
+	}
+
+	commands := [][]string{
+		{"doctor", "resume"},
+		{"doctor", "mcp"},
+		{"health-check"},
+		{"selftest"},
+	}
+	for _, args := range commands {
+		if err := dailyRefreshRunSelfCommand(d.paths, args...); err != nil {
+			return err
+		}
+	}
+
+	smokeScript := os.Getenv("IRONCLAW_MCP_SMOKE_SCRIPT")
+	if smokeScript == "" {
+		smokeScript = "/mnt/f/onedrive/repo/biz-stack/ironclaw-mcp/scripts/smoke-test.sh"
+	}
+	if _, err := os.Stat(smokeScript); err == nil {
+		if err := dailyRefreshRunSmoke(smokeScript); err != nil {
+			return err
+		}
+	} else {
+		d.out.Warn("IronClaw smoke script not found: %s", smokeScript)
+	}
+	return nil
+}
+
+func dailyRefreshRunSelfCommand(paths config.Paths, args ...string) error {
+	binPath := filepath.Join(paths.BinDir, "cursor-tools")
+	if _, err := os.Stat(binPath); err != nil {
+		exe, exeErr := os.Executable()
+		if exeErr != nil {
+			return nil
+		}
+		base := filepath.Base(exe)
+		if base != "cursor-tools" && !strings.HasPrefix(base, "cursor-tools") {
+			return nil
+		}
+		binPath = exe
+	}
+	cmd := exec.Command(binPath, args...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	return cmd.Run()
+}
+
+func dailyRefreshRunSmoke(scriptPath string) error {
+	cmd := exec.Command(scriptPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = append(os.Environ(),
+		"SMOKE_REQUIRE_ROUTER=true",
+		"SMOKE_STATEFUL_TOOL=ironclaw_chat",
+	)
+	return cmd.Run()
 }

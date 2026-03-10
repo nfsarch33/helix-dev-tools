@@ -360,3 +360,101 @@ func TestDailyRefreshErrorAndMissingBranches(t *testing.T) {
 		t.Fatal("runDailyRefresh() expected error when MCP config is invalid")
 	}
 }
+
+func TestStepMetricsReportUsesRotatedMetrics(t *testing.T) {
+	oldHome := os.Getenv("HOME")
+	oldGlobalKB := os.Getenv("GLOBAL_KB")
+	oldMemo := os.Getenv("MEMO")
+	home := t.TempDir()
+	globalKB := filepath.Join(home, "kb")
+	memo := filepath.Join(home, "memo")
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("GLOBAL_KB", globalKB); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("MEMO", memo); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("GLOBAL_KB", oldGlobalKB)
+		_ = os.Setenv("MEMO", oldMemo)
+	}()
+
+	p := config.DefaultPaths()
+	if err := os.MkdirAll(p.HooksDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(p.GlobalMemoriesDir(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	rotated := p.MetricsFile() + ".1"
+	if err := metrics.Record(rotated, metrics.Event{
+		Timestamp: nowUTC().Add(-1 * time.Hour),
+		Hook:      "guard-shell",
+		Action:    "allow",
+		Category:  "shell",
+		LatencyMs: 7,
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	d := &dailyRefresher{
+		paths: p,
+		out:   clilog.NewPrefixed("[test]"),
+	}
+	d.stepMetricsReport()
+
+	report := filepath.Join(p.GlobalMemoriesDir(), "system-performance.md")
+	data, err := os.ReadFile(report)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "System Performance Report") {
+		t.Fatalf("report missing expected header: %s", string(data))
+	}
+}
+
+func TestRunDailyRefreshInvokesVerification(t *testing.T) {
+	oldHome := os.Getenv("HOME")
+	oldGlobalKB := os.Getenv("GLOBAL_KB")
+	oldMemo := os.Getenv("MEMO")
+	home := t.TempDir()
+	globalKB := filepath.Join(home, "kb")
+	memo := filepath.Join(home, "memo")
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("GLOBAL_KB", globalKB); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("MEMO", memo); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv("GLOBAL_KB", oldGlobalKB)
+		_ = os.Setenv("MEMO", oldMemo)
+	}()
+
+	called := false
+	oldVerify := dailyRefreshVerify
+	dailyRefreshVerify = func(*dailyRefresher) error {
+		called = true
+		return nil
+	}
+	defer func() { dailyRefreshVerify = oldVerify }()
+
+	oldDryRun := dailyRefreshDryRun
+	dailyRefreshDryRun = true
+	defer func() { dailyRefreshDryRun = oldDryRun }()
+
+	if err := runDailyRefresh(nil, nil); err != nil {
+		t.Fatalf("runDailyRefresh() error = %v", err)
+	}
+	if !called {
+		t.Fatal("expected daily refresh verification step to run")
+	}
+}

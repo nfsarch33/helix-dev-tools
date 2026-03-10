@@ -826,6 +826,9 @@ func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPSer
 		}
 		switch e.Category {
 		case "skill":
+			if isSkillReadEvent(e) {
+				continue
+			}
 			acc, ok := skillAcc[e.Detail]
 			if !ok {
 				acc = &struct {
@@ -1010,6 +1013,9 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 		}
 		switch e.Category {
 		case "skill":
+			if isSkillReadEvent(e) {
+				continue
+			}
 			entry.skill = true
 		case "mcp":
 			entry.mcp = true
@@ -1049,6 +1055,10 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 		}
 	}
 	return coverage
+}
+
+func isSkillReadEvent(e Event) bool {
+	return e.Category == "skill" && strings.TrimSpace(e.Action) == "read"
 }
 
 func eventMCPServer(e Event) string {

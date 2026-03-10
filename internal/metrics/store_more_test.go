@@ -30,6 +30,7 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	events := []Event{
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 20, TurnID: "task-1", TaskSource: "exact"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 40, TurnID: "task-1", TaskSource: "exact"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "skill-activate", Action: "read", Category: "skill", Detail: "skill-read-only", DurationMs: 1, TurnID: "task-3", TaskSource: "exact"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "ironclaw:ironclaw_health", LatencyMs: 15, TurnID: "task-1", TaskSource: "exact"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "subagent", Detail: "go-architect", DurationMs: 5, TurnID: "task-2", TaskSource: "turn"},
 	}
@@ -46,10 +47,10 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	}
 
 	summary := Summarise(events, now.Add(-24*time.Hour))
-	if summary.Tasks.Total != 2 || summary.Tasks.SkillTasks != 1 || summary.Tasks.MCPTasks != 1 || summary.Tasks.SubagentTasks != 1 {
+	if summary.Tasks.Total != 3 || summary.Tasks.SkillTasks != 1 || summary.Tasks.MCPTasks != 1 || summary.Tasks.SubagentTasks != 1 {
 		t.Fatalf("unexpected task coverage: %+v", summary.Tasks)
 	}
-	if summary.Tasks.IronclawTasks != 1 || summary.Tasks.ExactTasks != 1 || summary.Tasks.TurnTasks != 1 {
+	if summary.Tasks.IronclawTasks != 1 || summary.Tasks.ExactTasks != 2 || summary.Tasks.TurnTasks != 1 {
 		t.Fatalf("unexpected task confidence coverage: %+v", summary.Tasks)
 	}
 	md := summary.Markdown()
