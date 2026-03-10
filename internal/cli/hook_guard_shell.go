@@ -15,6 +15,8 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
+var guardShellExit = os.Exit
+
 var guardShellCmd = &cobra.Command{
 	Use:   "guard-shell",
 	Short: "beforeShellExecution: block dangerous shell commands",
@@ -119,7 +121,7 @@ func runGuardShell(stdin *os.File, stdout *os.File) error {
 
 	_ = hookio.WriteResponse(stdout, resp)
 	if resp.Permission == "deny" {
-		os.Exit(2)
+		guardShellExit(2)
 	}
 	return nil
 }

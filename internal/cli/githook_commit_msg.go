@@ -2,12 +2,16 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
+
+var commitMsgExit = os.Exit
+var commitMsgStderr io.Writer = os.Stderr
 
 var commitMsgCmd = &cobra.Command{
 	Use:   "commit-msg [msg-file]",
@@ -41,8 +45,9 @@ func runCommitMsg(_ *cobra.Command, args []string) error {
 	for _, pattern := range aiPatterns {
 		re := regexp.MustCompile("(?i)" + pattern)
 		if re.MatchString(msgLower) {
-			fmt.Fprintf(os.Stderr, "ERROR: commit message contains AI attribution ('%s').\nRemove AI attribution and try again.\n", pattern)
-			os.Exit(1)
+			fmt.Fprintf(commitMsgStderr, "ERROR: commit message contains AI attribution ('%s').\nRemove AI attribution and try again.\n", pattern)
+			commitMsgExit(1)
+			return nil
 		}
 	}
 
@@ -53,8 +58,9 @@ func runCommitMsg(_ *cobra.Command, args []string) error {
 	}
 
 	if !conventionalFormat.MatchString(firstLine) {
-		fmt.Fprintf(os.Stderr, "ERROR: commit message must follow conventional format.\n  Expected: type(scope): message  OR  type: message\n  Got:      %s\n", firstLine)
-		os.Exit(1)
+		fmt.Fprintf(commitMsgStderr, "ERROR: commit message must follow conventional format.\n  Expected: type(scope): message  OR  type: message\n  Got:      %s\n", firstLine)
+		commitMsgExit(1)
+		return nil
 	}
 
 	return nil

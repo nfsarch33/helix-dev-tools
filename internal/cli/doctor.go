@@ -11,6 +11,11 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/health"
 )
 
+var doctorSyncCountsApply = SyncCountsApply
+var doctorBuildSuites = health.BuildDoctorSuites
+var doctorRunSuites = runSuites
+var doctorRecordCheckRun = recordCheckRun
+
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Run targeted install, MCP, platform, and resume checks",
@@ -64,7 +69,7 @@ func runDoctorProfile(profile string) error {
 	p := config.DefaultPaths()
 
 	if profile == "all" || profile == "install" || profile == "resume" {
-		changes, _ := SyncCountsApply(true, true)
+		changes, _ := doctorSyncCountsApply(true, true)
 		if changes > 0 {
 			clilog.Info("sync-counts: fixed %d index drift(s)", changes)
 		}
@@ -77,8 +82,8 @@ func runDoctorProfile(profile string) error {
 		metricName += "-" + profile
 	}
 
-	pass, total := runSuites(title, health.BuildDoctorSuites(p, profile))
-	recordCheckRun(metricName, started, pass, total)
+	pass, total := doctorRunSuites(title, doctorBuildSuites(p, profile))
+	doctorRecordCheckRun(metricName, started, pass, total)
 	if pass < total {
 		return fmt.Errorf("%s failed: %d/%d passed", metricName, pass, total)
 	}

@@ -15,6 +15,8 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
+var guardMcpExit = os.Exit
+
 var guardMcpCmd = &cobra.Command{
 	Use:   "guard-mcp",
 	Short: "beforeMCPExecution: gate destructive MCP tools",
@@ -103,7 +105,7 @@ func runGuardMcp(stdin *os.File, stdout *os.File) error {
 
 	_ = hookio.WriteResponse(stdout, resp)
 	if resp.Permission == "deny" {
-		os.Exit(2)
+		guardMcpExit(2)
 	}
 	return nil
 }

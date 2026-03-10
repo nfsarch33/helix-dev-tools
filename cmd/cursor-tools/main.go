@@ -7,10 +7,13 @@ import (
 )
 
 var version = "dev"
+var setVersion = cli.SetVersion
+var executeCLI = cli.Execute
+var exitMain = os.Exit
 
 func main() {
-	cli.SetVersion(version)
-	if err := cli.Execute(); err != nil {
-		os.Exit(1)
+	setVersion(version)
+	if err := executeCLI(); err != nil {
+		exitMain(1)
 	}
 }

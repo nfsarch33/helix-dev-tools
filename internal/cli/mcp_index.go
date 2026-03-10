@@ -111,15 +111,17 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("This file is canonical in Pepper (git): `~/memo/global-memories/mcp-index-and-selection-sop.md`.\n\n")
 
 	b.WriteString("## Tool selection SOP (KISS)\n")
-	b.WriteString("- If the task is codebase work: use `grep`, `read_file`, and `codebase_search` first, then make minimal patches.\n")
-	b.WriteString("- If the task is Git operations: prefer `git-mcp-server` tools (branch, diff, log, add, commit, push).\n")
+	b.WriteString("- If the task is read-only codebase investigation: use `context-mode` first, then `ReadFile`, `rg`, and `Glob`.\n")
+	b.WriteString("- If the task mutates files or git state: use the normal edit tools for files and Shell for installs, builds, and git commands.\n")
+	b.WriteString("- If the task is Git operations: prefer `git-mcp-server` for repo inspection and Shell/`gh` for workflow actions that need full git semantics.\n")
+	b.WriteString("- If the task is live research or current docs: prefer `perplexity`, `context7`, and `fetch` before generic web browsing.\n")
 	b.WriteString("- If the task is docs/word: use `word-document-server`.\n")
 	b.WriteString("- If the task is PDF ops: use `pdf-handler` (form fill/clear, comments, text, signatures, encrypt).\n")
 	b.WriteString("- If the task is memory/rules: Pepper is canonical; internal memory only stores pointers + short invariants.\n\n")
 
 	b.WriteString("## Quality gates (non-breaking)\n")
 	b.WriteString("- Default to non-breaking changes. Ask before breaking changes.\n")
-	b.WriteString("- Before pushing or releasing: run `pytest` and run `scripts/cursor_smoke.py`.\n\n")
+	b.WriteString("- Before relying on a fresh install or resumed machine state: run `~/bin/cursor-tools doctor mcp`, `doctor platform`, and `selftest`.\n\n")
 
 	b.WriteString("## Config hygiene\n")
 	b.WriteString("- Local dev may keep static creds in `~/.cursor/mcp.json` if needed.\n")

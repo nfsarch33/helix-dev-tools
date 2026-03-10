@@ -11,6 +11,11 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/health"
 )
 
+var healthCheckSyncCountsApply = SyncCountsApply
+var healthCheckBuildSuites = health.BuildAllSuites
+var healthCheckRunSuites = runSuites
+var healthCheckRecordCheckRun = recordCheckRun
+
 var healthCheckCmd = &cobra.Command{
 	Use:   "health-check",
 	Short: "Run the full integration health check suite",
@@ -20,14 +25,14 @@ var healthCheckCmd = &cobra.Command{
 func runHealthCheck(_ *cobra.Command, _ []string) error {
 	started := time.Now()
 
-	changes, _ := SyncCountsApply(true, true)
+	changes, _ := healthCheckSyncCountsApply(true, true)
 	if changes > 0 {
 		clilog.Info("sync-counts: fixed %d index drift(s)", changes)
 	}
 
 	p := config.DefaultPaths()
-	pass, total := runSuites("cursor-tools health-check", health.BuildAllSuites(p))
-	recordCheckRun("health-check", started, pass, total)
+	pass, total := healthCheckRunSuites("cursor-tools health-check", healthCheckBuildSuites(p))
+	healthCheckRecordCheckRun("health-check", started, pass, total)
 	if pass < total {
 		return fmt.Errorf("health-check failed: %d/%d passed", pass, total)
 	}

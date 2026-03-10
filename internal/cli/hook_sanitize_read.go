@@ -17,6 +17,8 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
+var sanitizeReadExit = os.Exit
+
 var sanitizeReadCmd = &cobra.Command{
 	Use:   "sanitize-read",
 	Short: "beforeReadFile: block secret file reads",
@@ -128,7 +130,7 @@ func runSanitizeRead(stdin *os.File, stdout *os.File) error {
 
 	_ = hookio.WriteResponse(stdout, resp)
 	if resp.Permission == "deny" {
-		os.Exit(2)
+		sanitizeReadExit(2)
 	}
 	return nil
 }

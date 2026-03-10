@@ -8,6 +8,8 @@ import (
 	"os"
 )
 
+var runExit = os.Exit
+
 // Input represents the JSON payload Cursor sends to hooks via stdin.
 type Input struct {
 	Command    string `json:"command,omitempty"`
@@ -123,6 +125,6 @@ func RunWithIO(h Handler, r io.Reader, w io.Writer) int {
 // On handler error it writes an empty response. On deny it exits with code 2.
 func Run(h Handler) {
 	if code := RunWithIO(h, os.Stdin, os.Stdout); code != 0 {
-		os.Exit(code)
+		runExit(code)
 	}
 }

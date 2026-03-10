@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"regexp"
@@ -10,6 +11,9 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+var prePushExit = os.Exit
+var prePushStderr io.Writer = os.Stderr
 
 var prePushCmd = &cobra.Command{
 	Use:   "pre-push [remote] [url]",
@@ -41,8 +45,9 @@ func runPrePush(_ *cobra.Command, args []string) error {
 		remoteRef := fields[2]
 		branch := strings.TrimPrefix(remoteRef, "refs/heads/")
 		if protectedBranches.MatchString(branch) {
-			fmt.Fprintf(os.Stderr, "ERROR: direct push to '%s' is blocked.\nUse a feature branch and open a pull request.\nTo opt-out (personal repos): git config hooks.allowMainPush true\n", branch)
-			os.Exit(1)
+			fmt.Fprintf(prePushStderr, "ERROR: direct push to '%s' is blocked.\nUse a feature branch and open a pull request.\nTo opt-out (personal repos): git config hooks.allowMainPush true\n", branch)
+			prePushExit(1)
+			return nil
 		}
 	}
 
