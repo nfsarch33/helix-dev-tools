@@ -13,16 +13,18 @@ import (
 
 // Event represents a single hook or command execution metric.
 type Event struct {
-	Timestamp  time.Time `json:"ts"`
-	Hook       string    `json:"hook"`
-	Action     string    `json:"action"`
-	LatencyMs  int64     `json:"latency_ms"`
-	Detail     string    `json:"detail,omitempty"`
-	BytesIn    int64     `json:"bytes_in,omitempty"`
-	BytesOut   int64     `json:"bytes_out,omitempty"`
-	Category   string    `json:"cat,omitempty"`
-	DurationMs int64     `json:"dur_ms,omitempty"`
-	ExitCode   int       `json:"exit,omitempty"`
+	Timestamp   time.Time `json:"ts"`
+	Hook        string    `json:"hook"`
+	Action      string    `json:"action"`
+	LatencyMs   int64     `json:"latency_ms"`
+	Detail      string    `json:"detail,omitempty"`
+	BytesIn     int64     `json:"bytes_in,omitempty"`
+	BytesOut    int64     `json:"bytes_out,omitempty"`
+	Category    string    `json:"cat,omitempty"`
+	DurationMs  int64     `json:"dur_ms,omitempty"`
+	ExitCode    int       `json:"exit,omitempty"`
+	PassedCount int       `json:"pass_count,omitempty"`
+	TotalCount  int       `json:"total_count,omitempty"`
 }
 
 // Record appends an event as a JSONL line. Uses O_APPEND for atomic writes.
@@ -169,6 +171,16 @@ type MCPServerStats struct {
 	AvgMs  float64
 }
 
+// CheckStats holds aggregated pass/fail data for doctor/health-check/selftest runs.
+type CheckStats struct {
+	Name              string
+	Runs              int
+	Passes            int
+	Fails             int
+	AvgMs             float64
+	AssertionPassRate float64
+}
+
 // Summary holds the full metrics report.
 type Summary struct {
 	Since       time.Time
@@ -182,6 +194,7 @@ type Summary struct {
 	Skills     []SkillStats
 	MCPServers []MCPServerStats
 	Subagents  []FreqEntry
+	Checks     []CheckStats
 }
 
 // Summarise aggregates events since the given time and computes period-over-period trend.
@@ -234,6 +247,7 @@ func Summarise(events []Event, since time.Time) *Summary {
 	s.TopDenied = topN(denyFreq, 10)
 	s.Categories = buildCategoryStats(events, since)
 	s.Skills, s.MCPServers, s.Subagents = buildAdoptionStats(events, since)
+	s.Checks = buildCheckStats(events, since)
 
 	if prevTotal > 0 {
 		prevRate := float64(prevDeny+prevWarn) / float64(prevTotal) * 100
@@ -395,6 +409,20 @@ func (s *Summary) Markdown() string {
 		}
 	}
 
+	if len(s.Checks) > 0 {
+		b.WriteString("\n## Self-Check Pass Rates\n\n")
+		b.WriteString("| Check | Runs | Pass | Fail | Run Pass Rate | Assertion Pass Rate | Avg (ms) |\n")
+		b.WriteString("|-------|------|------|------|---------------|---------------------|----------|\n")
+		for _, check := range s.Checks {
+			runRate := 0.0
+			if check.Runs > 0 {
+				runRate = float64(check.Passes) / float64(check.Runs) * 100
+			}
+			b.WriteString(fmt.Sprintf("| %s | %d | %d | %d | %.1f%% | %.1f%% | %.0f |\n",
+				check.Name, check.Runs, check.Passes, check.Fails, runRate, check.AssertionPassRate, check.AvgMs))
+		}
+	}
+
 	var totalBytesIn, totalBytesOut int64
 	for _, h := range s.Hooks {
 		totalBytesIn += h.TotalBytesIn
@@ -482,6 +510,17 @@ func (s *Summary) Compact(days int) string {
 			parts = append(parts, fmt.Sprintf("%s=%d@%.0fms", c.Category, c.Count, c.AvgDuration))
 		}
 		catPart = " | " + strings.Join(parts, " ")
+	}
+	if len(s.Checks) > 0 {
+		parts := make([]string, 0, len(s.Checks))
+		for _, check := range s.Checks {
+			runRate := 0.0
+			if check.Runs > 0 {
+				runRate = float64(check.Passes) / float64(check.Runs) * 100
+			}
+			parts = append(parts, fmt.Sprintf("%s=%.0f%%", check.Name, runRate))
+		}
+		catPart += " | checks=" + strings.Join(parts, ",")
 	}
 	return fmt.Sprintf("metrics: %d events %dd | deny=%d warn=%d | avg_lat=%dms | trend=%s%s",
 		s.TotalEvents, days, deny, warn, avgLat, trend, catPart)
@@ -669,7 +708,7 @@ func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPSer
 	for key, acc := range mcpAcc {
 		server, tool := "", key
 		if idx := strings.Index(key, ":"); idx > 0 {
-			server = key[:idx]
+			server = CanonicalMCPServerName(key[:idx])
 			tool = key[idx+1:]
 		}
 		avg := float64(0)
@@ -682,6 +721,66 @@ func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPSer
 
 	subagents := topN(subFreq, 10)
 	return skills, mcpServers, subagents
+}
+
+func buildCheckStats(events []Event, since time.Time) []CheckStats {
+	acc := make(map[string]*struct {
+		runs       int
+		passes     int
+		fails      int
+		totalMs    int64
+		passCount  int
+		assertions int
+	})
+
+	for _, e := range events {
+		if e.Timestamp.Before(since) || e.Category != "check" || e.Detail == "" {
+			continue
+		}
+		entry := acc[e.Detail]
+		if entry == nil {
+			entry = &struct {
+				runs       int
+				passes     int
+				fails      int
+				totalMs    int64
+				passCount  int
+				assertions int
+			}{}
+			acc[e.Detail] = entry
+		}
+		entry.runs++
+		if e.Action == "pass" {
+			entry.passes++
+		} else {
+			entry.fails++
+		}
+		entry.totalMs += EffectiveDuration(e)
+		entry.passCount += e.PassedCount
+		entry.assertions += e.TotalCount
+	}
+
+	stats := make([]CheckStats, 0, len(acc))
+	for name, entry := range acc {
+		avgMs := 0.0
+		if entry.runs > 0 {
+			avgMs = float64(entry.totalMs) / float64(entry.runs)
+		}
+		assertionRate := 0.0
+		if entry.assertions > 0 {
+			assertionRate = float64(entry.passCount) / float64(entry.assertions) * 100
+		}
+		stats = append(stats, CheckStats{
+			Name:              name,
+			Runs:              entry.runs,
+			Passes:            entry.passes,
+			Fails:             entry.fails,
+			AvgMs:             avgMs,
+			AssertionPassRate: assertionRate,
+		})
+	}
+	sort.Slice(stats, func(i, j int) bool { return stats[i].Name < stats[j].Name })
+	return stats
 }
 
 func topN(freq map[string]int, n int) []FreqEntry {

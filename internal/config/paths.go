@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 // Paths holds all configurable directory paths.
@@ -53,6 +54,21 @@ func (p Paths) CursorConfigDir() string {
 	return filepath.Join(p.GlobalKB, "cursor-config")
 }
 
+// CursorMCPConfig returns the global Cursor MCP config path.
+func (p Paths) CursorMCPConfig() string {
+	return filepath.Join(p.Home, ".cursor", "mcp.json")
+}
+
+// HooksJSONPath returns the live hooks.json symlink path.
+func (p Paths) HooksJSONPath() string {
+	return filepath.Join(p.Home, ".cursor", "hooks.json")
+}
+
+// SkillsCursorDir returns the cursor-managed skills directory.
+func (p Paths) SkillsCursorDir() string {
+	return filepath.Join(p.Home, ".cursor", "skills-cursor")
+}
+
 // GlobalMemoriesDir returns the Pepper L1 data directory.
 func (p Paths) GlobalMemoriesDir() string {
 	return filepath.Join(p.Memo, "global-memories")
@@ -93,6 +109,18 @@ func (p Paths) MetricsFile() string {
 	return filepath.Join(p.HooksDir, "metrics.jsonl")
 }
 
+// PlatformProfile returns the expected host profile for Cursor tooling.
+func (p Paths) PlatformProfile() string {
+	switch {
+	case runtime.GOOS == "darwin":
+		return "macos"
+	case isWSL():
+		return "wsl"
+	default:
+		return runtime.GOOS
+	}
+}
+
 // SSHKeyPath returns the path to the SSH private key used for GitHub.
 // Checks for ~/.ssh/agtc first (macOS), falls back to ~/.ssh/wsl_ubuntu (WSL).
 func (p Paths) SSHKeyPath() string {
@@ -110,4 +138,15 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+func isWSL() bool {
+	if os.Getenv("WSL_INTEROP") != "" || os.Getenv("WSL_DISTRO_NAME") != "" {
+		return true
+	}
+	data, err := os.ReadFile("/proc/version")
+	if err != nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(string(data)), "microsoft")
 }

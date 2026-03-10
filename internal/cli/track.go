@@ -29,21 +29,21 @@ Two modes:
   Manual:  cursor-tools track --cat mcp --name context7.resolve --ms 1234
   Wrapper: cursor-tools track --cat skill --name ui-ux-pro-max -- uiux search grid
 
-Categories: mcp, shell, skill, subagent, script, tool, custom
+Categories: mcp, shell, skill, subagent, script, tool, check, custom
 When --cat is omitted, defaults to "custom".`,
 	RunE:               runTrack,
 	DisableFlagParsing: false,
 }
 
 func init() {
-	trackCmd.Flags().StringVar(&trackFlags.category, "cat", "custom", "Operation category (mcp, shell, skill, subagent, script, tool, custom)")
+	trackCmd.Flags().StringVar(&trackFlags.category, "cat", "custom", "Operation category (mcp, shell, skill, subagent, script, tool, check, custom)")
 	trackCmd.Flags().StringVar(&trackFlags.name, "name", "", "Operation name (required)")
 	trackCmd.Flags().Int64Var(&trackFlags.durationMs, "ms", 0, "Pre-measured duration in milliseconds (manual mode)")
 	_ = trackCmd.MarkFlagRequired("name")
 }
 
 // ValidCategories lists accepted category values.
-var ValidCategories = []string{"mcp", "shell", "skill", "subagent", "script", "tool", "custom"}
+var ValidCategories = []string{"mcp", "shell", "skill", "subagent", "script", "tool", "check", "custom"}
 
 func isValidCategory(cat string) bool {
 	for _, v := range ValidCategories {

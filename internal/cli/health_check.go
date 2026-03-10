@@ -1,7 +1,8 @@
 package cli
 
 import (
-	"os"
+	"fmt"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -12,12 +13,12 @@ import (
 
 var healthCheckCmd = &cobra.Command{
 	Use:   "health-check",
-	Short: "Run 19-suite integration health check",
+	Short: "Run the full integration health check suite",
 	RunE:  runHealthCheck,
 }
 
 func runHealthCheck(_ *cobra.Command, _ []string) error {
-	clilog.Header("cursor-tools health-check")
+	started := time.Now()
 
 	changes, _ := SyncCountsApply(true, true)
 	if changes > 0 {
@@ -25,15 +26,10 @@ func runHealthCheck(_ *cobra.Command, _ []string) error {
 	}
 
 	p := config.DefaultPaths()
-	runner := health.NewRunner()
-
-	for _, s := range health.BuildAllSuites(p) {
-		runner.Add(s)
-	}
-
-	pass, total := runner.Run()
+	pass, total := runSuites("cursor-tools health-check", health.BuildAllSuites(p))
+	recordCheckRun("health-check", started, pass, total)
 	if pass < total {
-		os.Exit(1)
+		return fmt.Errorf("health-check failed: %d/%d passed", pass, total)
 	}
 	return nil
 }

@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -23,6 +25,7 @@ var selftestCmd = &cobra.Command{
 }
 
 func runSelftest(_ *cobra.Command, _ []string) error {
+	started := time.Now()
 	clilog.Header("cursor-tools selftest")
 	fmt.Println()
 
@@ -238,8 +241,9 @@ func runSelftest(_ *cobra.Command, _ []string) error {
 	fmt.Println()
 	total := pass + fail
 	clilog.Summary(pass, total)
+	recordCheckRun("selftest", started, pass, total)
 	if fail > 0 {
-		os.Exit(1)
+		return errors.New("selftest failed")
 	}
 	return nil
 }

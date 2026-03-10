@@ -334,6 +334,11 @@ var _ = Describe("Metrics Store", func() {
 		It("returns unknown tool as-is", func() {
 			Expect(metrics.EnrichToolDetail("unknown_tool_xyz")).To(Equal("unknown_tool_xyz"))
 		})
+
+		It("canonicalises perplexity aliases", func() {
+			Expect(metrics.EnrichToolDetail("perplexity_search")).To(Equal("perplexity:perplexity_search"))
+			Expect(metrics.CanonicalMCPServerName("perplexity-ask")).To(Equal("perplexity"))
+		})
 	})
 
 	Describe("Retroactive MCP enrichment in Summarise", func() {
@@ -372,6 +377,22 @@ var _ = Describe("Metrics Store", func() {
 			summary := metrics.Summarise(nil, time.Now().UTC().Add(-1*time.Hour))
 			md := summary.Markdown()
 			Expect(md).To(ContainSubstring("No metrics data"))
+		})
+	})
+
+	Describe("Check stats", func() {
+		It("aggregates doctor and health-check pass rates", func() {
+			now := time.Now().UTC()
+			events := []metrics.Event{
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "doctor", Action: "pass", Category: "check", Detail: "doctor", DurationMs: 100, PassedCount: 10, TotalCount: 10},
+				{Timestamp: now.Add(-30 * time.Minute), Hook: "doctor", Action: "fail", Category: "check", Detail: "doctor", DurationMs: 120, PassedCount: 8, TotalCount: 10},
+				{Timestamp: now.Add(-10 * time.Minute), Hook: "health-check", Action: "pass", Category: "check", Detail: "health-check", DurationMs: 300, PassedCount: 20, TotalCount: 20},
+			}
+
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			Expect(summary.Checks).To(HaveLen(2))
+			Expect(summary.Markdown()).To(ContainSubstring("Self-Check Pass Rates"))
+			Expect(summary.Compact(7)).To(ContainSubstring("checks="))
 		})
 	})
 })

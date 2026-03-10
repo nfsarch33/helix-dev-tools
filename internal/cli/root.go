@@ -25,6 +25,7 @@ func init() {
 	rootCmd.AddCommand(syncCountsCmd)
 	rootCmd.AddCommand(promoteCmd)
 	rootCmd.AddCommand(healthCheckCmd)
+	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(selftestCmd)
 	rootCmd.AddCommand(bootstrapCmd)
 	rootCmd.AddCommand(dailyRefreshCmd)

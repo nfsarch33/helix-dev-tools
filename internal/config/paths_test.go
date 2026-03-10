@@ -94,6 +94,21 @@ var _ = Describe("Paths", func() {
 			Expect(p.LogFile("mcp-audit")).To(HaveSuffix("mcp-audit.log"))
 		})
 
+		It("computes CursorMCPConfig correctly", func() {
+			p := config.DefaultPaths()
+			Expect(p.CursorMCPConfig()).To(HaveSuffix(".cursor/mcp.json"))
+		})
+
+		It("computes HooksJSONPath correctly", func() {
+			p := config.DefaultPaths()
+			Expect(p.HooksJSONPath()).To(HaveSuffix(".cursor/hooks.json"))
+		})
+
+		It("computes SkillsCursorDir correctly", func() {
+			p := config.DefaultPaths()
+			Expect(p.SkillsCursorDir()).To(HaveSuffix(".cursor/skills-cursor"))
+		})
+
 		It("computes LockDir correctly", func() {
 			p := config.DefaultPaths()
 			lockDir := p.LockDir("housekeeping")
@@ -115,6 +130,11 @@ var _ = Describe("Paths", func() {
 			p := config.DefaultPaths()
 			Expect(p.GlobalMemoriesDir()).To(Equal("/tmp/test-memo/global-memories"))
 			Expect(p.GlobalLearningsDir()).To(Equal("/tmp/test-memo/learnings"))
+		})
+
+		It("returns a recognised platform profile", func() {
+			p := config.DefaultPaths()
+			Expect([]string{"macos", "wsl", "linux"}).To(ContainElement(p.PlatformProfile()))
 		})
 	})
 })

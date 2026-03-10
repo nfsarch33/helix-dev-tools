@@ -14,7 +14,7 @@ import (
 var _ = Describe("Track Command", func() {
 	Describe("ValidCategories", func() {
 		It("includes all expected categories", func() {
-			expected := []string{"mcp", "shell", "skill", "subagent", "script", "tool", "custom"}
+			expected := []string{"mcp", "shell", "skill", "subagent", "script", "tool", "check", "custom"}
 			Expect(ValidCategories).To(Equal(expected))
 		})
 

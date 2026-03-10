@@ -46,6 +46,10 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	summary := metrics.Summarise(events, since)
 	installedSkills := countSkillDirs(p.SkillsDir, map[string]bool{"00-index": true}) + countSkillDirs(p.AgentsSkillsDir, nil)
 	installedSubagents := countFiles(p.AgentsDir, ".md")
+	alwaysOnMCP := []string{
+		"git-mcp-server", "context-mode", "allPepper-memory-bank", "github-official",
+		"context7", "duckduckgo", "perplexity", "fetch", "wolfram-alpha",
+	}
 
 	if metricsFlags.compact {
 		fmt.Println(summary.Compact(metricsFlags.days))
@@ -142,20 +146,47 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 		}
 	}
 
-	// Adoption funnel
-	skillCount := len(summary.Skills)
-	mcpServerSet := make(map[string]bool)
-	for _, m := range summary.MCPServers {
-		if m.Server != "" {
-			mcpServerSet[m.Server] = true
+	if len(summary.Checks) > 0 {
+		fmt.Println("\n  Self-Check Pass Rates:")
+		fmt.Printf("  %-18s %6s %6s %6s %12s %14s %8s\n", "Check", "Runs", "Pass", "Fail", "RunRate", "AssertRate", "Avg(ms)")
+		clilog.Divider()
+		for _, check := range summary.Checks {
+			runRate := 0.0
+			if check.Runs > 0 {
+				runRate = float64(check.Passes) / float64(check.Runs) * 100
+			}
+			fmt.Printf("  %-18s %6d %6d %6d %11.1f%% %13.1f%% %8.0f\n",
+				check.Name, check.Runs, check.Passes, check.Fails, runRate, check.AssertionPassRate, check.AvgMs)
 		}
 	}
+
+	// Adoption funnel
+	skillCount := len(summary.Skills)
+	skillUses := 0
+	for _, sk := range summary.Skills {
+		skillUses += sk.Uses
+	}
+	mcpServerSet := make(map[string]bool)
+	mcpUses := 0
+	for _, m := range summary.MCPServers {
+		if m.Server != "" {
+			mcpServerSet[metrics.CanonicalMCPServerName(m.Server)] = true
+		}
+		mcpUses += m.Uses
+	}
 	subCount := len(summary.Subagents)
+	subUses := 0
+	for _, sa := range summary.Subagents {
+		subUses += sa.Count
+	}
 	if skillCount > 0 || len(mcpServerSet) > 0 || subCount > 0 {
 		fmt.Println("\n  Adoption Funnel:")
-		fmt.Printf("    Skills activated:       %d of %d installed\n", skillCount, installedSkills)
-		fmt.Printf("    MCP servers used:       %d of 9 always-on\n", len(mcpServerSet))
-		fmt.Printf("    Subagents invoked:      %d of %d available\n", subCount, installedSubagents)
+		fmt.Printf("    Skills activated:       %d of %d installed (%.1f%%)\n", skillCount, installedSkills, percentage(skillCount, installedSkills))
+		fmt.Printf("    Skill hit rate:         %d of %d events (%.1f%%)\n", skillUses, summary.TotalEvents, percentage(skillUses, summary.TotalEvents))
+		fmt.Printf("    MCP servers used:       %d of %d always-on (%.1f%%)\n", len(mcpServerSet), len(alwaysOnMCP), percentage(len(mcpServerSet), len(alwaysOnMCP)))
+		fmt.Printf("    MCP hit rate:           %d of %d events (%.1f%%)\n", mcpUses, summary.TotalEvents, percentage(mcpUses, summary.TotalEvents))
+		fmt.Printf("    Subagents invoked:      %d of %d available (%.1f%%)\n", subCount, installedSubagents, percentage(subCount, installedSubagents))
+		fmt.Printf("    Subagent hit rate:      %d of %d events (%.1f%%)\n", subUses, summary.TotalEvents, percentage(subUses, summary.TotalEvents))
 	}
 
 	fmt.Println()
@@ -189,4 +220,11 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+func percentage(numerator, denominator int) float64 {
+	if denominator <= 0 {
+		return 0
+	}
+	return float64(numerator) / float64(denominator) * 100
 }

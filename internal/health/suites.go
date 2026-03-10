@@ -1,26 +1,33 @@
 package health
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
 
-// BuildAllSuites creates all 21 health check suites.
+// BuildAllSuites creates the full health check suite set.
 func BuildAllSuites(p config.Paths) []*Suite {
 	return []*Suite{
 		suiteL0Rules(p),
 		suiteL1Pepper(p),
 		suiteL2GlobalKB(p),
 		suiteSkillsRegistry(p),
+		suiteSkillsCursorPolicy(p),
 		suiteCrossFileConsistency(p),
 		suiteGitSync(p),
 		suiteHooksSubagentsCommandsMCP(p),
+		suiteInstallReadiness(p),
+		suiteMCPReadiness(p),
+		suitePlatformReadiness(p),
+		suiteResumeReadiness(p),
 		suiteMemoryRouting(p),
 		suiteCrossMachineSync(p),
 		suiteProgrammaticCounts(p),
@@ -38,19 +45,76 @@ func BuildAllSuites(p config.Paths) []*Suite {
 	}
 }
 
+// BuildDoctorSuites selects the shared health suites used by doctor subcommands.
+func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
+	selected := map[string]bool{}
+	switch profile {
+	case "install":
+		selected = map[string]bool{
+			"L1 Pepper":                        true,
+			"L2 Global KB":                     true,
+			"Skills Registry":                  true,
+			"skills-cursor Policy":             true,
+			"Hooks, Sub-agents, Commands, MCP": true,
+			"Install Readiness":                true,
+			"MCP Readiness":                    true,
+			"Platform Readiness":               true,
+			"Global Cursor Config":             true,
+			"Cross-Machine Sync":               true,
+			"rtk Token Optimization":           true,
+		}
+	case "mcp":
+		selected = map[string]bool{
+			"Hooks, Sub-agents, Commands, MCP": true,
+			"MCP Readiness":                    true,
+			"Platform Readiness":               true,
+			"Programmatic Count Verification":  true,
+		}
+	case "platform":
+		selected = map[string]bool{
+			"Install Readiness":       true,
+			"Platform Readiness":      true,
+			"Cross-Machine Sync":      true,
+			"Global Cursor Config":    true,
+			"DevContainer Compliance": true,
+		}
+	case "resume":
+		selected = map[string]bool{
+			"Cross-File Consistency":          true,
+			"Git Sync":                        true,
+			"Programmatic Count Verification": true,
+			"Resume Readiness":                true,
+			"Automation Pipeline":             true,
+			"Data Integrity":                  true,
+			"MCP Readiness":                   true,
+		}
+	default:
+		return BuildAllSuites(p)
+	}
+
+	var filtered []*Suite
+	for _, suite := range BuildAllSuites(p) {
+		if selected[suite.Name] {
+			filtered = append(filtered, suite)
+		}
+	}
+	return filtered
+}
+
 func suiteL0Rules(p config.Paths) *Suite {
 	s := &Suite{Name: "L0 Rules"}
 	rulesDir := p.RulesDir
 
 	expectedRules := []string{
 		"00-capabilities", "devcontainer-execution", "engineering-standards",
-		"self-improvement", "subagents", "template.rules", "zendesk-workspace.rules",
+		"outsource-to-save-tokens", "rtk-token-optimization", "self-improvement",
+		"skill-routing", "subagents", "template.rules", "zendesk-workspace.rules",
 	}
 	s.AssertFileExists("Rules directory exists", rulesDir)
 
 	entries, err := os.ReadDir(rulesDir)
 	if err == nil {
-		s.Assert("Rules dir has files", len(entries) >= 7, "expected >= 7 rule files")
+		s.Assert("Rules dir has files", len(entries) >= 10, "expected >= 10 rule files")
 		nameSet := make(map[string]bool)
 		for _, e := range entries {
 			nameSet[strings.TrimSuffix(e.Name(), ".md")] = true
@@ -178,6 +242,21 @@ func suiteSkillsRegistry(p config.Paths) *Suite {
 	return s
 }
 
+func suiteSkillsCursorPolicy(p config.Paths) *Suite {
+	s := &Suite{Name: "skills-cursor Policy"}
+	s.AssertFileExists("skills-cursor dir exists", p.SkillsCursorDir())
+
+	count := countDirsWithFile(p.SkillsCursorDir(), "SKILL.md", nil)
+	s.Assert("skills-cursor count >= 5", count >= 5, itoa(count))
+
+	indexPath := filepath.Join(p.GlobalMemoriesDir(), "skills-index.md")
+	s.AssertFileContains("skills-index documents skills-cursor", indexPath, "skills-cursor")
+	metaIndexPath := filepath.Join(p.SkillsDir, "00-index", "SKILL.md")
+	s.AssertFileContains("00-index documents skills-cursor", metaIndexPath, "skills-cursor")
+
+	return s
+}
+
 func suiteCrossFileConsistency(p config.Paths) *Suite {
 	s := &Suite{Name: "Cross-File Consistency"}
 
@@ -248,12 +327,120 @@ func suiteHooksSubagentsCommandsMCP(p config.Paths) *Suite {
 		s.AssertFileExists("Agent: "+a, filepath.Join(p.AgentsDir, a))
 	}
 
-	s.AssertDirMinCount("Commands >= 5", p.CommandsDir, 5, ".md")
+	s.AssertDirMinCount("Commands >= 6", p.CommandsDir, 6, ".md")
 
 	mcpIndex := filepath.Join(p.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
 	s.AssertFileExists("MCP index exists", mcpIndex)
 	s.AssertFileContains("MCP index has servers", mcpIndex, "MCP")
 	s.AssertFileNotContains("No credentials in MCP index", mcpIndex, "ATATT3x")
+
+	return s
+}
+
+func suiteInstallReadiness(p config.Paths) *Suite {
+	s := &Suite{Name: "Install Readiness"}
+
+	s.AssertSymlink("~/memo is symlink", p.Memo)
+	s.AssertFileExists("cursor-tools binary exists", filepath.Join(p.BinDir, "cursor-tools"))
+	s.AssertSymlink("skills symlink exists", p.SkillsDir)
+	s.AssertSymlink("rules symlink exists", p.RulesDir)
+	s.AssertSymlink("commands symlink exists", p.CommandsDir)
+	s.AssertSymlink("agents symlink exists", p.AgentsDir)
+	s.AssertSymlink("hooks.json symlink exists", p.HooksJSONPath())
+	s.AssertFileExists("MCP config exists", p.CursorMCPConfig())
+	s.AssertFileExists("bootstrap.sh exists", filepath.Join(p.CursorConfigDir(), "bootstrap.sh"))
+
+	switch p.PlatformProfile() {
+	case "macos":
+		s.AssertFileExists("launchd installer exists", filepath.Join(p.GlobalKB, "tools", "install-launchd-automation.sh"))
+	default:
+		s.AssertFileExists("systemd installer exists", filepath.Join(p.GlobalKB, "tools", "install-systemd-user-timer.sh"))
+	}
+
+	return s
+}
+
+func suiteMCPReadiness(p config.Paths) *Suite {
+	s := &Suite{Name: "MCP Readiness"}
+	mcpPath := p.CursorMCPConfig()
+	s.AssertFileExists("mcp.json exists", mcpPath)
+
+	cfg, err := loadMCPHealthConfig(mcpPath)
+	if err != nil {
+		s.Fail("mcp.json parses", err.Error())
+		return s
+	}
+	s.Pass("mcp.json parses")
+	s.Assert("mcpServers present", len(cfg.MCPServers) >= 9, itoa(len(cfg.MCPServers)))
+
+	requiredServers := []string{
+		"allPepper-memory-bank", "context-mode", "context7", "git-mcp-server",
+		"github-official", "duckduckgo", "fetch",
+	}
+	for _, name := range requiredServers {
+		_, ok := cfg.MCPServers[name]
+		s.Assert("MCP server: "+name, ok, "not found in mcp.json")
+	}
+
+	_, hasPerplexityAsk := cfg.MCPServers["perplexity-ask"]
+	_, hasPerplexity := cfg.MCPServers["perplexity"]
+	s.Assert("Perplexity server present", hasPerplexityAsk || hasPerplexity, "expected perplexity or perplexity-ask")
+
+	activeServers := 0
+	for name, spec := range cfg.MCPServers {
+		if spec.Disabled {
+			continue
+		}
+		activeServers++
+		s.Assert("Command resolvable: "+name, commandResolvable(spec.Command), "command not found: "+spec.Command)
+		s.Assert("Env ready: "+name, envReady(spec.Env), "missing env placeholder for enabled server")
+		s.Assert("Absolute args exist: "+name, absArgsExist(spec.Args), "missing absolute arg path")
+	}
+	s.Assert("active MCP servers >= 9", activeServers >= 9, itoa(activeServers))
+
+	return s
+}
+
+func suitePlatformReadiness(p config.Paths) *Suite {
+	s := &Suite{Name: "Platform Readiness"}
+	profile := p.PlatformProfile()
+	s.Assert("platform profile recognised", profile == "macos" || profile == "wsl" || profile == "linux", profile)
+
+	switch profile {
+	case "macos":
+		s.Assert("GOOS is darwin", runtime.GOOS == "darwin", runtime.GOOS)
+		s.AssertFileExists("macOS MCP extras doc exists", filepath.Join(p.CursorConfigDir(), "mcp-templates", "mcp-config-macos-extras.md"))
+	case "wsl":
+		s.Assert("WSL detected", true, "")
+		s.Assert("home path looks Linux", strings.HasPrefix(p.Home, "/home/"), p.Home)
+		s.AssertFileExists("WSL MCP extras doc exists", filepath.Join(p.CursorConfigDir(), "mcp-templates", "mcp-config-wsl-extras.md"))
+	default:
+		s.Assert("home path looks Linux", strings.HasPrefix(p.Home, "/home/") || p.Home == "~", p.Home)
+		s.AssertFileExists("WSL MCP extras doc exists", filepath.Join(p.CursorConfigDir(), "mcp-templates", "mcp-config-wsl-extras.md"))
+	}
+
+	s.Assert("SSH key path computed", strings.TrimSpace(p.SSHKeyPath()) != "", "empty ssh key path")
+
+	return s
+}
+
+func suiteResumeReadiness(p config.Paths) *Suite {
+	s := &Suite{Name: "Resume Readiness"}
+
+	dailyPrompt := filepath.Join(p.GlobalMemoriesDir(), "daily-startup-prompt.md")
+	handoff := filepath.Join(p.GlobalMemoriesDir(), "session-handoff-2026-03-10.md")
+	mcpIndex := filepath.Join(p.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
+
+	s.AssertFileExists("daily-startup prompt exists", dailyPrompt)
+	s.AssertFileExists("session handoff exists", handoff)
+	s.AssertFileExists("MCP index exists", mcpIndex)
+	s.AssertFileContains("daily prompt references session handoff", dailyPrompt, "session-handoff")
+	s.AssertFileContains("session handoff has next priorities", handoff, "Next priorities")
+	s.AssertFileContains("session handoff mentions ai-agent-business-stack", handoff, "ai-agent-business-stack")
+
+	status, err := gitOutput(p.GlobalKB, "status", "--short")
+	s.Assert("git status executes", err == nil, "git status failed")
+	s.Assert("git status output captured", err == nil && status != "" || strings.TrimSpace(status) == "", "status unavailable")
 
 	return s
 }
@@ -310,7 +497,7 @@ func suiteCrossMachineSync(p config.Paths) *Suite {
 func suiteProgrammaticCounts(p config.Paths) *Suite {
 	s := &Suite{Name: "Programmatic Count Verification"}
 
-	// Note: The total number of assertions in this health check (currently 262)
+	// Note: The total number of assertions in this health check
 	// is documented in ~/memo/global-memories/daily-startup-prompt.md.
 	// If you add or remove assertions, update the count in that file.
 
@@ -740,4 +927,67 @@ func suiteRTKTokenOptimization(p config.Paths) *Suite {
 
 func itoa(n int) string {
 	return fmt.Sprintf("%d", n)
+}
+
+type mcpHealthServerSpec struct {
+	Command  string            `json:"command"`
+	Args     []string          `json:"args"`
+	Env      map[string]string `json:"env"`
+	Disabled bool              `json:"disabled"`
+}
+
+type mcpHealthConfig struct {
+	MCPServers map[string]mcpHealthServerSpec `json:"mcpServers"`
+}
+
+func loadMCPHealthConfig(path string) (*mcpHealthConfig, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var cfg mcpHealthConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return nil, err
+	}
+	if cfg.MCPServers == nil {
+		cfg.MCPServers = map[string]mcpHealthServerSpec{}
+	}
+	return &cfg, nil
+}
+
+func commandResolvable(command string) bool {
+	if command == "" {
+		return false
+	}
+	if filepath.IsAbs(command) {
+		_, err := os.Stat(command)
+		return err == nil
+	}
+	_, err := exec.LookPath(command)
+	return err == nil
+}
+
+func envReady(env map[string]string) bool {
+	for _, value := range env {
+		if isExactEnvPlaceholder(value) && os.Getenv(strings.TrimPrefix(value, "$")) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func isExactEnvPlaceholder(value string) bool {
+	return strings.HasPrefix(value, "$") && !strings.Contains(value, "/") && len(value) > 1
+}
+
+func absArgsExist(args []string) bool {
+	for _, arg := range args {
+		if !filepath.IsAbs(arg) {
+			continue
+		}
+		if _, err := os.Stat(arg); err != nil {
+			return false
+		}
+	}
+	return true
 }

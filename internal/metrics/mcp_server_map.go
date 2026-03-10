@@ -12,8 +12,11 @@ var MCPToolServerMap = map[string]string{
 	// duckduckgo
 	"search":        "duckduckgo",
 	"fetch_content": "duckduckgo",
-	// perplexity-ask
-	"perplexity_ask": "perplexity-ask",
+	// perplexity
+	"perplexity_ask":      "perplexity",
+	"perplexity_search":   "perplexity",
+	"perplexity_research": "perplexity",
+	"perplexity_reason":   "perplexity",
 	// fetch
 	"fetch": "fetch",
 	// playwright
@@ -112,11 +115,22 @@ var MCPToolServerMap = map[string]string{
 func EnrichToolDetail(detail string) string {
 	for i := 0; i < len(detail); i++ {
 		if detail[i] == ':' {
-			return detail
+			server := CanonicalMCPServerName(detail[:i])
+			return server + detail[i:]
 		}
 	}
 	if server, ok := MCPToolServerMap[detail]; ok {
-		return server + ":" + detail
+		return CanonicalMCPServerName(server) + ":" + detail
 	}
 	return detail
+}
+
+// CanonicalMCPServerName collapses legacy aliases into a single reporting name.
+func CanonicalMCPServerName(name string) string {
+	switch name {
+	case "perplexity-ask":
+		return "perplexity"
+	default:
+		return name
+	}
 }
