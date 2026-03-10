@@ -35,6 +35,7 @@ func BuildAllSuites(p config.Paths) []*Suite {
 		suiteLogFileIntegrity(p),
 		suiteAutomationPipeline(p),
 		suiteSkillvetEDR(p),
+		suiteIronClawReadiness(p),
 		suiteGlobalCursorConfig(p),
 		suiteRaceConditionPrevention(p),
 		suiteDataIntegrity(p),
@@ -67,6 +68,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 		selected = map[string]bool{
 			"Hooks, Sub-agents, Commands, MCP": true,
 			"MCP Readiness":                    true,
+			"IronClaw Readiness":               true,
 			"Platform Readiness":               true,
 			"Programmatic Count Verification":  true,
 		}
@@ -621,6 +623,31 @@ func suiteAutomationPipeline(p config.Paths) *Suite {
 
 	s.AssertFileContains("Go daily-refresh has metrics step", goDailyRefresh, "stepMetricsReport")
 
+	return s
+}
+
+func suiteIronClawReadiness(p config.Paths) *Suite {
+	s := &Suite{Name: "IronClaw Readiness"}
+	mcpPath := p.CursorMCPConfig()
+	cfg, err := loadMCPHealthConfig(mcpPath)
+	if err != nil {
+		s.Pass("mcp.json parses (IronClaw check skipped)")
+		return s
+	}
+	spec, hasIronclaw := cfg.MCPServers["ironclaw"]
+	if !hasIronclaw {
+		s.Pass("ironclaw not configured (optional for local Cursor+IronClaw integration)")
+		return s
+	}
+	if spec.Disabled {
+		s.Pass("ironclaw configured but disabled")
+		return s
+	}
+	s.Assert("ironclaw command resolvable", commandResolvable(spec.Command), "ironclaw-mcp binary not found: "+spec.Command)
+	// envReady is optional: ironclaw-mcp defaults to http://localhost:3000
+	if len(spec.Env) > 0 {
+		s.Assert("ironclaw env ready", envReady(spec.Env), "missing env placeholder for ironclaw")
+	}
 	return s
 }
 

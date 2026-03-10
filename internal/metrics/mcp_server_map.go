@@ -79,6 +79,17 @@ var MCPToolServerMap = map[string]string{
 	"memory_bank_update": "allPepper-memory-bank",
 	"list_projects":      "allPepper-memory-bank",
 	"list_project_files": "allPepper-memory-bank",
+	// ironclaw (ironclaw-mcp bridge)
+	"ironclaw_health":         "ironclaw",
+	"ironclaw_chat":           "ironclaw",
+	"ironclaw_list_jobs":      "ironclaw",
+	"ironclaw_get_job":        "ironclaw",
+	"ironclaw_cancel_job":     "ironclaw",
+	"ironclaw_search_memory":  "ironclaw",
+	"ironclaw_list_routines":  "ironclaw",
+	"ironclaw_create_routine": "ironclaw",
+	"ironclaw_delete_routine": "ironclaw",
+	"ironclaw_list_tools":     "ironclaw",
 	// git-mcp-server
 	"git_status":              "git-mcp-server",
 	"git_diff":                "git-mcp-server",
