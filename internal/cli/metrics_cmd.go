@@ -3,14 +3,12 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/debuglog"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
 
@@ -48,29 +46,6 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	summary := metrics.Summarise(events, since)
 	installedSkills := countSkillDirs(p.SkillsDir, map[string]bool{"00-index": true}) + countSkillDirs(p.AgentsSkillsDir, nil)
 	installedSubagents := countFiles(p.AgentsDir, ".md")
-	installedCommands := countFiles(p.CommandsDir, ".md")
-	mcpIndexPath := p.GlobalMemoriesDir() + "/mcp-index-and-selection-sop.md"
-	mcpIndexData, _ := os.ReadFile(mcpIndexPath)
-	indexServerCount := strings.Count(string(mcpIndexData), "\n### ")
-	mcpUsedSet := make(map[string]bool)
-	for _, m := range summary.MCPServers {
-		if m.Server != "" {
-			mcpUsedSet[m.Server] = true
-		}
-	}
-	// #region agent log
-	debuglog.Write("metrics", "H4", "internal/cli/metrics_cmd.go:60", "metrics summary baselines", map[string]interface{}{
-		"days":                metricsFlags.days,
-		"totalEvents":         summary.TotalEvents,
-		"skillsSeen":          len(summary.Skills),
-		"mcpServersSeen":      len(mcpUsedSet),
-		"subagentsSeen":       len(summary.Subagents),
-		"installedSkills":     installedSkills,
-		"installedSubagents":  installedSubagents,
-		"installedCommands":   installedCommands,
-		"mcpIndexServerCount": indexServerCount,
-	})
-	// #endregion
 
 	if metricsFlags.compact {
 		fmt.Println(summary.Compact(metricsFlags.days))

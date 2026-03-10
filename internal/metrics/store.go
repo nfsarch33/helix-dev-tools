@@ -9,8 +9,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/nfsarch33/cursor-tools/internal/debuglog"
 )
 
 // Event represents a single hook or command execution metric.
@@ -623,7 +621,6 @@ func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPSer
 	})
 	// Subagents: cat=="subagent"
 	subFreq := make(map[string]int)
-	unknownMCP := make(map[string]int)
 
 	for _, e := range events {
 		if e.Timestamp.Before(since) {
@@ -643,9 +640,6 @@ func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPSer
 			acc.totalMs += EffectiveDuration(e)
 		case "mcp":
 			key := EnrichToolDetail(e.Detail)
-			if !strings.Contains(key, ":") {
-				unknownMCP[key]++
-			}
 			acc, ok := mcpAcc[key]
 			if !ok {
 				acc = &struct {
@@ -687,14 +681,6 @@ func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPSer
 	sort.Slice(mcpServers, func(i, j int) bool { return mcpServers[i].Uses > mcpServers[j].Uses })
 
 	subagents := topN(subFreq, 10)
-	// #region agent log
-	debuglog.Write("metrics", "H3", "internal/metrics/store.go:686", "built adoption stats", map[string]interface{}{
-		"skills":          len(skills),
-		"mcpServerTools":  len(mcpServers),
-		"subagents":       len(subagents),
-		"unknownMCPTools": topN(unknownMCP, 10),
-	})
-	// #endregion
 	return skills, mcpServers, subagents
 }
 
