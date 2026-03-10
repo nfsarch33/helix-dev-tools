@@ -69,6 +69,16 @@ var _ = Describe("guardMcpHandler", func() {
 		Expect(string(data)).To(ContainSubstring("context7:resolve-library-id"))
 	})
 
+	It("enriches wolfram-alpha tool with server name", func() {
+		input := &hookio.Input{ToolName: "query-wolfram-alpha", ToolInput: `{"query":"integrate x^2 sin(x)"}`}
+		_, err := handler.Handle(context.Background(), input)
+		Expect(err).NotTo(HaveOccurred())
+
+		data, err := os.ReadFile(metricsFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(data)).To(ContainSubstring("wolfram-alpha:query-wolfram-alpha"))
+	})
+
 	It("prefers Cursor-provided server name over static map", func() {
 		input := &hookio.Input{
 			ToolName:   "search",
