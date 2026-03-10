@@ -82,7 +82,29 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	}
 
 	record("allow", basename)
+
+	// Emit secondary skill-activate event when an Agent Skill is loaded
+	if basename == "SKILL.md" && strings.Contains(input.FilePath, "/skills/") {
+		skillName := extractSkillName(input.FilePath)
+		if skillName != "" && h.metricsPath != "" {
+			_ = metrics.Record(h.metricsPath, metrics.Event{
+				Hook:      "skill-activate",
+				Action:    "load",
+				Category:  "skill",
+				LatencyMs: 0,
+				Detail:    skillName,
+			})
+		}
+	}
+
 	return hookio.Allow(), nil
+}
+
+// extractSkillName pulls the skill directory name from a SKILL.md path.
+// e.g. "/Users/x/.cursor/skills/rust-mastery/SKILL.md" -> "rust-mastery"
+func extractSkillName(filePath string) string {
+	dir := filepath.Dir(filePath)
+	return filepath.Base(dir)
 }
 
 func runSanitizeRead(stdin *os.File, stdout *os.File) error {

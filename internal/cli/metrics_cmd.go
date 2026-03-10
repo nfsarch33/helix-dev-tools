@@ -102,6 +102,60 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 			fmt.Printf("    %d. %s (%dx)\n", i+1, detail, d.Count)
 		}
 	}
+
+	if len(summary.Skills) > 0 {
+		fmt.Println("\n  Skill Activations (last 7d):")
+		fmt.Printf("  %-30s %6s %8s\n", "Skill", "Uses", "Avg(ms)")
+		clilog.Divider()
+		for i, sk := range summary.Skills {
+			if i >= 15 {
+				break
+			}
+			fmt.Printf("  %-30s %6d %8.0f\n", sk.Name, sk.Uses, sk.AvgMs)
+		}
+	}
+
+	if len(summary.MCPServers) > 0 {
+		fmt.Println("\n  MCP Server Calls (last 7d):")
+		fmt.Printf("  %-18s %-28s %6s %8s\n", "Server", "Tool", "Uses", "Avg(ms)")
+		clilog.Divider()
+		for i, m := range summary.MCPServers {
+			if i >= 15 {
+				break
+			}
+			server := m.Server
+			if server == "" {
+				server = "(unknown)"
+			}
+			fmt.Printf("  %-18s %-28s %6d %8.0f\n", server, m.Tool, m.Uses, m.AvgMs)
+		}
+	}
+
+	if len(summary.Subagents) > 0 {
+		fmt.Println("\n  Subagent Invocations (last 7d):")
+		fmt.Printf("  %-30s %6s\n", "Agent", "Uses")
+		clilog.Divider()
+		for _, sa := range summary.Subagents {
+			fmt.Printf("  %-30s %6d\n", sa.Detail, sa.Count)
+		}
+	}
+
+	// Adoption funnel
+	skillCount := len(summary.Skills)
+	mcpServerSet := make(map[string]bool)
+	for _, m := range summary.MCPServers {
+		if m.Server != "" {
+			mcpServerSet[m.Server] = true
+		}
+	}
+	subCount := len(summary.Subagents)
+	if skillCount > 0 || len(mcpServerSet) > 0 || subCount > 0 {
+		fmt.Println("\n  Adoption Funnel:")
+		fmt.Printf("    Skills activated:       %d of 89 installed\n", skillCount)
+		fmt.Printf("    MCP servers used:       %d of 8 always-on\n", len(mcpServerSet))
+		fmt.Printf("    Subagents invoked:      %d of 6 available\n", subCount)
+	}
+
 	fmt.Println()
 
 	recs := summary.Analyse()

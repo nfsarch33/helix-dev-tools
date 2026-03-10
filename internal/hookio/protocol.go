@@ -10,11 +10,12 @@ import (
 
 // Input represents the JSON payload Cursor sends to hooks via stdin.
 type Input struct {
-	Command   string `json:"command,omitempty"`
-	FilePath  string `json:"file_path,omitempty"`
-	ToolName  string `json:"tool_name,omitempty"`
-	ToolInput string `json:"tool_input,omitempty"`
-	Status    string `json:"status,omitempty"`
+	Command    string `json:"command,omitempty"`
+	FilePath   string `json:"file_path,omitempty"`
+	ToolName   string `json:"tool_name,omitempty"`
+	ToolInput  string `json:"tool_input,omitempty"`
+	Status     string `json:"status,omitempty"`
+	ServerName string `json:"server_name,omitempty"` // MCP server name (if provided by Cursor)
 }
 
 // Response represents the JSON payload hooks return to Cursor via stdout.

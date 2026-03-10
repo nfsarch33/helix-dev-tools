@@ -58,4 +58,28 @@ var _ = Describe("guardMcpHandler", func() {
 		_, err := handler.Handle(context.Background(), input)
 		Expect(err).NotTo(HaveOccurred())
 	})
+
+	It("enriches detail with server name from static map", func() {
+		input := &hookio.Input{ToolName: "resolve-library-id", ToolInput: `{"libraryName":"react"}`}
+		_, err := handler.Handle(context.Background(), input)
+		Expect(err).NotTo(HaveOccurred())
+
+		data, err := os.ReadFile(metricsFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(data)).To(ContainSubstring("context7:resolve-library-id"))
+	})
+
+	It("prefers Cursor-provided server name over static map", func() {
+		input := &hookio.Input{
+			ToolName:   "search",
+			ToolInput:  `{"query":"test"}`,
+			ServerName: "my-custom-server",
+		}
+		_, err := handler.Handle(context.Background(), input)
+		Expect(err).NotTo(HaveOccurred())
+
+		data, err := os.ReadFile(metricsFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(data)).To(ContainSubstring("my-custom-server:search"))
+	})
 })

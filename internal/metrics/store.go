@@ -128,6 +128,21 @@ func (t Trend) arrow(delta float64) string {
 	return "="
 }
 
+// SkillStats holds activation data for a single Agent Skill.
+type SkillStats struct {
+	Name  string
+	Uses  int
+	AvgMs float64
+}
+
+// MCPServerStats holds per-server MCP call data.
+type MCPServerStats struct {
+	Server string
+	Tool   string
+	Uses   int
+	AvgMs  float64
+}
+
 // Summary holds the full metrics report.
 type Summary struct {
 	Since       time.Time
@@ -137,6 +152,10 @@ type Summary struct {
 	Categories  []CategoryStats
 	TopDenied   []FreqEntry
 	Trend       Trend
+
+	Skills     []SkillStats
+	MCPServers []MCPServerStats
+	Subagents  []FreqEntry
 }
 
 // Summarise aggregates events since the given time and computes period-over-period trend.
@@ -188,6 +207,7 @@ func Summarise(events []Event, since time.Time) *Summary {
 
 	s.TopDenied = topN(denyFreq, 10)
 	s.Categories = buildCategoryStats(events, since)
+	s.Skills, s.MCPServers, s.Subagents = buildAdoptionStats(events, since)
 
 	if prevTotal > 0 {
 		prevRate := float64(prevDeny+prevWarn) / float64(prevTotal) * 100
@@ -558,6 +578,84 @@ func buildCategoryStats(events []Event, since time.Time) []CategoryStats {
 	}
 	sort.Slice(stats, func(i, j int) bool { return stats[i].Count > stats[j].Count })
 	return stats
+}
+
+// buildAdoptionStats extracts skill activations, MCP server:tool breakdowns,
+// and subagent invocations from events.
+func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPServerStats, []FreqEntry) {
+	// Skills: cat=="skill" events (from skill-activate hook or cursor-tools track)
+	skillAcc := make(map[string]*struct {
+		count   int
+		totalMs int64
+	})
+	// MCP: cat=="mcp" events with "server:tool" in Detail
+	mcpAcc := make(map[string]*struct {
+		count   int
+		totalMs int64
+	})
+	// Subagents: cat=="subagent"
+	subFreq := make(map[string]int)
+
+	for _, e := range events {
+		if e.Timestamp.Before(since) {
+			continue
+		}
+		switch e.Category {
+		case "skill":
+			acc, ok := skillAcc[e.Detail]
+			if !ok {
+				acc = &struct {
+					count   int
+					totalMs int64
+				}{}
+				skillAcc[e.Detail] = acc
+			}
+			acc.count++
+			acc.totalMs += EffectiveDuration(e)
+		case "mcp":
+			key := e.Detail
+			acc, ok := mcpAcc[key]
+			if !ok {
+				acc = &struct {
+					count   int
+					totalMs int64
+				}{}
+				mcpAcc[key] = acc
+			}
+			acc.count++
+			acc.totalMs += EffectiveDuration(e)
+		case "subagent":
+			subFreq[e.Detail]++
+		}
+	}
+
+	skills := make([]SkillStats, 0, len(skillAcc))
+	for name, acc := range skillAcc {
+		avg := float64(0)
+		if acc.count > 0 {
+			avg = float64(acc.totalMs) / float64(acc.count)
+		}
+		skills = append(skills, SkillStats{Name: name, Uses: acc.count, AvgMs: avg})
+	}
+	sort.Slice(skills, func(i, j int) bool { return skills[i].Uses > skills[j].Uses })
+
+	mcpServers := make([]MCPServerStats, 0, len(mcpAcc))
+	for key, acc := range mcpAcc {
+		server, tool := "", key
+		if idx := strings.Index(key, ":"); idx > 0 {
+			server = key[:idx]
+			tool = key[idx+1:]
+		}
+		avg := float64(0)
+		if acc.count > 0 {
+			avg = float64(acc.totalMs) / float64(acc.count)
+		}
+		mcpServers = append(mcpServers, MCPServerStats{Server: server, Tool: tool, Uses: acc.count, AvgMs: avg})
+	}
+	sort.Slice(mcpServers, func(i, j int) bool { return mcpServers[i].Uses > mcpServers[j].Uses })
+
+	subagents := topN(subFreq, 10)
+	return skills, mcpServers, subagents
 }
 
 func topN(freq map[string]int, n int) []FreqEntry {
