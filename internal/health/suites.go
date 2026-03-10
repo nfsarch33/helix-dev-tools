@@ -334,7 +334,7 @@ func suiteProgrammaticCounts(p config.Paths) *Suite {
 	s.Assert("agents = 6", agentCount == 6, itoa(agentCount))
 
 	cmdCount := countFilesWithExt(p.CommandsDir, ".md")
-	s.Assert("commands = 5", cmdCount == 5, itoa(cmdCount))
+	s.Assert("commands = 6", cmdCount == 6, itoa(cmdCount))
 
 	return s
 }
