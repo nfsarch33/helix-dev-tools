@@ -28,17 +28,17 @@ func TestSmallHelpers(t *testing.T) {
 func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	now := time.Now().UTC()
 	events := []Event{
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 20, TurnID: "task-1"},
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 40, TurnID: "task-1"},
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "perplexity:perplexity_search", LatencyMs: 15, TurnID: "task-1"},
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "subagent", Detail: "go-architect", DurationMs: 5, TurnID: "task-2"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 20, TurnID: "task-1", TaskSource: "exact"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 40, TurnID: "task-1", TaskSource: "exact"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "ironclaw:ironclaw_health", LatencyMs: 15, TurnID: "task-1", TaskSource: "exact"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "subagent", Detail: "go-architect", DurationMs: 5, TurnID: "task-2", TaskSource: "turn"},
 	}
 
 	skills, mcpServers, subagents := buildAdoptionStats(events, now.Add(-24*time.Hour))
 	if len(skills) != 1 || skills[0].Name != "skill-a" || skills[0].Uses != 2 {
 		t.Fatalf("unexpected skills: %+v", skills)
 	}
-	if len(mcpServers) != 1 || mcpServers[0].Server != "perplexity" || mcpServers[0].Tool != "perplexity_search" {
+	if len(mcpServers) != 1 || mcpServers[0].Server != "ironclaw" || mcpServers[0].Tool != "ironclaw_health" {
 		t.Fatalf("unexpected mcp servers: %+v", mcpServers)
 	}
 	if len(subagents) != 1 || subagents[0].Detail != "go-architect" {
@@ -49,12 +49,15 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	if summary.Tasks.Total != 2 || summary.Tasks.SkillTasks != 1 || summary.Tasks.MCPTasks != 1 || summary.Tasks.SubagentTasks != 1 {
 		t.Fatalf("unexpected task coverage: %+v", summary.Tasks)
 	}
+	if summary.Tasks.IronclawTasks != 1 || summary.Tasks.ExactTasks != 1 || summary.Tasks.TurnTasks != 1 {
+		t.Fatalf("unexpected task confidence coverage: %+v", summary.Tasks)
+	}
 	md := summary.Markdown()
-	if !strings.Contains(md, "System Performance Report") || !strings.Contains(md, "Operation Timing by Category") || !strings.Contains(md, "Task Adoption Coverage") {
+	if !strings.Contains(md, "System Performance Report") || !strings.Contains(md, "Operation Timing by Category") || !strings.Contains(md, "IronClaw MCP task coverage") {
 		t.Fatalf("Markdown() output missing sections: %q", md)
 	}
 	compact := summary.Compact(7)
-	if !strings.Contains(compact, "events 7d") || !strings.Contains(compact, "tasks=") {
+	if !strings.Contains(compact, "events 7d") || !strings.Contains(compact, "iron=") {
 		t.Fatalf("Compact() output = %q", compact)
 	}
 

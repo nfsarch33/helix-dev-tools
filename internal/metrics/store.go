@@ -26,6 +26,7 @@ type Event struct {
 	PassedCount int       `json:"pass_count,omitempty"`
 	TotalCount  int       `json:"total_count,omitempty"`
 	TurnID      string    `json:"turn_id,omitempty"`
+	TaskSource  string    `json:"task_source,omitempty"`
 }
 
 // Record appends an event as a JSONL line. Uses O_APPEND for atomic writes.
@@ -33,8 +34,14 @@ func Record(path string, e Event) error {
 	if e.Timestamp.IsZero() {
 		e.Timestamp = time.Now().UTC()
 	}
-	if e.TurnID == "" {
-		e.TurnID = currentTurnID()
+	if e.TurnID == "" || e.TaskSource == "" {
+		turnID, source := currentTaskIdentity()
+		if e.TurnID == "" {
+			e.TurnID = turnID
+		}
+		if e.TaskSource == "" {
+			e.TaskSource = source
+		}
 	}
 	data, err := json.Marshal(e)
 	if err != nil {
@@ -55,11 +62,16 @@ func Record(path string, e Event) error {
 }
 
 func currentTurnID() string {
+	turnID, _ := currentTaskIdentity()
+	return turnID
+}
+
+func currentTaskIdentity() (string, string) {
 	for _, key := range []string{
-		"CURSOR_AGENT_TURN_ID",
-		"CURSOR_TURN_ID",
 		"CURSOR_TASK_ID",
 		"CLAUDE_CODE_TASK_ID",
+		"CURSOR_AGENT_TURN_ID",
+		"CURSOR_TURN_ID",
 		"CLAUDE_SESSION_ID",
 	} {
 		value := strings.TrimSpace(os.Getenv(key))
@@ -67,10 +79,15 @@ func currentTurnID() string {
 			if len(value) > 120 {
 				value = value[:120]
 			}
-			return value
+			switch key {
+			case "CURSOR_TASK_ID", "CLAUDE_CODE_TASK_ID":
+				return value, "exact"
+			default:
+				return value, "turn"
+			}
 		}
 	}
-	return ""
+	return "", ""
 }
 
 // Load reads all events from a JSONL file.
@@ -210,6 +227,9 @@ type TaskCoverage struct {
 	SkillTasks     int
 	MCPTasks       int
 	SubagentTasks  int
+	IronclawTasks  int
+	ExactTasks     int
+	TurnTasks      int
 	ExplicitTasks  int
 	HeuristicTasks int
 }
@@ -466,6 +486,12 @@ func (s *Summary) Analyse() []Recommendation {
 			Category: "adoption",
 			Message:  "Task grouping is still heuristic for this window because older events lack explicit turn IDs. Task coverage KPIs will sharpen as new events are recorded.",
 		})
+	} else if s.Tasks.ExplicitTasks > 0 && s.Tasks.HeuristicTasks > 0 {
+		recs = append(recs, Recommendation{
+			Severity: "info",
+			Category: "adoption",
+			Message:  fmt.Sprintf("Task grouping confidence is mixed for this window: exact=%d, turn-based=%d, heuristic=%d.", s.Tasks.ExactTasks, s.Tasks.TurnTasks, s.Tasks.HeuristicTasks),
+		})
 	}
 
 	return recs
@@ -540,9 +566,11 @@ func (s *Summary) Markdown() string {
 		b.WriteString("\n## Task Adoption Coverage\n\n")
 		b.WriteString(fmt.Sprintf("- Skill task coverage: %d / %d = %.1f%%\n", s.Tasks.SkillTasks, s.Tasks.Total, percentageInt(s.Tasks.SkillTasks, s.Tasks.Total)))
 		b.WriteString(fmt.Sprintf("- MCP task coverage: %d / %d = %.1f%%\n", s.Tasks.MCPTasks, s.Tasks.Total, percentageInt(s.Tasks.MCPTasks, s.Tasks.Total)))
+		b.WriteString(fmt.Sprintf("- IronClaw MCP task coverage: %d / %d = %.1f%%\n", s.Tasks.IronclawTasks, s.Tasks.Total, percentageInt(s.Tasks.IronclawTasks, s.Tasks.Total)))
 		b.WriteString(fmt.Sprintf("- Subagent task coverage: %d / %d = %.1f%%\n", s.Tasks.SubagentTasks, s.Tasks.Total, percentageInt(s.Tasks.SubagentTasks, s.Tasks.Total)))
-		b.WriteString(fmt.Sprintf("- Explicit task groups: %d, heuristic task groups: %d\n", s.Tasks.ExplicitTasks, s.Tasks.HeuristicTasks))
-		b.WriteString("- Task grouping uses explicit `turn_id` when available and falls back to timestamp clustering for older history.\n")
+		b.WriteString(fmt.Sprintf("- Task grouping confidence: exact=%d, turn-based=%d, heuristic=%d\n", s.Tasks.ExactTasks, s.Tasks.TurnTasks, s.Tasks.HeuristicTasks))
+		b.WriteString(fmt.Sprintf("- Explicit task groups: %d\n", s.Tasks.ExplicitTasks))
+		b.WriteString("- Task grouping uses explicit task IDs when available, falls back to turn IDs, and finally to timestamp clustering for older history.\n")
 	}
 
 	var totalBytesIn, totalBytesOut int64
@@ -645,10 +673,11 @@ func (s *Summary) Compact(days int) string {
 		catPart += " | checks=" + strings.Join(parts, ",")
 	}
 	if s.Tasks.Total > 0 {
-		catPart += fmt.Sprintf(" | tasks=%d skill=%.0f%% mcp=%.0f%% sub=%.0f%%",
+		catPart += fmt.Sprintf(" | tasks=%d skill=%.0f%% mcp=%.0f%% iron=%.0f%% sub=%.0f%%",
 			s.Tasks.Total,
 			percentageInt(s.Tasks.SkillTasks, s.Tasks.Total),
 			percentageInt(s.Tasks.MCPTasks, s.Tasks.Total),
+			percentageInt(s.Tasks.IronclawTasks, s.Tasks.Total),
 			percentageInt(s.Tasks.SubagentTasks, s.Tasks.Total),
 		)
 	}
@@ -917,7 +946,10 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 	type taskSignals struct {
 		skill    bool
 		mcp      bool
+		ironclaw bool
 		subagent bool
+		exact    bool
+		turn     bool
 		explicit bool
 	}
 
@@ -970,12 +1002,20 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 		}
 		if strings.HasPrefix(key, "turn:") {
 			entry.explicit = true
+			if strings.TrimSpace(e.TaskSource) == "exact" {
+				entry.exact = true
+			} else {
+				entry.turn = true
+			}
 		}
 		switch e.Category {
 		case "skill":
 			entry.skill = true
 		case "mcp":
 			entry.mcp = true
+			if eventMCPServer(e) == "ironclaw" {
+				entry.ironclaw = true
+			}
 		case "subagent":
 			entry.subagent = true
 		}
@@ -990,8 +1030,17 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 		if task.mcp {
 			coverage.MCPTasks++
 		}
+		if task.ironclaw {
+			coverage.IronclawTasks++
+		}
 		if task.subagent {
 			coverage.SubagentTasks++
+		}
+		if task.exact {
+			coverage.ExactTasks++
+		}
+		if task.turn {
+			coverage.TurnTasks++
 		}
 		if task.explicit {
 			coverage.ExplicitTasks++
@@ -1000,6 +1049,17 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 		}
 	}
 	return coverage
+}
+
+func eventMCPServer(e Event) string {
+	detail := strings.TrimSpace(e.Detail)
+	if detail == "" {
+		return ""
+	}
+	if idx := strings.Index(detail, ":"); idx > 0 {
+		return CanonicalMCPServerName(detail[:idx])
+	}
+	return ""
 }
 
 func percentageInt(numerator, denominator int) float64 {

@@ -68,6 +68,23 @@ var _ = Describe("Metrics Store", func() {
 			Expect(events[0].Timestamp).NotTo(BeZero())
 		})
 
+		It("captures task source from environment", func() {
+			Expect(os.Setenv("CURSOR_TASK_ID", "task-exact-123")).To(Succeed())
+			defer os.Unsetenv("CURSOR_TASK_ID")
+
+			err := metrics.Record(metricsPath, metrics.Event{
+				Hook:   "track",
+				Action: "record",
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			events, err := metrics.Load(metricsPath)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(events).To(HaveLen(1))
+			Expect(events[0].TurnID).To(Equal("task-exact-123"))
+			Expect(events[0].TaskSource).To(Equal("exact"))
+		})
+
 		It("creates nested directories", func() {
 			nested := filepath.Join(tmpDir, "a", "b", "metrics.jsonl")
 			err := metrics.Record(nested, metrics.Event{Hook: "test", Action: "allow"})

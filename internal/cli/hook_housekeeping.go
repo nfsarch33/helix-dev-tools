@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -13,6 +15,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/lockfile"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
 
 var housekeepingCmd = &cobra.Command{
@@ -24,11 +27,26 @@ var housekeepingCmd = &cobra.Command{
 }
 
 type housekeepingHandler struct {
-	log   *logger.Logger
-	paths config.Paths
+	log         *logger.Logger
+	paths       config.Paths
+	metricsPath string
 }
 
 func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
+	started := time.Now()
+	defer func() {
+		if h.metricsPath == "" || input == nil {
+			return
+		}
+		_ = metrics.Record(h.metricsPath, metrics.Event{
+			Hook:      "housekeeping",
+			Action:    strings.TrimSpace(input.Status),
+			Category:  "housekeeping",
+			Detail:    strings.TrimSpace(input.Status),
+			LatencyMs: time.Since(started).Milliseconds(),
+		})
+	}()
+
 	lock := lockfile.NewDirLock(h.paths.LockDir("housekeeping"))
 	if err := lock.Acquire(); err != nil {
 		h.log.Log("SKIPPED: another housekeeping instance running")
@@ -158,8 +176,9 @@ func gitCmd(repoPath string, args ...string) error {
 func runHousekeeping(stdin *os.File, stdout *os.File) error {
 	paths := config.DefaultPaths()
 	handler := &housekeepingHandler{
-		log:   logger.New(paths.LogFile("housekeeping")),
-		paths: paths,
+		log:         logger.New(paths.LogFile("housekeeping")),
+		paths:       paths,
+		metricsPath: paths.MetricsFile(),
 	}
 
 	input, err := hookio.ReadInput(stdin)
