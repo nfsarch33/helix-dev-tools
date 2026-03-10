@@ -178,9 +178,9 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	subCount := len(summary.Subagents)
 	if skillCount > 0 || len(mcpServerSet) > 0 || subCount > 0 {
 		fmt.Println("\n  Adoption Funnel:")
-		fmt.Printf("    Skills activated:       %d of 91 installed\n", skillCount)
+		fmt.Printf("    Skills activated:       %d of %d installed\n", skillCount, installedSkills)
 		fmt.Printf("    MCP servers used:       %d of 9 always-on\n", len(mcpServerSet))
-		fmt.Printf("    Subagents invoked:      %d of 6 available\n", subCount)
+		fmt.Printf("    Subagents invoked:      %d of %d available\n", subCount, installedSubagents)
 	}
 
 	fmt.Println()

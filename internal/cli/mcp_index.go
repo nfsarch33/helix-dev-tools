@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -46,16 +48,19 @@ func init() {
 
 // mcpServerSpec mirrors the relevant fields of an MCP server entry.
 type mcpServerSpec struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
-	Env     map[string]string `json:"env"`
-	Type    string            `json:"type"`
-	URL     string            `json:"url"`
+	Command  string            `json:"command"`
+	Args     []string          `json:"args"`
+	Env      map[string]string `json:"env"`
+	Type     string            `json:"type"`
+	URL      string            `json:"url"`
+	Disabled bool              `json:"disabled"`
 }
 
 type mcpConfig struct {
 	MCPServers map[string]mcpServerSpec `json:"mcpServers"`
 }
+
+var exactEnvRefPattern = regexp.MustCompile(`^\$[A-Z0-9_]+$`)
 
 // loadMCPServers reads and parses the MCP config file.
 func loadMCPServers(path string) (map[string]mcpServerSpec, error) {
@@ -84,6 +89,7 @@ func loadMCPServers(path string) (map[string]mcpServerSpec, error) {
 		_ = spec
 	}
 	sort.Strings(names)
+	problems := validateMCPServers(cfg.MCPServers)
 	// #region agent log
 	debuglog.Write("mcp-index", "H1", "internal/cli/mcp_index.go:72", "loaded mcp servers", map[string]interface{}{
 		"path":             path,
@@ -93,9 +99,54 @@ func loadMCPServers(path string) (map[string]mcpServerSpec, error) {
 		"hasPerplexityAsk": cfg.MCPServers["perplexity-ask"].Command != "",
 		"hasPerplexity":    cfg.MCPServers["perplexity"].Command != "",
 		"disabledGuess":    disabled,
+		"problemServers":   problems,
 	})
 	// #endregion
 	return cfg.MCPServers, nil
+}
+
+func validateMCPServers(servers map[string]mcpServerSpec) []map[string]interface{} {
+	problems := make([]map[string]interface{}, 0)
+	for name, spec := range servers {
+		commandExists := true
+		if spec.Command != "" {
+			if filepath.IsAbs(spec.Command) {
+				_, err := os.Stat(spec.Command)
+				commandExists = err == nil
+			} else {
+				_, err := exec.LookPath(spec.Command)
+				commandExists = err == nil
+			}
+		}
+		missingArgs := make([]string, 0)
+		for _, arg := range spec.Args {
+			if filepath.IsAbs(arg) {
+				if _, err := os.Stat(arg); err != nil {
+					missingArgs = append(missingArgs, arg)
+				}
+			}
+		}
+		missingEnv := make([]string, 0)
+		for key, value := range spec.Env {
+			if exactEnvRefPattern.MatchString(value) && os.Getenv(strings.TrimPrefix(value, "$")) == "" {
+				missingEnv = append(missingEnv, key)
+			}
+		}
+		sort.Strings(missingEnv)
+		if spec.Disabled || !commandExists || len(missingArgs) > 0 || len(missingEnv) > 0 {
+			problems = append(problems, map[string]interface{}{
+				"name":          name,
+				"disabled":      spec.Disabled,
+				"commandExists": commandExists,
+				"missingArgs":   missingArgs,
+				"missingEnv":    missingEnv,
+			})
+		}
+	}
+	sort.Slice(problems, func(i, j int) bool {
+		return problems[i]["name"].(string) < problems[j]["name"].(string)
+	})
+	return problems
 }
 
 // credentialFlags lists CLI flag names whose values should be redacted.

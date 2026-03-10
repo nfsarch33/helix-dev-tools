@@ -36,6 +36,15 @@ type diskCounts struct {
 	Commands     int
 }
 
+func countHookRoutes(hooksJSONPath string) int {
+	data, err := os.ReadFile(hooksJSONPath)
+	if err != nil {
+		return 0
+	}
+	content := string(data)
+	return strings.Count(content, "cursor-tools hook ")
+}
+
 func countSkillDirs(base string, exclude map[string]bool) int {
 	entries, err := os.ReadDir(base)
 	if err != nil {
@@ -78,7 +87,7 @@ func getDiskCounts(p config.Paths) diskCounts {
 		CursorSkills: cursor,
 		AgentsSkills: agents,
 		TotalSkills:  cursor + agents,
-		Hooks:        countFiles(p.HooksDir, ".sh"),
+		Hooks:        countHookRoutes(filepath.Join(p.Home, ".cursor", "hooks.json")),
 		Agents:       countFiles(p.AgentsDir, ".md"),
 		Commands:     countFiles(p.CommandsDir, ".md"),
 	}
@@ -127,7 +136,8 @@ func SyncCountsApply(apply, quiet bool) (int, int) {
 	}
 
 	replacements := []replacement{
-		{"daily-startup-prompt", `\(\d+ unique skills\)`, fmt.Sprintf("(%d unique skills)", counts.TotalSkills)},
+		{"daily-startup-prompt", `\(\d+ unique skills, \d+ L0 rules\)`, fmt.Sprintf("(%d unique skills, 10 L0 rules)", counts.TotalSkills)},
+		{"daily-startup-prompt", `Slash commands: \d+ in`, fmt.Sprintf("Slash commands: %d in", counts.Commands)},
 		{"skills-index", `Total: \d+ unique skills across ~/\.cursor/skills/ \(\d+\) and ~/\.agents/skills/ \(\d+\)`,
 			fmt.Sprintf("Total: %d unique skills across ~/.cursor/skills/ (%d) and ~/.agents/skills/ (%d)", counts.TotalSkills, counts.CursorSkills, counts.AgentsSkills)},
 		{"00-index", `## Skills \(\d+ unique across`, fmt.Sprintf("## Skills (%d unique across", counts.TotalSkills)},
