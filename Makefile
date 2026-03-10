@@ -15,7 +15,7 @@ else
   HOST_GOARCH := $(HOST_ARCH)
 endif
 
-.PHONY: build test test-cover lint vuln security fuzz install docker docker-native test-docker release clean
+.PHONY: build test test-cover lint vuln security fuzz install dist-install docker docker-native test-docker release clean
 
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) ./cmd/cursor-tools/
@@ -45,6 +45,11 @@ install: build
 	cp bin/$(BINARY) ~/bin/$(BINARY)
 	@echo "Installed to ~/bin/$(BINARY)"
 
+dist-install:
+	@DIST=dist/$(BINARY)-$(HOST_OS)-$(HOST_GOARCH); \
+	if [ -f "$$DIST" ]; then cp "$$DIST" ~/bin/$(BINARY) && echo "Installed from dist: $$DIST"; \
+	else echo "No dist binary for $(HOST_OS)-$(HOST_GOARCH) -- run make install to build locally"; fi
+
 docker:
 	docker buildx build \
 	  --platform linux/amd64,linux/arm64 \
@@ -65,9 +70,10 @@ test-docker:
 	docker run --rm $(BINARY)-dev:latest
 
 release:
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY)-darwin-arm64 ./cmd/cursor-tools/
-	CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY)-linux-amd64  ./cmd/cursor-tools/
-	CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY)-linux-arm64  ./cmd/cursor-tools/
+	mkdir -p dist
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-darwin-arm64 ./cmd/cursor-tools/
+	CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-linux-amd64  ./cmd/cursor-tools/
+	CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-linux-arm64  ./cmd/cursor-tools/
 	@echo "Built: darwin-arm64, linux-amd64, linux-arm64"
 
 clean:

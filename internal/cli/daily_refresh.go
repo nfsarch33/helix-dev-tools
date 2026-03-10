@@ -24,7 +24,7 @@ var dailyRefreshVerify = runDailyRefreshVerification
 var dailyRefreshCmd = &cobra.Command{
 	Use:   "daily-refresh",
 	Short: "Daily Pepper automation: MCP index, repo memories, git sync, skills sync",
-	Long:  "Runs the four-step daily refresh pipeline previously handled by daily_refresh.sh.",
+	Long:  "Runs the eight-step daily refresh pipeline, including session handoff review before git sync and dist-based cursor-tools auto-update after pull.",
 	RunE:  runDailyRefresh,
 }
 
@@ -203,6 +203,8 @@ func (d *dailyRefresher) stepGitSync() {
 
 	if err := gitCmd(repoPath, "pull", "--rebase", "--autostash", "origin", "main"); err != nil {
 		d.out.Warn("unified-memory: pull failed (offline?)")
+	} else if err := applyDistUpdate(d.paths, d.out, false, false); err != nil {
+		d.out.Warn("auto-update: %s", err.Error())
 	}
 
 	if hasChanges(repoPath) {

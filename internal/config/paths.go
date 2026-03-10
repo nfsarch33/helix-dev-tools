@@ -121,6 +121,15 @@ func (p Paths) PlatformProfile() string {
 	}
 }
 
+// PlatformBinarySuffix returns the dist binary suffix for the current host.
+func (p Paths) PlatformBinarySuffix() string {
+	goos := runtime.GOOS
+	if isWSL() {
+		goos = "linux"
+	}
+	return goos + "-" + runtime.GOARCH
+}
+
 // SSHKeyPath returns the path to the SSH private key used for GitHub.
 // Checks for ~/.ssh/agtc first (macOS), falls back to ~/.ssh/wsl_ubuntu (WSL).
 func (p Paths) SSHKeyPath() string {

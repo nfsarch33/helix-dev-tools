@@ -1088,6 +1088,19 @@ func suiteToolchainFreshness(p config.Paths) *Suite {
 		fmt.Sprintf("source newer than binary — rebuild: cd %s && go build -o ~/bin/cursor-tools ./cmd/cursor-tools/", srcRoot),
 	)
 
+	distDir := filepath.Join(srcRoot, "dist")
+	distVersionBytes, _ := os.ReadFile(filepath.Join(distDir, "VERSION"))
+	distVersion := strings.TrimSpace(string(distVersionBytes))
+	distBin := filepath.Join(distDir, "cursor-tools-"+p.PlatformBinarySuffix())
+	distInfo, distErr := os.Stat(distBin)
+	distNewer := distErr == nil && distInfo.ModTime().After(binInfo.ModTime())
+
+	distHint := "pre-built binary available — run: cursor-tools auto-update"
+	if distVersion != "" {
+		distHint = fmt.Sprintf("pre-built binary %s available — run: cursor-tools auto-update", distVersion)
+	}
+	s.Assert("dist binary matches local binary", !distNewer, distHint)
+
 	return s
 }
 

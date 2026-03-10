@@ -17,4 +17,12 @@ var _ = Describe("root helpers", func() {
 		Expect(truncate("abcdef", 3)).To(Equal("abc..."))
 		Expect(truncate("abc", 10)).To(Equal("abc"))
 	})
+
+	It("registers auto-update on the root command", func() {
+		names := []string{}
+		for _, cmd := range rootCmd.Commands() {
+			names = append(names, cmd.Name())
+		}
+		Expect(names).To(ContainElement("auto-update"))
+	})
 })

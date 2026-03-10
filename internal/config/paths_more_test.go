@@ -46,6 +46,9 @@ func TestDerivedPathsAndPlatformBranches(t *testing.T) {
 	if got := p.PlatformProfile(); got == "" {
 		t.Fatal("PlatformProfile() returned empty string")
 	}
+	if got := p.PlatformBinarySuffix(); got == "" {
+		t.Fatal("PlatformBinarySuffix() returned empty string")
+	}
 	// WSL_INTEROP trick only works on Linux; on macOS the darwin branch
 	// short-circuits, so we just verify non-empty above.
 	if os.Getenv("WSL_INTEROP") != "" || p.PlatformProfile() == "linux" {
