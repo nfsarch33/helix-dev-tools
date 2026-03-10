@@ -278,6 +278,43 @@ var _ = Describe("Metrics Store", func() {
 		})
 	})
 
+	Describe("EnrichToolDetail", func() {
+		It("enriches a known tool name", func() {
+			Expect(metrics.EnrichToolDetail("evaluate_script")).To(Equal("chrome-devtools:evaluate_script"))
+		})
+
+		It("enriches wolfram-alpha tool", func() {
+			Expect(metrics.EnrichToolDetail("query-wolfram-alpha")).To(Equal("wolfram-alpha:query-wolfram-alpha"))
+		})
+
+		It("preserves already-enriched detail", func() {
+			Expect(metrics.EnrichToolDetail("context7:query-docs")).To(Equal("context7:query-docs"))
+		})
+
+		It("returns unknown tool as-is", func() {
+			Expect(metrics.EnrichToolDetail("unknown_tool_xyz")).To(Equal("unknown_tool_xyz"))
+		})
+	})
+
+	Describe("Retroactive MCP enrichment in Summarise", func() {
+		now := time.Now().UTC()
+
+		It("attributes historical MCP events to servers via map", func() {
+			events := []metrics.Event{
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "evaluate_script"},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "take_snapshot"},
+				{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "query-wolfram-alpha"},
+			}
+			summary := metrics.Summarise(events, now.Add(-24*time.Hour))
+			serverSet := make(map[string]bool)
+			for _, m := range summary.MCPServers {
+				serverSet[m.Server] = true
+			}
+			Expect(serverSet).To(HaveKey("chrome-devtools"))
+			Expect(serverSet).To(HaveKey("wolfram-alpha"))
+		})
+	})
+
 	Describe("Summary.Markdown", func() {
 		It("renders valid markdown with hook table", func() {
 			events := []metrics.Event{

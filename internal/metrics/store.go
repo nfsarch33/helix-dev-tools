@@ -613,7 +613,7 @@ func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPSer
 			acc.count++
 			acc.totalMs += EffectiveDuration(e)
 		case "mcp":
-			key := e.Detail
+			key := EnrichToolDetail(e.Detail)
 			acc, ok := mcpAcc[key]
 			if !ok {
 				acc = &struct {
