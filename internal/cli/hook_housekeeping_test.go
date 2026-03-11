@@ -168,7 +168,8 @@ func TestHousekeepingSyncRepoPullRepoAndHandle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(logData), "stop event: status=completed") {
+	logText := string(logData)
+	if !strings.Contains(logText, `"msg":"stop event received"`) || !strings.Contains(logText, `"status":"completed"`) {
 		t.Fatalf("housekeeping log missing completed event: %q", string(logData))
 	}
 }

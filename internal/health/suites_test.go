@@ -164,12 +164,10 @@ var _ = Describe("DevContainer Compliance", func() {
 var _ = Describe("Memory Evidence", func() {
 	It("passes when parity exports and outcome coverage exist", func() {
 		tmpDir := GinkgoT().TempDir()
-		p := config.Paths{
-			Home:     tmpDir,
-			GlobalKB: filepath.Join(tmpDir, "Code", "global-kb"),
-			Memo:     filepath.Join(tmpDir, "memo"),
-			BinDir:   filepath.Join(tmpDir, "bin"),
-		}
+		oldHome := os.Getenv("HOME")
+		Expect(os.Setenv("HOME", tmpDir)).To(Succeed())
+		defer os.Setenv("HOME", oldHome)
+		p := config.DefaultPaths()
 		Expect(os.MkdirAll(filepath.Join(tmpDir, "logs"), 0o755)).To(Succeed())
 		Expect(os.MkdirAll(p.HooksDir, 0o755)).To(Succeed())
 
