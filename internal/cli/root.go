@@ -32,6 +32,7 @@ func init() {
 	rootCmd.AddCommand(mcpIndexCmd)
 	rootCmd.AddCommand(metricsCmd)
 	rootCmd.AddCommand(trackCmd)
+	rootCmd.AddCommand(mem0ParityCmd)
 	rootCmd.AddCommand(safeCmd)
 	rootCmd.AddCommand(skillvetAuditCmd)
 	rootCmd.AddCommand(skillAuditSourcesCmd)

@@ -227,7 +227,23 @@ type MemoryLayerStats struct {
 	Misses         int
 	Empty          int
 	Unknown        int
+	Observed       int
 	AvgResultCount float64
+}
+
+func (m MemoryLayerStats) ObservedHitRate() (float64, bool) {
+	if m.Observed == 0 {
+		return 0, false
+	}
+	return float64(m.Hits) / float64(m.Observed) * 100, true
+}
+
+func (m MemoryLayerStats) OutcomeCoverage() (float64, bool) {
+	attempts := m.Searches + m.Reads
+	if attempts == 0 {
+		return 0, false
+	}
+	return float64(m.Observed) / float64(attempts) * 100, true
 }
 
 // CheckStats holds aggregated pass/fail data for doctor/health-check/selftest runs.
@@ -494,9 +510,7 @@ func (s *Summary) Analyse() []Recommendation {
 		switch layer.Layer {
 		case MemoryLayerMem0:
 			mem0Uses = layer.Total
-			known := layer.Hits + layer.Misses + layer.Empty
-			if known > 0 {
-				hitRate := float64(layer.Hits) / float64(known) * 100
+			if hitRate, ok := layer.ObservedHitRate(); ok {
 				if hitRate < 40 {
 					recs = append(recs, Recommendation{
 						Severity: "warn",
@@ -504,11 +518,31 @@ func (s *Summary) Analyse() []Recommendation {
 						Message:  fmt.Sprintf("Mem0 reported hit rate is low (%.1f%%). Review write quality, metadata, and search phrasing.", hitRate),
 					})
 				}
+			} else if layer.Searches > 0 {
+				recs = append(recs, Recommendation{
+					Severity: "info",
+					Category: "memory",
+					Message:  "Mem0 searches are being attempted without explicit outcome tracking. Add post-search track events so hit-rate KPIs stay meaningful.",
+				})
 			}
 		case MemoryLayerContextMode:
 			contextModeUses = layer.Total
+			if layer.Searches > 0 && layer.Observed == 0 {
+				recs = append(recs, Recommendation{
+					Severity: "info",
+					Category: "memory",
+					Message:  "Context Mode usage is present, but no explicit search outcomes were tracked. Record context_mode hits/misses after ctx_search to avoid misleading 0% or unknown-heavy reports.",
+				})
+			}
 		case MemoryLayerGitKB:
 			gitKBUses = layer.Total
+			if layer.Reads > 0 && layer.Observed == 0 {
+				recs = append(recs, Recommendation{
+					Severity: "info",
+					Category: "memory",
+					Message:  "Git KB reads are being inferred from attempted file access only. Record explicit git_kb outcomes when Git is used as a memory fallback.",
+				})
+			}
 		case MemoryLayerAllPepper:
 			recs = append(recs, Recommendation{
 				Severity: "warn",
@@ -641,22 +675,27 @@ func (s *Summary) Markdown() string {
 
 	if len(s.MemoryLayers) > 0 {
 		b.WriteString("\n## Memory Layer KPIs\n\n")
-		b.WriteString("| Layer | Uses | Search | Read | Write | Update | Hit | Miss | Empty | Unknown | Hit Rate | Avg Result Count |\n")
-		b.WriteString("|-------|------|--------|------|-------|--------|-----|------|-------|---------|----------|------------------|\n")
+		b.WriteString("| Layer | Uses | Search | Read | Write | Update | Hit | Miss | Empty | Unknown | Observed | Coverage | Observed Hit Rate | Avg Result Count |\n")
+		b.WriteString("|-------|------|--------|------|-------|--------|-----|------|-------|---------|----------|----------|-------------------|------------------|\n")
 		for _, layer := range s.MemoryLayers {
 			hitRate := "n/a"
-			known := layer.Hits + layer.Misses + layer.Empty
-			if known > 0 {
-				hitRate = fmt.Sprintf("%.1f%%", float64(layer.Hits)/float64(known)*100)
+			if rate, ok := layer.ObservedHitRate(); ok {
+				hitRate = fmt.Sprintf("%.1f%%", rate)
+			}
+			coverage := "n/a"
+			if rate, ok := layer.OutcomeCoverage(); ok {
+				coverage = fmt.Sprintf("%.1f%%", rate)
 			}
 			avgCount := "n/a"
 			if layer.AvgResultCount > 0 {
 				avgCount = fmt.Sprintf("%.1f", layer.AvgResultCount)
 			}
-			b.WriteString(fmt.Sprintf("| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s | %s |\n",
-				layer.Layer, layer.Total, layer.Searches, layer.Reads, layer.WriteOps, layer.UpdateOps, layer.Hits, layer.Misses, layer.Empty, layer.Unknown, hitRate, avgCount))
+			b.WriteString(fmt.Sprintf("| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s | %s | %s |\n",
+				layer.Layer, layer.Total, layer.Searches, layer.Reads, layer.WriteOps, layer.UpdateOps, layer.Hits, layer.Misses, layer.Empty, layer.Unknown, layer.Observed, coverage, hitRate, avgCount))
 		}
-		b.WriteString("\n- `unknown` means the layer usage was recorded but the final search outcome was not explicitly tracked.\n")
+		b.WriteString("\n- `observed` counts explicit retrieval outcomes (`hit`, `miss`, `empty`).\n")
+		b.WriteString("- `coverage` compares observed outcomes against retrieval attempts (`search` + `read`).\n")
+		b.WriteString("- `unknown` means the layer usage was recorded but the final retrieval outcome was not explicitly tracked.\n")
 	}
 
 	var totalBytesIn, totalBytesOut int64
@@ -770,7 +809,11 @@ func (s *Summary) Compact(days int) string {
 	if len(s.MemoryLayers) > 0 {
 		parts := make([]string, 0, len(s.MemoryLayers))
 		for _, layer := range s.MemoryLayers {
-			parts = append(parts, fmt.Sprintf("%s=%d", layer.Layer, layer.Total))
+			part := fmt.Sprintf("%s=%d", layer.Layer, layer.Total)
+			if rate, ok := layer.ObservedHitRate(); ok {
+				part += fmt.Sprintf("@%.0f%%", rate)
+			}
+			parts = append(parts, part)
 		}
 		catPart += " | memory=" + strings.Join(parts, ",")
 	}
@@ -989,6 +1032,7 @@ func buildMemoryLayerStats(events []Event, since time.Time) []MemoryLayerStats {
 		misses         int
 		empty          int
 		unknown        int
+		observed       int
 		resultCountSum int
 		resultCountN   int
 	})
@@ -1025,6 +1069,7 @@ func buildMemoryLayerStats(events []Event, since time.Time) []MemoryLayerStats {
 				misses         int
 				empty          int
 				unknown        int
+				observed       int
 				resultCountSum int
 				resultCountN   int
 			}{}
@@ -1041,17 +1086,24 @@ func buildMemoryLayerStats(events []Event, since time.Time) []MemoryLayerStats {
 		case MemoryOpUpdate:
 			entry.updates++
 		}
-		switch result {
-		case MemoryResultHit:
-			entry.hits++
-		case MemoryResultMiss:
-			entry.misses++
-		case MemoryResultEmpty:
-			entry.empty++
-		case MemoryResultWrite:
-			// write/update confirmation is not part of retrieval hit rate
-		default:
-			entry.unknown++
+		switch op {
+		case MemoryOpSearch, MemoryOpRead:
+			switch result {
+			case MemoryResultHit:
+				entry.hits++
+				entry.observed++
+			case MemoryResultMiss:
+				entry.misses++
+				entry.observed++
+			case MemoryResultEmpty:
+				entry.empty++
+				entry.observed++
+			default:
+				entry.unknown++
+			}
+		case MemoryOpWrite, MemoryOpUpdate:
+			// Write/update events are tracked for usage, but they do not
+			// contribute to retrieval quality or "unknown" outcome counts.
 		}
 		if resultCount > 0 {
 			entry.resultCountSum += resultCount
@@ -1076,6 +1128,7 @@ func buildMemoryLayerStats(events []Event, since time.Time) []MemoryLayerStats {
 			Misses:         entry.misses,
 			Empty:          entry.empty,
 			Unknown:        entry.unknown,
+			Observed:       entry.observed,
 			AvgResultCount: avgCount,
 		})
 	}

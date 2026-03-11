@@ -162,24 +162,29 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 
 	if len(summary.MemoryLayers) > 0 {
 		fmt.Println("\n  Memory Layer KPIs:")
-		fmt.Printf("  %-14s %6s %7s %6s %6s %7s %5s %5s %5s %7s %8s %9s\n",
-			"Layer", "Uses", "Search", "Read", "Write", "Update", "Hit", "Miss", "Empty", "Unknown", "HitRate", "AvgCount")
+		fmt.Printf("  %-14s %6s %7s %6s %6s %7s %5s %5s %5s %7s %8s %9s %8s %9s\n",
+			"Layer", "Uses", "Search", "Read", "Write", "Update", "Hit", "Miss", "Empty", "Unknown", "Observed", "Coverage", "HitRate", "AvgCount")
 		clilog.Divider()
 		for _, layer := range summary.MemoryLayers {
 			hitRate := "n/a"
-			known := layer.Hits + layer.Misses + layer.Empty
-			if known > 0 {
-				hitRate = fmt.Sprintf("%.1f%%", float64(layer.Hits)/float64(known)*100)
+			if rate, ok := layer.ObservedHitRate(); ok {
+				hitRate = fmt.Sprintf("%.1f%%", rate)
+			}
+			coverage := "n/a"
+			if rate, ok := layer.OutcomeCoverage(); ok {
+				coverage = fmt.Sprintf("%.1f%%", rate)
 			}
 			avgCount := "n/a"
 			if layer.AvgResultCount > 0 {
 				avgCount = fmt.Sprintf("%.1f", layer.AvgResultCount)
 			}
-			fmt.Printf("  %-14s %6d %7d %6d %6d %7d %5d %5d %5d %7d %8s %9s\n",
+			fmt.Printf("  %-14s %6d %7d %6d %6d %7d %5d %5d %5d %7d %8d %9s %8s %9s\n",
 				layer.Layer, layer.Total, layer.Searches, layer.Reads, layer.WriteOps, layer.UpdateOps,
-				layer.Hits, layer.Misses, layer.Empty, layer.Unknown, hitRate, avgCount)
+				layer.Hits, layer.Misses, layer.Empty, layer.Unknown, layer.Observed, coverage, hitRate, avgCount)
 		}
-		fmt.Println("    unknown = layer usage recorded without an explicit reported search outcome")
+		fmt.Println("    observed = explicit retrieval outcomes (hit/miss/empty)")
+		fmt.Println("    coverage = observed outcomes divided by retrieval attempts (search + read)")
+		fmt.Println("    unknown  = layer usage recorded without an explicit reported retrieval outcome")
 	}
 
 	// Adoption funnel

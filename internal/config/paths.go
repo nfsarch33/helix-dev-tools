@@ -69,7 +69,7 @@ func (p Paths) SkillsCursorDir() string {
 	return filepath.Join(p.Home, ".cursor", "skills-cursor")
 }
 
-// GlobalMemoriesDir returns the Pepper L1 data directory.
+// GlobalMemoriesDir returns the Git-backed startup-index directory.
 func (p Paths) GlobalMemoriesDir() string {
 	return filepath.Join(p.Memo, "global-memories")
 }

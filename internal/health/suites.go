@@ -75,6 +75,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 		selected = map[string]bool{
 			"Hooks, Sub-agents, Commands, MCP": true,
 			"MCP Readiness":                    true,
+			"Mem0 Connectivity":                true,
 			"IronClaw Readiness":               true,
 			"Platform Readiness":               true,
 			"Programmatic Count Verification":  true,
@@ -525,11 +526,23 @@ func suiteMemoryRouting(p config.Paths) *Suite {
 	s.AssertFileExists("memory-task command exists", memoryTask)
 	s.AssertFileContains("memory-task searches mem0 first", memoryTask, "search_memories")
 	s.AssertFileContains("memory-task records memory outcomes", memoryTask, "--memory-layer mem0")
+	s.AssertFileContains("memory-task records context-mode outcomes", memoryTask, "context-mode:ctx_search")
+	s.AssertFileContains("memory-task records git kb outcomes", memoryTask, "--memory-layer git_kb")
 
 	selfImproveRule := filepath.Join(p.RulesDir, "self-improvement.md")
 	s.AssertFileExists("self-improvement rule exists", selfImproveRule)
 	s.AssertFileContains("self-improvement promotes to Mem0", selfImproveRule, "promote to Mem0")
 	s.AssertFileNotContains("self-improvement no longer uses memo learnings as primary shared store", selfImproveRule, "~/memo/learnings/")
+
+	capabilitiesRule := filepath.Join(p.RulesDir, "00-capabilities.md")
+	s.AssertFileExists("00-capabilities rule exists", capabilitiesRule)
+	s.AssertFileContains("00-capabilities uses Mem0 as L1", capabilitiesRule, "Shared hot memory")
+	s.AssertFileNotContains("00-capabilities no longer routes L1 to Pepper", capabilitiesRule, "via Pepper")
+
+	contextModeSkill := filepath.Join(p.SkillsDir, "context-mode", "SKILL.md")
+	s.AssertFileExists("context-mode skill exists", contextModeSkill)
+	s.AssertFileContains("context-mode skill uses ctx_search", contextModeSkill, "ctx_search")
+	s.AssertFileContains("context-mode skill tracks outcomes", contextModeSkill, "--memory-layer context_mode")
 
 	mcpIndex := filepath.Join(p.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
 	s.AssertFileContains("mcp index marks allPepper disabled", mcpIndex, "### allPepper-memory-bank")

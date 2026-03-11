@@ -138,6 +138,11 @@ func classifyAllPepperTool(tool string) string {
 
 // InferMemoryContextFromReadPath identifies Git-backed KB reads that count as
 // durable memory-layer access instead of ordinary code reads.
+//
+// Important: this hook runs before the actual file read completes, so it should
+// classify the layer/op only. The final result quality must be recorded later
+// via an explicit tracking event instead of assuming every attempted KB read was
+// a successful "hit".
 func InferMemoryContextFromReadPath(path string) (layer, op, result string) {
 	if path == "" {
 		return "", "", ""
@@ -170,12 +175,12 @@ func InferMemoryContextFromReadPath(path string) (layer, op, result string) {
 	}
 	for _, marker := range markers {
 		if strings.Contains(normalised, marker) {
-			return MemoryLayerGitKB, MemoryOpRead, MemoryResultHit
+			return MemoryLayerGitKB, MemoryOpRead, ""
 		}
 	}
 
 	if strings.HasSuffix(normalised, "/code/global-kb/readme.md") {
-		return MemoryLayerGitKB, MemoryOpRead, MemoryResultHit
+		return MemoryLayerGitKB, MemoryOpRead, ""
 	}
 	return "", "", ""
 }

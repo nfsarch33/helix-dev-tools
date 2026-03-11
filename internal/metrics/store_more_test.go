@@ -137,7 +137,7 @@ func TestMemoryLayerHelpersAndSummary(t *testing.T) {
 	if layer, op := InferMemoryContextFromMCPDetail("search_memories"); layer != MemoryLayerMem0 || op != MemoryOpSearch {
 		t.Fatalf("InferMemoryContextFromMCPDetail(search_memories) = %q/%q", layer, op)
 	}
-	if layer, op, result := InferMemoryContextFromReadPath("/Users/jason.lian/Code/global-kb/global-memories/daily-startup-prompt.md"); layer != MemoryLayerGitKB || op != MemoryOpRead || result != MemoryResultHit {
+	if layer, op, result := InferMemoryContextFromReadPath("/Users/jason.lian/Code/global-kb/global-memories/daily-startup-prompt.md"); layer != MemoryLayerGitKB || op != MemoryOpRead || result != "" {
 		t.Fatalf("InferMemoryContextFromReadPath() = %q/%q/%q", layer, op, result)
 	}
 
@@ -145,12 +145,16 @@ func TestMemoryLayerHelpersAndSummary(t *testing.T) {
 		{Timestamp: now.Add(-5 * time.Minute), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "mem0:search_memories", MemoryLayer: MemoryLayerMem0, MemoryOp: MemoryOpSearch},
 		{Timestamp: now.Add(-4 * time.Minute), Hook: "track", Action: "record", Category: "mcp", Detail: "mem0:search_memories", MemoryLayer: MemoryLayerMem0, MemoryOp: MemoryOpSearch, MemoryResult: MemoryResultHit, ResultCount: 3},
 		{Timestamp: now.Add(-3 * time.Minute), Hook: "track", Action: "record", Category: "mcp", Detail: "context-mode:ctx_search", MemoryLayer: MemoryLayerContextMode, MemoryOp: MemoryOpSearch, MemoryResult: MemoryResultMiss},
-		{Timestamp: now.Add(-2 * time.Minute), Hook: "sanitize-read", Action: "allow", Category: "tool", Detail: "/Users/jason.lian/Code/global-kb/sop/mcp-tools-reference.md", MemoryLayer: MemoryLayerGitKB, MemoryOp: MemoryOpRead, MemoryResult: MemoryResultHit},
+		{Timestamp: now.Add(-2 * time.Minute), Hook: "sanitize-read", Action: "allow", Category: "tool", Detail: "/Users/jason.lian/Code/global-kb/sop/mcp-tools-reference.md", MemoryLayer: MemoryLayerGitKB, MemoryOp: MemoryOpRead},
+		{Timestamp: now.Add(-1 * time.Minute), Hook: "track", Action: "record", Category: "tool", Detail: "git_kb:mcp-tools-reference", MemoryLayer: MemoryLayerGitKB, MemoryOp: MemoryOpRead, MemoryResult: MemoryResultHit},
 	}
 
 	summary := Summarise(events, now.Add(-24*time.Hour))
 	if len(summary.MemoryLayers) < 3 {
 		t.Fatalf("expected memory layers, got %+v", summary.MemoryLayers)
+	}
+	if md := summary.Markdown(); !strings.Contains(md, "Coverage") || !strings.Contains(md, "Observed Hit Rate") {
+		t.Fatalf("Markdown() missing coverage columns: %q", md)
 	}
 
 	md := summary.Markdown()
