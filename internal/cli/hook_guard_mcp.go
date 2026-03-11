@@ -40,7 +40,15 @@ func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 	if len(toolInputShort) > 100 {
 		toolInputShort = toolInputShort[:100]
 	}
-	h.log.Log(fmt.Sprintf("MCP: %s input=%q", input.ToolName, toolInputShort))
+	h.log.LogEntry(logger.Entry{
+		Level:   "info",
+		Message: "mcp call observed",
+		Hook:    "guard-mcp",
+		Fields: map[string]any{
+			"tool":  input.ToolName,
+			"input": toolInputShort,
+		},
+	})
 
 	var actionStr string
 	var resp *hookio.Response

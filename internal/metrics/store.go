@@ -27,6 +27,10 @@ type Event struct {
 	TotalCount   int       `json:"total_count,omitempty"`
 	TurnID       string    `json:"turn_id,omitempty"`
 	TaskSource   string    `json:"task_source,omitempty"`
+	RunID        string    `json:"run_id,omitempty"`
+	Command      string    `json:"command,omitempty"`
+	Profile      string    `json:"profile,omitempty"`
+	Suite        string    `json:"suite,omitempty"`
 	MemoryLayer  string    `json:"memory_layer,omitempty"`
 	MemoryOp     string    `json:"memory_op,omitempty"`
 	MemoryResult string    `json:"memory_result,omitempty"`
@@ -145,6 +149,26 @@ func LoadAll(path string) ([]Event, error) {
 		all = append(all, events...)
 	}
 	return all, nil
+}
+
+// RotateFile rotates a JSONL file without writing any non-JSON marker line to
+// the replacement file. This keeps downstream loaders strict and predictable.
+func RotateFile(path string, maxBytes int64) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if info.Size() <= maxBytes {
+		return nil
+	}
+	rotated := path + ".1"
+	if err := os.Rename(path, rotated); err != nil {
+		return err
+	}
+	return os.WriteFile(path, nil, 0o644)
 }
 
 // HookStats holds aggregated statistics for a single hook.
@@ -1170,7 +1194,7 @@ func buildCheckStats(events []Event, since time.Time) []CheckStats {
 	})
 
 	for _, e := range events {
-		if e.Timestamp.Before(since) || e.Category != "check" || e.Detail == "" {
+		if e.Timestamp.Before(since) || e.Category != "check" || e.Detail == "" || strings.TrimSpace(e.Suite) != "" {
 			continue
 		}
 		entry := acc[e.Detail]

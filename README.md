@@ -23,8 +23,9 @@ cursor-tools version
 | `cursor-tools githook pre-push` | Block direct pushes to main/master |
 | `cursor-tools sync-counts [--apply]` | Verify and fix skill/hook counts in index files |
 | `cursor-tools promote [--workspace] [--dry-run]` | Promote learnings through memory hierarchy |
-| `cursor-tools health-check` | 19-suite integration health check |
+| `cursor-tools health-check` | 33-suite integration health check |
 | `cursor-tools selftest` | Hook unit tests (94 assertions) |
+| `cursor-tools memory-routine` | Export memory KPI and parity evidence, then optionally sync durable docs |
 | `cursor-tools bootstrap [--dry-run]` | Create all symlinks on a fresh machine |
 | `cursor-tools safe` | Launch Cursor with --disable-gpu |
 | `cursor-tools version` | Print version, commit, build date |
@@ -50,10 +51,10 @@ Single binary, zero runtime dependencies. All internal packages are in `/interna
 - `internal/hookio` -- Cursor hook JSON stdin/stdout protocol
 - `internal/patterns` -- Pre-compiled regex deny/warn/allow pattern engine
 - `internal/lockfile` -- Cross-platform mkdir and flock locking
-- `internal/logger` -- Structured hook logging with rotation
+- `internal/logger` -- Structured JSONL logging with rotation
 - `internal/config` -- Platform-aware path configuration
 - `internal/learnings` -- Self-improvement pipeline (parse, merge, digest)
-- `internal/health` -- 19-suite health check runner
+- `internal/health` -- multi-suite health check runner
 - `internal/cli` -- Cobra command definitions
 
 ## Rollback

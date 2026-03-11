@@ -163,15 +163,6 @@ func InferMemoryContextFromReadPath(path string) (layer, op, result string) {
 		"/code/global-kb/investigations/",
 		"/code/global-kb/incidents/",
 		"/code/global-kb/docs/adr/",
-		"/code/global-kb/cursor-config/skills/",
-		"/code/global-kb/cursor-config/agents/",
-		"/code/global-kb/cursor-config/rules/",
-		"/code/global-kb/cursor-config/commands/",
-		"/.cursor/skills/",
-		"/.cursor/rules/",
-		"/.cursor/commands/",
-		"/.claude/agents/",
-		"/.agents/skills/",
 	}
 	for _, marker := range markers {
 		if strings.Contains(normalised, marker) {

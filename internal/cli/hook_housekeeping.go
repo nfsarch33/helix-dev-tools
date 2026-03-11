@@ -49,13 +49,29 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 
 	lock := lockfile.NewDirLock(h.paths.LockDir("housekeeping"))
 	if err := lock.Acquire(); err != nil {
-		h.log.Log("SKIPPED: another housekeeping instance running")
+		h.log.LogEntry(logger.Entry{
+			Level:   "warn",
+			Message: "housekeeping skipped",
+			Hook:    "housekeeping",
+			Result:  "skip",
+			Fields: map[string]any{
+				"reason": "another housekeeping instance running",
+			},
+		})
 		return hookio.Empty(), nil
 	}
 	defer lock.Release()
 
 	h.rotateAllLogs()
-	h.log.Log(fmt.Sprintf("stop event: status=%s", input.Status))
+	h.log.LogEntry(logger.Entry{
+		Level:   "info",
+		Message: "stop event received",
+		Hook:    "housekeeping",
+		Result:  strings.TrimSpace(input.Status),
+		Fields: map[string]any{
+			"status": strings.TrimSpace(input.Status),
+		},
+	})
 
 	if input.Status == "completed" || input.Status == "aborted" {
 		h.runSessionHandoff()
@@ -72,21 +88,17 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 func (h *housekeepingHandler) rotateAllLogs() {
 	logger.RotateAll(h.paths.HooksDir, []string{
 		"housekeeping.log",
+		"checks.log",
 		"mcp-audit.log",
 		"guard-shell.log",
 		"sanitize-read.log",
 		"post-edit.log",
-		"metrics.jsonl",
 	})
+	_ = metrics.RotateFile(h.metricsPath, 512000)
 }
 
 func (h *housekeepingHandler) runSessionHandoff() {
-	selfBin, err := os.Executable()
-	if err != nil {
-		return
-	}
-	cmd := exec.Command(selfBin, "session-handoff")
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := runSelfCommandOutput(2*time.Minute, h.paths, "session-handoff"); err != nil {
 		h.log.Log(fmt.Sprintf("session-handoff error: %s", string(out)))
 	} else {
 		h.log.Log("session-handoff: ok")
@@ -94,21 +106,12 @@ func (h *housekeepingHandler) runSessionHandoff() {
 }
 
 func (h *housekeepingHandler) runSyncCounts() {
-	selfBin, err := os.Executable()
-	if err != nil {
-		return
-	}
-	cmd := exec.Command(selfBin, "sync-counts", "--apply")
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := runSelfCommandOutput(2*time.Minute, h.paths, "sync-counts", "--apply"); err != nil {
 		h.log.Log(fmt.Sprintf("sync-counts error: %s", string(out)))
 	}
 }
 
 func (h *housekeepingHandler) runPromoteLearnings() {
-	selfBin, err := os.Executable()
-	if err != nil {
-		return
-	}
 	workspaceDir := os.Getenv("CURSOR_WORKSPACE")
 	if workspaceDir == "" || !filepath.IsAbs(workspaceDir) {
 		workspaceDir, _ = os.Getwd()
@@ -116,12 +119,10 @@ func (h *housekeepingHandler) runPromoteLearnings() {
 	workspaceDir = filepath.Clean(workspaceDir)
 	learningsDir := workspaceDir + "/.learnings"
 	if isDir(learningsDir) {
-		cmd := exec.Command(selfBin, "promote", "--workspace", workspaceDir) // #nosec G702 -- workspaceDir validated as absolute + cleaned
-		_ = cmd.Run()
+		_, _ = runSelfCommandOutput(2*time.Minute, h.paths, "promote", "--workspace", workspaceDir)
 		h.log.Log(fmt.Sprintf("promoted learnings from %s", workspaceDir))
 	} else {
-		cmd := exec.Command(selfBin, "promote")
-		_ = cmd.Run()
+		_, _ = runSelfCommandOutput(2*time.Minute, h.paths, "promote")
 	}
 }
 
@@ -178,8 +179,7 @@ func (h *housekeepingHandler) setSSHCommand() {
 }
 
 func hasChanges(repoPath string) bool {
-	cmd := exec.Command("git", "-C", repoPath, "status", "--porcelain")
-	out, err := cmd.Output()
+	out, err := runCommandOutput(30*time.Second, "git", "-C", repoPath, "status", "--porcelain")
 	return err == nil && len(out) > 0
 }
 
@@ -187,8 +187,7 @@ func hasChanges(repoPath string) bool {
 // grouped by top-level directory (e.g. "cursor-config/", "global-memories/").
 // Appended to auto commit messages so WSL↔macOS syncs are searchable.
 func changedFileSummary(repoPath string) string {
-	cmd := exec.Command("git", "-C", repoPath, "diff", "--cached", "--name-only")
-	out, err := cmd.Output()
+	out, err := runCommandOutput(30*time.Second, "git", "-C", repoPath, "diff", "--cached", "--name-only")
 	if err != nil || len(out) == 0 {
 		return ""
 	}
@@ -220,17 +219,14 @@ func changedFileSummary(repoPath string) string {
 
 func gitCmd(repoPath string, args ...string) error {
 	fullArgs := append([]string{"-C", repoPath}, args...)
-	cmd := exec.Command("git", fullArgs...)
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-	return cmd.Run()
+	_, err := runCommandOutput(2*time.Minute, "git", fullArgs...)
+	return err
 }
 
 // gitCmdOutput runs a git command and returns combined stdout+stderr.
 func gitCmdOutput(repoPath string, args ...string) (string, error) {
 	fullArgs := append([]string{"-C", repoPath}, args...)
-	cmd := exec.Command("git", fullArgs...)
-	out, err := cmd.CombinedOutput()
+	out, err := runCommandOutput(2*time.Minute, "git", fullArgs...)
 	return strings.TrimSpace(string(out)), err
 }
 

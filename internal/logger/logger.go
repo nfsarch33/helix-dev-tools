@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -20,6 +21,21 @@ type Logger struct {
 	mu       sync.Mutex
 }
 
+// Entry is a single structured log event written as JSONL.
+type Entry struct {
+	Timestamp  time.Time      `json:"ts"`
+	Level      string         `json:"level,omitempty"`
+	Message    string         `json:"msg,omitempty"`
+	Hook       string         `json:"hook,omitempty"`
+	Command    string         `json:"command,omitempty"`
+	Profile    string         `json:"profile,omitempty"`
+	Suite      string         `json:"suite,omitempty"`
+	Result     string         `json:"result,omitempty"`
+	RunID      string         `json:"run_id,omitempty"`
+	DurationMs int64          `json:"duration_ms,omitempty"`
+	Fields     map[string]any `json:"fields,omitempty"`
+}
+
 // New creates a logger that writes to the given file path.
 func New(path string) *Logger {
 	return &Logger{path: path, maxBytes: defaultMaxBytes}
@@ -33,11 +49,28 @@ func (l *Logger) WithMaxBytes(n int64) *Logger {
 
 // Log appends a timestamped message to the log file.
 func (l *Logger) Log(msg string) {
+	l.LogEntry(Entry{
+		Level:   "info",
+		Message: msg,
+	})
+}
+
+// LogEntry appends a structured JSONL event to the log file.
+func (l *Logger) LogEntry(entry Entry) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
-	line := fmt.Sprintf("[%s] %s\n", ts, msg)
+	if entry.Timestamp.IsZero() {
+		entry.Timestamp = time.Now().UTC()
+	}
+	if entry.Level == "" {
+		entry.Level = "info"
+	}
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return
+	}
+	data = append(data, '\n')
 
 	if err := os.MkdirAll(filepath.Dir(l.path), 0o755); err != nil {
 		return
@@ -47,7 +80,7 @@ func (l *Logger) Log(msg string) {
 		return
 	}
 	defer f.Close()
-	_, _ = f.WriteString(line)
+	_, _ = f.Write(data)
 }
 
 // Rotate checks file size and rotates if necessary.
@@ -61,9 +94,7 @@ func (l *Logger) Rotate() {
 	}
 	rotated := l.path + rotatedSuffix
 	_ = os.Rename(l.path, rotated)
-
-	ts := time.Now().UTC().Format("2006-01-02T15:04:05Z")
-	_ = os.WriteFile(l.path, []byte(fmt.Sprintf("[%s] log rotated\n", ts)), 0o644)
+	_ = os.WriteFile(l.path, nil, 0o644)
 }
 
 // RotateAll rotates multiple log files.

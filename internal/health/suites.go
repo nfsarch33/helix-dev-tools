@@ -1,6 +1,7 @@
 package health
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,108 +13,145 @@ import (
 	"time"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
+
+type suiteBuilder func(config.Paths) *Suite
+
+type suiteSpec struct {
+	name    string
+	builder suiteBuilder
+}
+
+var suiteCatalog = []suiteSpec{
+	{name: "L0 Rules", builder: suiteL0Rules},
+	{name: "L1 Startup Indexes", builder: suiteL1StartupIndexes},
+	{name: "L2 Global KB", builder: suiteL2GlobalKB},
+	{name: "Skills Registry", builder: suiteSkillsRegistry},
+	{name: "skills-cursor Policy", builder: suiteSkillsCursorPolicy},
+	{name: "Cross-File Consistency", builder: suiteCrossFileConsistency},
+	{name: "Git Sync", builder: suiteGitSync},
+	{name: "Hooks, Sub-agents, Commands, MCP", builder: suiteHooksSubagentsCommandsMCP},
+	{name: "Install Readiness", builder: suiteInstallReadiness},
+	{name: "MCP Readiness", builder: suiteMCPReadiness},
+	{name: "Mem0 Connectivity", builder: suiteMem0Connectivity},
+	{name: "Platform Readiness", builder: suitePlatformReadiness},
+	{name: "Resume Readiness", builder: suiteResumeReadiness},
+	{name: "Memory Routing", builder: suiteMemoryRouting},
+	{name: "Memory Evidence", builder: suiteMemoryEvidence},
+	{name: "Cross-Machine Sync", builder: suiteCrossMachineSync},
+	{name: "Programmatic Count Verification", builder: suiteProgrammaticCounts},
+	{name: "Hook Unit Tests", builder: suiteHookUnitTests},
+	{name: "Log File Integrity", builder: suiteLogFileIntegrity},
+	{name: "Automation Pipeline", builder: suiteAutomationPipeline},
+	{name: "Skillvet EDR-Safety", builder: suiteSkillvetEDR},
+	{name: "IronClaw Readiness", builder: suiteIronClawReadiness},
+	{name: "Global Cursor Config", builder: suiteGlobalCursorConfig},
+	{name: "Race Condition Prevention", builder: suiteRaceConditionPrevention},
+	{name: "Data Integrity", builder: suiteDataIntegrity},
+	{name: "Git Hook Integrity", builder: suiteGitHookIntegrity},
+	{name: "Self-Improvement Pipeline", builder: suiteSelfImprovementPipeline},
+	{name: "DevContainer Compliance", builder: suiteDevContainerCompliance},
+	{name: "rtk Token Optimization", builder: suiteRTKTokenOptimization},
+	{name: "Toolchain Freshness", builder: suiteToolchainFreshness},
+	{name: "Toolchain Cross-Platform", builder: suiteToolchainCrossPlatform},
+	{name: "Handoff Acknowledgement", builder: suiteHandoffAcknowledgement},
+	{name: "Git Sync Resilience", builder: suiteGitSyncResilience},
+}
+
+var suiteCatalogByName = func() map[string]suiteSpec {
+	byName := make(map[string]suiteSpec, len(suiteCatalog))
+	for _, spec := range suiteCatalog {
+		byName[spec.name] = spec
+	}
+	return byName
+}()
+
+func buildSuiteList(p config.Paths, names []string) []*Suite {
+	suites := make([]*Suite, 0, len(names))
+	for _, name := range names {
+		spec, ok := suiteCatalogByName[name]
+		if !ok {
+			continue
+		}
+		started := time.Now()
+		suite := spec.builder(p)
+		if suite == nil {
+			suite = &Suite{Name: name}
+		}
+		if strings.TrimSpace(suite.Name) == "" {
+			suite.Name = name
+		}
+		suite.DurationMs = time.Since(started).Milliseconds()
+		suites = append(suites, suite)
+	}
+	return suites
+}
 
 // BuildAllSuites creates the full health check suite set.
 func BuildAllSuites(p config.Paths) []*Suite {
-	return []*Suite{
-		suiteL0Rules(p),
-		suiteL1Pepper(p),
-		suiteL2GlobalKB(p),
-		suiteSkillsRegistry(p),
-		suiteSkillsCursorPolicy(p),
-		suiteCrossFileConsistency(p),
-		suiteGitSync(p),
-		suiteHooksSubagentsCommandsMCP(p),
-		suiteInstallReadiness(p),
-		suiteMCPReadiness(p),
-		suiteMem0Connectivity(p),
-		suitePlatformReadiness(p),
-		suiteResumeReadiness(p),
-		suiteMemoryRouting(p),
-		suiteCrossMachineSync(p),
-		suiteProgrammaticCounts(p),
-		suiteHookUnitTests(p),
-		suiteLogFileIntegrity(p),
-		suiteAutomationPipeline(p),
-		suiteSkillvetEDR(p),
-		suiteIronClawReadiness(p),
-		suiteGlobalCursorConfig(p),
-		suiteRaceConditionPrevention(p),
-		suiteDataIntegrity(p),
-		suiteGitHookIntegrity(p),
-		suiteSelfImprovementPipeline(p),
-		suiteDevContainerCompliance(p),
-		suiteRTKTokenOptimization(p),
-		suiteToolchainFreshness(p),
-		suiteToolchainCrossPlatform(p),
-		suiteHandoffAcknowledgement(p),
-		suiteGitSyncResilience(p),
+	names := make([]string, 0, len(suiteCatalog))
+	for _, spec := range suiteCatalog {
+		names = append(names, spec.name)
 	}
+	return buildSuiteList(p, names)
 }
 
 // BuildDoctorSuites selects the shared health suites used by doctor subcommands.
 func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
-	selected := map[string]bool{}
+	var names []string
 	switch profile {
 	case "install":
-		selected = map[string]bool{
-			"L1 Pepper":                        true,
-			"L2 Global KB":                     true,
-			"Skills Registry":                  true,
-			"skills-cursor Policy":             true,
-			"Hooks, Sub-agents, Commands, MCP": true,
-			"Install Readiness":                true,
-			"MCP Readiness":                    true,
-			"Mem0 Connectivity":                true,
-			"Platform Readiness":               true,
-			"Global Cursor Config":             true,
-			"Cross-Machine Sync":               true,
-			"rtk Token Optimization":           true,
+		names = []string{
+			"L1 Startup Indexes",
+			"L2 Global KB",
+			"Skills Registry",
+			"skills-cursor Policy",
+			"Hooks, Sub-agents, Commands, MCP",
+			"Install Readiness",
+			"MCP Readiness",
+			"Mem0 Connectivity",
+			"Platform Readiness",
+			"Global Cursor Config",
+			"Cross-Machine Sync",
+			"rtk Token Optimization",
 		}
 	case "mcp":
-		selected = map[string]bool{
-			"Hooks, Sub-agents, Commands, MCP": true,
-			"MCP Readiness":                    true,
-			"Mem0 Connectivity":                true,
-			"IronClaw Readiness":               true,
-			"Platform Readiness":               true,
-			"Programmatic Count Verification":  true,
+		names = []string{
+			"Hooks, Sub-agents, Commands, MCP",
+			"MCP Readiness",
+			"Mem0 Connectivity",
+			"IronClaw Readiness",
+			"Platform Readiness",
+			"Programmatic Count Verification",
 		}
 	case "platform":
-		selected = map[string]bool{
-			"Install Readiness":       true,
-			"Platform Readiness":      true,
-			"Cross-Machine Sync":      true,
-			"Global Cursor Config":    true,
-			"DevContainer Compliance": true,
+		names = []string{
+			"Install Readiness",
+			"Platform Readiness",
+			"Cross-Machine Sync",
+			"Global Cursor Config",
+			"DevContainer Compliance",
 		}
 	case "resume":
-		selected = map[string]bool{
-			"Cross-File Consistency":          true,
-			"Git Sync":                        true,
-			"Programmatic Count Verification": true,
-			"Resume Readiness":                true,
-			"Automation Pipeline":             true,
-			"Data Integrity":                  true,
-			"MCP Readiness":                   true,
-			"Mem0 Connectivity":               true,
-			"Toolchain Freshness":             true,
-			"Toolchain Cross-Platform":        true,
-			"Handoff Acknowledgement":         true,
-			"Git Sync Resilience":             true,
+		names = []string{
+			"Cross-File Consistency",
+			"Git Sync",
+			"Programmatic Count Verification",
+			"Resume Readiness",
+			"Automation Pipeline",
+			"Data Integrity",
+			"MCP Readiness",
+			"Mem0 Connectivity",
+			"Toolchain Freshness",
+			"Toolchain Cross-Platform",
+			"Handoff Acknowledgement",
+			"Git Sync Resilience",
 		}
 	default:
 		return BuildAllSuites(p)
 	}
-
-	var filtered []*Suite
-	for _, suite := range BuildAllSuites(p) {
-		if selected[suite.Name] {
-			filtered = append(filtered, suite)
-		}
-	}
-	return filtered
+	return buildSuiteList(p, names)
 }
 
 func suiteL0Rules(p config.Paths) *Suite {
@@ -174,8 +212,8 @@ func suiteL0Rules(p config.Paths) *Suite {
 	return s
 }
 
-func suiteL1Pepper(p config.Paths) *Suite {
-	s := &Suite{Name: "L1 Pepper"}
+func suiteL1StartupIndexes(p config.Paths) *Suite {
+	s := &Suite{Name: "L1 Startup Indexes"}
 	gmDir := p.GlobalMemoriesDir()
 
 	s.AssertFileExists("global-memories dir exists", gmDir)
@@ -185,7 +223,7 @@ func suiteL1Pepper(p config.Paths) *Suite {
 		"mcp-index-and-selection-sop.md", "one-person-company-progress.md",
 	}
 	for _, f := range pepperFiles {
-		s.AssertFileExists("Pepper: "+f, filepath.Join(gmDir, f))
+		s.AssertFileExists("Startup index: "+f, filepath.Join(gmDir, f))
 	}
 
 	s.AssertFileContains("daily prompt has memory system", filepath.Join(gmDir, "daily-startup-prompt.md"), "Memory System")
@@ -539,6 +577,15 @@ func suiteMemoryRouting(p config.Paths) *Suite {
 	s.AssertFileContains("00-capabilities uses Mem0 as L1", capabilitiesRule, "Shared hot memory")
 	s.AssertFileNotContains("00-capabilities no longer routes L1 to Pepper", capabilitiesRule, "via Pepper")
 
+	templateRule := filepath.Join(p.RulesDir, "template.rules")
+	s.AssertFileExists("template rule exists", templateRule)
+	s.AssertFileNotContains("template rule no longer routes add to memory to Pepper", templateRule, "put procedures/checklists in Pepper")
+
+	zendeskRule := filepath.Join(p.RulesDir, "zendesk-workspace.rules")
+	s.AssertFileExists("zendesk workspace rule exists", zendeskRule)
+	s.AssertFileNotContains("zendesk rule no longer calls Pepper source of truth", zendeskRule, "Pepper Memory Bank")
+	s.AssertFileNotContains("zendesk rule no longer updates Pepper", zendeskRule, "UPDATE Pepper")
+
 	contextModeSkill := filepath.Join(p.SkillsDir, "context-mode", "SKILL.md")
 	s.AssertFileExists("context-mode skill exists", contextModeSkill)
 	s.AssertFileContains("context-mode skill uses ctx_search", contextModeSkill, "ctx_search")
@@ -547,6 +594,63 @@ func suiteMemoryRouting(p config.Paths) *Suite {
 	mcpIndex := filepath.Join(p.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
 	s.AssertFileContains("mcp index marks allPepper disabled", mcpIndex, "### allPepper-memory-bank")
 	s.AssertFileContains("mcp index marks allPepper legacy", mcpIndex, "legacy fallback only")
+
+	return s
+}
+
+func suiteMemoryEvidence(p config.Paths) *Suite {
+	s := &Suite{Name: "Memory Evidence"}
+	logsDir := filepath.Join(p.Home, "logs")
+	parityExport := filepath.Join(logsDir, "memory-parity.md")
+	metricsExport := filepath.Join(logsDir, "memory-metrics.md")
+
+	s.AssertFileExists("logs dir exists", logsDir)
+	s.AssertFileExists("memory parity export exists", parityExport)
+	s.AssertFileExists("memory metrics export exists", metricsExport)
+	s.AssertFileContains("memory parity export proves parity", parityExport, "Parity proven: `true`")
+	s.AssertFileContains("memory parity export has zero missing entries", parityExport, "Missing manifest entries: 0")
+	s.AssertFileContains("memory metrics export includes memory KPI section", metricsExport, "## Memory Layer KPIs")
+	s.AssertFileContains("memory metrics export includes coverage column", metricsExport, "Coverage")
+
+	for _, item := range []struct {
+		label string
+		path  string
+	}{
+		{label: "memory parity export is fresh", path: parityExport},
+		{label: "memory metrics export is fresh", path: metricsExport},
+	} {
+		info, err := os.Stat(item.path)
+		if err != nil {
+			s.Fail(item.label, "missing file: "+item.path)
+			continue
+		}
+		s.Assert(item.label, info.ModTime().After(time.Now().UTC().Add(-35*24*time.Hour)),
+			fmt.Sprintf("stale file (%s) — run 'cursor-tools memory-routine'", info.ModTime().Format("2006-01-02 15:04 UTC")))
+	}
+
+	events, err := metrics.LoadAll(p.MetricsFile())
+	if err != nil {
+		s.Fail("metrics history loads", err.Error())
+		return s
+	}
+	s.Pass("metrics history loads")
+
+	summary := metrics.Summarise(events, time.Now().UTC().Add(-30*24*time.Hour))
+	for _, layer := range summary.MemoryLayers {
+		switch layer.Layer {
+		case metrics.MemoryLayerMem0, metrics.MemoryLayerContextMode:
+			attempts := layer.Searches + layer.Reads
+			if attempts == 0 {
+				s.Pass(layer.Layer + " coverage not applicable (no retrieval attempts)")
+				continue
+			}
+			coverage, ok := layer.OutcomeCoverage()
+			s.Assert(layer.Layer+" has observed outcomes", ok && layer.Observed > 0,
+				"retrieval attempts exist without tracked outcomes — run memory validation or improve automatic tracking")
+			s.Assert(layer.Layer+" outcome coverage is at least 50%", ok && coverage >= 50,
+				fmt.Sprintf("coverage=%.1f%% observed=%d attempts=%d", coverage, layer.Observed, attempts))
+		}
+	}
 
 	return s
 }
@@ -616,8 +720,7 @@ func suiteHookUnitTests(p config.Paths) *Suite {
 	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
 	s.AssertFileExists("cursor-tools binary exists", binaryPath)
 
-	cmd := exec.Command(binaryPath, "selftest")
-	out, err := cmd.CombinedOutput()
+	out, err := runCombinedOutput(2*time.Minute, binaryPath, "selftest")
 	output := string(out)
 	s.Assert("selftest runs without error", err == nil, "selftest failed: "+output)
 	s.Assert("selftest has guard-shell tests", strings.Contains(output, "guard-shell"), "missing guard-shell tests")
@@ -629,15 +732,15 @@ func suiteHookUnitTests(p config.Paths) *Suite {
 
 func suiteLogFileIntegrity(p config.Paths) *Suite {
 	s := &Suite{Name: "Log File Integrity"}
-	logNames := []string{"guard-shell", "sanitize-read", "mcp-audit", "post-edit", "housekeeping"}
+	logNames := []string{"guard-shell", "sanitize-read", "mcp-audit", "post-edit", "housekeeping", "checks"}
 
 	for _, name := range logNames {
 		logPath := filepath.Join(p.HooksDir, name+".log")
 		if _, err := os.Stat(logPath); err == nil {
 			s.Pass("Log exists: " + name)
 			data, _ := os.ReadFile(logPath)
-			hasTimestamp := regexp.MustCompile(`\[\d{4}-\d{2}-\d{2}T`).Match(data)
-			s.Assert("Timestamps in "+name+".log", hasTimestamp, "no ISO-8601 timestamps found")
+			hasTimestamp := regexp.MustCompile(`"ts":"\d{4}-\d{2}-\d{2}T`).Match(data)
+			s.Assert("Structured timestamps in "+name+".log", hasTimestamp, "no structured timestamp found")
 		} else {
 			s.Pass("Log not yet created: " + name + " (OK)")
 			s.Pass("Timestamp check skipped: " + name)
@@ -1006,6 +1109,12 @@ func countFilesWithExt(dir, ext string) int {
 	return count
 }
 
+func runCombinedOutput(timeout time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	return exec.CommandContext(ctx, name, args...).CombinedOutput()
+}
+
 func gitOutput(repoPath string, args ...string) (string, error) {
 	var fullArgs []string
 	if repoPath != "" {
@@ -1013,7 +1122,9 @@ func gitOutput(repoPath string, args ...string) (string, error) {
 	} else {
 		fullArgs = args
 	}
-	cmd := exec.Command("git", fullArgs...)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "git", fullArgs...)
 	out, err := cmd.Output()
 	return string(out), err
 }
@@ -1242,8 +1353,7 @@ func suiteToolchainCrossPlatform(p config.Paths) *Suite {
 		return s
 	}
 
-	cmd := exec.Command(binPath, "version")
-	err := cmd.Run()
+	_, err := runCombinedOutput(30*time.Second, binPath, "version")
 	s.Assert(
 		"binary executes on current platform ("+p.PlatformProfile()+")",
 		err == nil,

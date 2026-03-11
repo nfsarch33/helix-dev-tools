@@ -20,8 +20,9 @@ type Result struct {
 
 // Suite groups assertions under a name.
 type Suite struct {
-	Name    string
-	Results []Result
+	Name       string
+	Results    []Result
+	DurationMs int64
 }
 
 // Pass adds a passing assertion.

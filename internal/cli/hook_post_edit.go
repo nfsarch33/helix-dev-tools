@@ -72,9 +72,17 @@ func (h *postEditHandler) runFormatter(name string, args ...string) {
 	if _, err := exec.LookPath(name); err != nil {
 		return
 	}
-	cmd := exec.Command(name, args...)
-	if err := cmd.Run(); err == nil {
-		h.log.Log(fmt.Sprintf("FORMAT: %s path=%s", name, args[len(args)-1]))
+	if _, err := runCommandOutput(2*time.Minute, name, args...); err == nil {
+		h.log.LogEntry(logger.Entry{
+			Level:   "info",
+			Message: "formatter completed",
+			Hook:    "post-edit",
+			Result:  "format",
+			Fields: map[string]any{
+				"formatter": name,
+				"path":      args[len(args)-1],
+			},
+		})
 	}
 }
 
@@ -89,7 +97,16 @@ func (h *postEditHandler) formatJSON(filePath string) {
 		return
 	}
 	_ = os.WriteFile(filePath, []byte(buf.String()+"\n"), 0o644)
-	h.log.Log(fmt.Sprintf("FORMAT: json path=%s", filePath))
+	h.log.LogEntry(logger.Entry{
+		Level:   "info",
+		Message: "formatter completed",
+		Hook:    "post-edit",
+		Result:  "format",
+		Fields: map[string]any{
+			"formatter": "json",
+			"path":      filePath,
+		},
+	})
 }
 
 func (h *postEditHandler) runGraphQLCodegen(filePath string) {
@@ -107,7 +124,17 @@ func (h *postEditHandler) runGraphQLCodegen(filePath string) {
 		cmd := exec.Command("make", "schema-pdg")
 		cmd.Dir = repoRoot
 		if err := cmd.Run(); err == nil {
-			h.log.Log(fmt.Sprintf("CODEGEN: schema-pdg path=%s repo=%s", filePath, repoRoot))
+			h.log.LogEntry(logger.Entry{
+				Level:   "info",
+				Message: "graphql codegen completed",
+				Hook:    "post-edit",
+				Result:  "codegen",
+				Fields: map[string]any{
+					"path": filePath,
+					"repo": repoRoot,
+					"task": "schema-pdg",
+				},
+			})
 		}
 	}
 }
@@ -127,8 +154,7 @@ func (h *postEditHandler) runSyncCounts() {
 	if err != nil {
 		return
 	}
-	cmd := exec.Command(selfBin, "sync-counts", "--apply")
-	_ = cmd.Run()
+	_, _ = runCommandOutput(2*time.Minute, selfBin, "sync-counts", "--apply")
 }
 
 type learningsAction int
@@ -161,12 +187,27 @@ func (h *postEditHandler) promoteLearningsIfNeeded(filePath string) {
 	switch action {
 	case learningsLocal:
 		if isDir(filepath.Join(wsDir, ".learnings")) {
-			cmd := exec.Command(selfBin, "promote", "--workspace", wsDir)
-			_ = cmd.Run()
-			h.log.Log(fmt.Sprintf("PROMOTE: learnings from %s", wsDir))
+			_, _ = runCommandOutput(2*time.Minute, selfBin, "promote", "--workspace", wsDir)
+			h.log.LogEntry(logger.Entry{
+				Level:   "info",
+				Message: "learnings promoted",
+				Hook:    "post-edit",
+				Result:  "promote",
+				Fields: map[string]any{
+					"workspace": wsDir,
+				},
+			})
 		}
 	case learningsGlobal:
-		h.log.Log("PROMOTE: skipped archived global learnings edit (Mem0-first routing)")
+		h.log.LogEntry(logger.Entry{
+			Level:   "info",
+			Message: "global learnings promotion skipped",
+			Hook:    "post-edit",
+			Result:  "skip",
+			Fields: map[string]any{
+				"reason": "mem0-first routing",
+			},
+		})
 	}
 }
 

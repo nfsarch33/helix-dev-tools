@@ -4,12 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/health"
+	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
 
 func TestHealth(t *testing.T) {
@@ -18,28 +20,34 @@ func TestHealth(t *testing.T) {
 }
 
 var _ = Describe("BuildAllSuites", func() {
-	It("returns 32 suites", func() {
+	It("returns 33 suites", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites).To(HaveLen(32))
+		Expect(suites).To(HaveLen(33))
 	})
 
-	It("includes Self-Improvement Pipeline as Suite 26", func() {
+	It("includes Memory Evidence in the shared catalog", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites[25].Name).To(Equal("Self-Improvement Pipeline"))
+		Expect(suites[14].Name).To(Equal("Memory Evidence"))
 	})
 
-	It("includes DevContainer Compliance as Suite 27", func() {
+	It("includes Self-Improvement Pipeline as Suite 27", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites[26].Name).To(Equal("DevContainer Compliance"))
+		Expect(suites[26].Name).To(Equal("Self-Improvement Pipeline"))
 	})
 
-	It("includes rtk Token Optimization as Suite 28", func() {
+	It("includes DevContainer Compliance as Suite 28", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites[27].Name).To(Equal("rtk Token Optimization"))
+		Expect(suites[27].Name).To(Equal("DevContainer Compliance"))
+	})
+
+	It("includes rtk Token Optimization as Suite 29", func() {
+		p := config.DefaultPaths()
+		suites := health.BuildAllSuites(p)
+		Expect(suites[28].Name).To(Equal("rtk Token Optimization"))
 	})
 
 	It("builds doctor resume suites from the shared catalog", func() {
@@ -55,14 +63,14 @@ var _ = Describe("BuildAllSuites", func() {
 		Expect(names).To(ContainElement("Git Sync Resilience"))
 	})
 
-	It("includes Git Sync Resilience as Suite 32", func() {
+	It("includes Git Sync Resilience as Suite 33", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites[31].Name).To(Equal("Git Sync Resilience"))
+		Expect(suites[32].Name).To(Equal("Git Sync Resilience"))
 	})
 })
 
-var _ = Describe("Suite 20: DevContainer Compliance", func() {
+var _ = Describe("DevContainer Compliance", func() {
 	var tmpDir string
 	var p config.Paths
 
@@ -150,6 +158,45 @@ var _ = Describe("Suite 20: DevContainer Compliance", func() {
 		}
 		Expect(dc).NotTo(BeNil())
 		Expect(dc.PassCount()).To(Equal(7))
+	})
+})
+
+var _ = Describe("Memory Evidence", func() {
+	It("passes when parity exports and outcome coverage exist", func() {
+		tmpDir := GinkgoT().TempDir()
+		p := config.Paths{
+			Home:     tmpDir,
+			GlobalKB: filepath.Join(tmpDir, "Code", "global-kb"),
+			Memo:     filepath.Join(tmpDir, "memo"),
+			BinDir:   filepath.Join(tmpDir, "bin"),
+		}
+		Expect(os.MkdirAll(filepath.Join(tmpDir, "logs"), 0o755)).To(Succeed())
+		Expect(os.MkdirAll(p.HooksDir, 0o755)).To(Succeed())
+
+		Expect(os.WriteFile(filepath.Join(tmpDir, "logs", "memory-parity.md"), []byte("# Mem0 Parity Audit\n- Missing manifest entries: 0\n- Parity proven: `true`\n"), 0o644)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(tmpDir, "logs", "memory-metrics.md"), []byte("# Metrics\n\n## Memory Layer KPIs\n\nCoverage\n"), 0o644)).To(Succeed())
+		Expect(metrics.Record(p.MetricsFile(), metrics.Event{
+			Timestamp:    time.Now().UTC().Add(-1 * time.Hour),
+			Hook:         "track",
+			Action:       "record",
+			Category:     "mcp",
+			Detail:       "mem0:search_memories",
+			MemoryLayer:  metrics.MemoryLayerMem0,
+			MemoryOp:     metrics.MemoryOpSearch,
+			MemoryResult: metrics.MemoryResultHit,
+			ResultCount:  1,
+		})).To(Succeed())
+
+		suites := health.BuildAllSuites(p)
+		var target *health.Suite
+		for _, suite := range suites {
+			if suite.Name == "Memory Evidence" {
+				target = suite
+				break
+			}
+		}
+		Expect(target).NotTo(BeNil())
+		Expect(target.PassCount()).To(Equal(target.Total()))
 	})
 })
 

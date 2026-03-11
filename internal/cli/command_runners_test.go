@@ -66,11 +66,15 @@ func TestRunDoctorProfile(t *testing.T) {
 			gotTitle = title
 			return 3, 3
 		}
-		doctorRecordCheckRun = func(name string, _ time.Time, pass, total int) {
+		doctorRecordCheckRun = func(name, command, profile string, _ time.Time, pass, total int) string {
 			gotMetric = name
+			if command != "doctor" || profile != "install" {
+				t.Fatalf("unexpected command/profile: %q %q", command, profile)
+			}
 			if pass != 3 || total != 3 {
 				t.Fatalf("recorded %d/%d, want 3/3", pass, total)
 			}
+			return "run-1"
 		}
 
 		if err := runDoctorProfile("install"); err != nil {
@@ -98,7 +102,7 @@ func TestRunDoctorProfile(t *testing.T) {
 		doctorRunSuites = func(string, []*health.Suite) (int, int) {
 			return 1, 2
 		}
-		doctorRecordCheckRun = func(string, time.Time, int, int) {}
+		doctorRecordCheckRun = func(string, string, string, time.Time, int, int) string { return "run-2" }
 
 		err := runDoctorProfile("mcp")
 		if err == nil || !strings.Contains(err.Error(), "doctor-mcp failed: 1/2 passed") {
@@ -144,11 +148,15 @@ func TestRunHealthCheck(t *testing.T) {
 		}
 		return 2, 2
 	}
-	healthCheckRecordCheckRun = func(name string, _ time.Time, pass, total int) {
+	healthCheckRecordCheckRun = func(name, command, profile string, _ time.Time, pass, total int) string {
 		recordedName = name
+		if command != "health-check" || profile != "" {
+			t.Fatalf("unexpected command/profile: %q %q", command, profile)
+		}
 		if pass != 2 || total != 2 {
 			t.Fatalf("recorded %d/%d, want 2/2", pass, total)
 		}
+		return "run-3"
 	}
 
 	if err := runHealthCheck(nil, nil); err != nil {
@@ -159,7 +167,7 @@ func TestRunHealthCheck(t *testing.T) {
 	}
 
 	healthCheckRunSuites = func(string, []*health.Suite) (int, int) { return 3, 4 }
-	healthCheckRecordCheckRun = func(string, time.Time, int, int) {}
+	healthCheckRecordCheckRun = func(string, string, string, time.Time, int, int) string { return "run-4" }
 	if err := runHealthCheck(nil, nil); err == nil || !strings.Contains(err.Error(), "health-check failed: 3/4 passed") {
 		t.Fatalf("runHealthCheck() error = %v, want health-check failure", err)
 	}

@@ -3,9 +3,9 @@ package cli
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -409,15 +409,13 @@ func runDailyRefreshVerification(d *dailyRefresher) error {
 	d.out.Info("step 3/8: verification")
 
 	if d.dryRun {
-		d.out.Info("[dry-run] would run: doctor resume, doctor mcp, health-check, selftest, IronClaw smoke")
+		d.out.Info("[dry-run] would run: doctor resume, memory-routine, IronClaw smoke")
 		return nil
 	}
 
 	commands := [][]string{
 		{"doctor", "resume"},
-		{"doctor", "mcp"},
-		{"health-check"},
-		{"selftest"},
+		{"memory-routine", "--skip-sync"},
 	}
 	for _, args := range commands {
 		if err := dailyRefreshRunSelfCommand(d.paths, args...); err != nil {
@@ -440,33 +438,20 @@ func runDailyRefreshVerification(d *dailyRefresher) error {
 }
 
 func dailyRefreshRunSelfCommand(paths config.Paths, args ...string) error {
-	binPath := filepath.Join(paths.BinDir, "cursor-tools")
-	if _, err := os.Stat(binPath); err != nil {
-		exe, exeErr := os.Executable()
-		if exeErr != nil {
-			return nil
-		}
-		base := filepath.Base(exe)
-		if base != "cursor-tools" && !strings.HasPrefix(base, "cursor-tools") {
-			return nil
-		}
-		binPath = exe
-	}
-	cmd := exec.Command(binPath, args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	return cmd.Run()
+	return runSelfCommandStream(5*time.Minute, paths, args...)
 }
 
 func dailyRefreshRunSmoke(scriptPath string) error {
-	cmd := exec.Command(scriptPath)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Stdin = os.Stdin
-	cmd.Env = append(os.Environ(),
+	ctxEnv := append(os.Environ(),
 		"SMOKE_REQUIRE_ROUTER=true",
 		"SMOKE_STATEFUL_TOOL=ironclaw_chat",
 	)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, scriptPath)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = ctxEnv
 	return cmd.Run()
 }

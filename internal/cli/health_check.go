@@ -14,7 +14,7 @@ import (
 var healthCheckSyncCountsApply = SyncCountsApply
 var healthCheckBuildSuites = health.BuildAllSuites
 var healthCheckRunSuites = runSuites
-var healthCheckRecordCheckRun = recordCheckRun
+var healthCheckRecordCheckRun = recordCheckRunWithContext
 
 var healthCheckCmd = &cobra.Command{
 	Use:   "health-check",
@@ -31,8 +31,10 @@ func runHealthCheck(_ *cobra.Command, _ []string) error {
 	}
 
 	p := config.DefaultPaths()
-	pass, total := healthCheckRunSuites("cursor-tools health-check", healthCheckBuildSuites(p))
-	healthCheckRecordCheckRun("health-check", started, pass, total)
+	suites := healthCheckBuildSuites(p)
+	pass, total := healthCheckRunSuites("cursor-tools health-check", suites)
+	runID := healthCheckRecordCheckRun("health-check", "health-check", "", started, pass, total)
+	recordCheckSuiteRuns("health-check", "", runID, suites)
 	if pass < total {
 		return fmt.Errorf("health-check failed: %d/%d passed", pass, total)
 	}

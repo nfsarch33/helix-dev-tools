@@ -6,11 +6,11 @@ Run this at the start of each day or session to verify system integrity.
 
 - command: cursor-tools health-check
   expect_exit: 0
-  description: Run 19-suite integration health check
+  description: Run the full integration health check suite
 
-- command: cursor-tools selftest
+- command: cursor-tools memory-routine
   expect_exit: 0
-  description: Run 94 hook unit test assertions
+  description: Export parity and memory KPI evidence, then sync durable docs
 
 - command: cursor-tools sync-counts --apply
   expect_exit: 0

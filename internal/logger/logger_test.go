@@ -1,6 +1,7 @@
 package logger_test
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -55,9 +56,10 @@ var _ = Describe("Logger", func() {
 
 			data, err := os.ReadFile(logPath)
 			Expect(err).NotTo(HaveOccurred())
-			content := string(data)
-			Expect(content).To(ContainSubstring("hello world"))
-			Expect(content).To(MatchRegexp(`\[\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z\]`))
+			var entry map[string]any
+			Expect(json.Unmarshal(data, &entry)).To(Succeed())
+			Expect(entry["msg"]).To(Equal("hello world"))
+			Expect(entry["ts"]).NotTo(BeEmpty())
 		})
 
 		It("appends multiple messages", func() {
@@ -114,7 +116,7 @@ var _ = Describe("Logger", func() {
 
 			Expect(filepath.Join(tmpDir, "test.log.1")).To(BeAnExistingFile())
 			data, _ := os.ReadFile(logPath)
-			Expect(string(data)).To(ContainSubstring("log rotated"))
+			Expect(strings.TrimSpace(string(data))).To(BeEmpty())
 		})
 
 		It("does not rotate when file is small", func() {

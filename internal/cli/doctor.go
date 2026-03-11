@@ -14,7 +14,7 @@ import (
 var doctorSyncCountsApply = SyncCountsApply
 var doctorBuildSuites = health.BuildDoctorSuites
 var doctorRunSuites = runSuites
-var doctorRecordCheckRun = recordCheckRun
+var doctorRecordCheckRun = recordCheckRunWithContext
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -77,13 +77,18 @@ func runDoctorProfile(profile string) error {
 
 	title := "cursor-tools doctor"
 	metricName := "doctor"
+	metricProfile := profile
 	if profile != "all" {
 		title += " " + profile
 		metricName += "-" + profile
+	} else {
+		metricProfile = ""
 	}
 
-	pass, total := doctorRunSuites(title, doctorBuildSuites(p, profile))
-	doctorRecordCheckRun(metricName, started, pass, total)
+	suites := doctorBuildSuites(p, profile)
+	pass, total := doctorRunSuites(title, suites)
+	runID := doctorRecordCheckRun(metricName, "doctor", metricProfile, started, pass, total)
+	recordCheckSuiteRuns("doctor", metricProfile, runID, suites)
 	if pass < total {
 		return fmt.Errorf("%s failed: %d/%d passed", metricName, pass, total)
 	}

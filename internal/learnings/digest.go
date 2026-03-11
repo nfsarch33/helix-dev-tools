@@ -43,7 +43,7 @@ func (r PromoteResults) Summary() string {
 	return strings.Join(parts, ", ")
 }
 
-// GenerateL1Digest creates the L1 Pepper digest from patterns with 3+ applications.
+// GenerateL1Digest creates the Git-backed startup digest from patterns with 3+ applications.
 func GenerateL1Digest(learningsDir, pepperDir string, dryRun bool) int {
 	patternsFile := filepath.Join(learningsDir, "PATTERNS.md")
 	pats, err := ParsePatterns(patternsFile)

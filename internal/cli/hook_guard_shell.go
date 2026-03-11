@@ -67,14 +67,32 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 	switch action {
 	case patterns.ActionDeny:
 		actionStr = "deny"
-		h.log.Log(fmt.Sprintf("BLOCKED cmd=%q pattern=%q", cmdShort, patternShort))
+		h.log.LogEntry(logger.Entry{
+			Level:   "warn",
+			Message: "shell command blocked",
+			Hook:    "guard-shell",
+			Result:  "deny",
+			Fields: map[string]any{
+				"command": cmdShort,
+				"pattern": patternShort,
+			},
+		})
 		resp = hookio.Deny(
 			fmt.Sprintf("BLOCKED: dangerous command detected (pattern: %s...)", patternShort),
 			"This command was BLOCKED by guard-shell because it matched a dangerous pattern. Do NOT attempt workarounds. Use a safe alternative.",
 		)
 	case patterns.ActionWarn:
 		actionStr = "warn"
-		h.log.Log(fmt.Sprintf("WARN cmd=%q pattern=%q", cmdShort, matchedPattern))
+		h.log.LogEntry(logger.Entry{
+			Level:   "warn",
+			Message: "shell command requires confirmation",
+			Hook:    "guard-shell",
+			Result:  "warn",
+			Fields: map[string]any{
+				"command": cmdShort,
+				"pattern": matchedPattern,
+			},
+		})
 		cmdDisplay := input.Command
 		if len(cmdDisplay) > 80 {
 			cmdDisplay = cmdDisplay[:80]

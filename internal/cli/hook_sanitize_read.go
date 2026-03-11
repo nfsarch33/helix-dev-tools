@@ -58,7 +58,16 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 
 	for _, blocked := range patterns.BlockedFilenames {
 		if basename == blocked {
-			h.log.Log(fmt.Sprintf("BLOCKED file=%q match=%q", input.FilePath, blocked))
+			h.log.LogEntry(logger.Entry{
+				Level:   "warn",
+				Message: "file read blocked",
+				Hook:    "sanitize-read",
+				Result:  "deny",
+				Fields: map[string]any{
+					"path":  input.FilePath,
+					"match": blocked,
+				},
+			})
 			record("deny", basename)
 			return hookio.Deny(
 				fmt.Sprintf("BLOCKED: '%s' likely contains secrets", basename),
@@ -68,7 +77,16 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	}
 
 	if patterns.ContainsAny(input.FilePath, patterns.BlockedDirs) {
-		h.log.Log(fmt.Sprintf("BLOCKED file=%q dir=secrets", input.FilePath))
+		h.log.LogEntry(logger.Entry{
+			Level:   "warn",
+			Message: "file read blocked",
+			Hook:    "sanitize-read",
+			Result:  "deny",
+			Fields: map[string]any{
+				"path":   input.FilePath,
+				"reason": "blocked directory",
+			},
+		})
 		record("deny", input.FilePath)
 		return hookio.Deny(
 			fmt.Sprintf("BLOCKED: path contains secrets directory"),
@@ -78,7 +96,16 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 
 	for _, ext := range patterns.BlockedExtensions {
 		if strings.HasSuffix(strings.ToLower(basename), ext) {
-			h.log.Log(fmt.Sprintf("BLOCKED file=%q ext=%q", input.FilePath, ext))
+			h.log.LogEntry(logger.Entry{
+				Level:   "warn",
+				Message: "file read blocked",
+				Hook:    "sanitize-read",
+				Result:  "deny",
+				Fields: map[string]any{
+					"path": input.FilePath,
+					"ext":  ext,
+				},
+			})
 			record("deny", basename)
 			return hookio.Deny(
 				fmt.Sprintf("BLOCKED: '%s' is a key/certificate file", basename),
