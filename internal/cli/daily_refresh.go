@@ -190,6 +190,7 @@ func (d *dailyRefresher) stepGitSync() {
 		return
 	}
 	d.setSSHCommand()
+	ensureGitSyncConfig(repoPath)
 
 	rulesSrc := filepath.Join(repoPath, "cursor-config", "rules")
 	if isDir(rulesSrc) {
@@ -201,8 +202,8 @@ func (d *dailyRefresher) stepGitSync() {
 		return
 	}
 
-	if err := gitCmd(repoPath, "pull", "--rebase", "--autostash", "origin", "main"); err != nil {
-		d.out.Warn("unified-memory: pull failed (offline?)")
+	if err := safeRebase(repoPath); err != nil {
+		d.out.Warn("unified-memory: pull failed (%s)", err.Error())
 	} else if err := applyDistUpdate(d.paths, d.out, false, false); err != nil {
 		d.out.Warn("auto-update: %s", err.Error())
 	}
@@ -217,13 +218,18 @@ func (d *dailyRefresher) stepGitSync() {
 		if err := gitCmd(repoPath, "commit", "-m", commitMsg); err != nil {
 			d.out.Warn("unified-memory: commit failed")
 		} else {
-			d.out.Info("unified-memory: committed and pushed")
-		}
-		if err := gitCmd(repoPath, "push", "origin", "main"); err != nil {
-			d.out.Warn("unified-memory: push failed (offline?)")
+			d.out.Info("unified-memory: committed")
 		}
 	} else {
 		d.out.Info("unified-memory: clean")
+	}
+
+	result := pushWithRetry(repoPath, 3)
+	writePushState(d.paths.HooksDir, result)
+	if result.Err != nil {
+		d.out.Warn("unified-memory: push failed after %d attempt(s): %s", result.Attempts, result.Err.Error())
+	} else {
+		d.out.Info("unified-memory: pushed (%d attempt(s))", result.Attempts)
 	}
 }
 

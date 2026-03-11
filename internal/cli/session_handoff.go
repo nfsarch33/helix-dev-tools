@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -20,9 +21,9 @@ var sessionHandoffDryRun bool
 var sessionHandoffCmd = &cobra.Command{
 	Use:   "session-handoff",
 	Short: "Write a session handoff document to global-memories",
-	Long: `Writes ~/memo/global-memories/session-handoff-<YYYY-MM-DD>.md with
+	Long: `Writes ~/memo/global-memories/session-handoff-<YYYY-MM-DD>-<platform>.md with
 current platform, git state for all tracked repos, and open-items stubs.
-Skips if today's file already exists unless --force is given.`,
+Skips if today's platform-specific file already exists unless --force is given.`,
 	RunE: runSessionHandoff,
 }
 
@@ -47,10 +48,23 @@ func runSessionHandoff(_ *cobra.Command, _ []string) error {
 	return generateSessionHandoff(p, out, sessionHandoffForce, sessionHandoffDryRun)
 }
 
+// platformSuffix returns a short label for the current machine: "macos", "wsl", or "linux".
+func platformSuffix() string {
+	switch {
+	case runtime.GOOS == "darwin":
+		return "macos"
+	case os.Getenv("WSL_INTEROP") != "" || os.Getenv("WSL_DISTRO_NAME") != "":
+		return "wsl"
+	default:
+		return runtime.GOOS
+	}
+}
+
 // generateSessionHandoff is the testable core of the command.
 func generateSessionHandoff(p config.Paths, out *clilog.Prefixed, force, dryRun bool) error {
 	today := time.Now().UTC().Format("2006-01-02")
-	outPath := filepath.Join(p.GlobalMemoriesDir(), "session-handoff-"+today+".md")
+	suffix := platformSuffix()
+	outPath := filepath.Join(p.GlobalMemoriesDir(), "session-handoff-"+today+"-"+suffix+".md")
 
 	if !force {
 		if _, err := os.Stat(outPath); err == nil {

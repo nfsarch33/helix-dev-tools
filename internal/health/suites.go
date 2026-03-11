@@ -47,6 +47,7 @@ func BuildAllSuites(p config.Paths) []*Suite {
 		suiteToolchainFreshness(p),
 		suiteToolchainCrossPlatform(p),
 		suiteHandoffAcknowledgement(p),
+		suiteGitSyncResilience(p),
 	}
 }
 
@@ -96,6 +97,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Toolchain Freshness":             true,
 			"Toolchain Cross-Platform":        true,
 			"Handoff Acknowledgement":         true,
+			"Git Sync Resilience":             true,
 		}
 	default:
 		return BuildAllSuites(p)
@@ -1041,6 +1043,60 @@ func latestGlobMatch(dir, pattern string) string {
 		}
 	}
 	return latest
+}
+
+// suiteGitSyncResilience validates the concurrent-sync hardening configuration:
+// rerere, .gitattributes merge drivers, no stale rebase, and last push state.
+func suiteGitSyncResilience(p config.Paths) *Suite {
+	s := &Suite{Name: "Git Sync Resilience"}
+
+	repoPath := p.GlobalKB
+	gitDir := filepath.Join(repoPath, ".git")
+	if _, err := os.Stat(gitDir); err != nil {
+		s.Fail("git repo exists", "no .git at "+repoPath)
+		return s
+	}
+
+	rerere, _ := gitOutput(repoPath, "config", "--local", "rerere.enabled")
+	s.Assert("rerere.enabled is true", strings.TrimSpace(rerere) == "true",
+		"run: git -C "+repoPath+" config --local rerere.enabled true")
+
+	oursDriver, _ := gitOutput(repoPath, "config", "--local", "merge.ours.driver")
+	s.Assert("merge.ours.driver registered", strings.TrimSpace(oursDriver) == "true",
+		"run: git -C "+repoPath+" config --local merge.ours.driver true")
+
+	gitattributes := filepath.Join(repoPath, ".gitattributes")
+	s.AssertFileExists(".gitattributes exists", gitattributes)
+	s.AssertFileContains(".gitattributes has ours merge", gitattributes, "merge=ours")
+	s.AssertFileContains(".gitattributes has union merge", gitattributes, "merge=union")
+	s.AssertFileContains(".gitattributes has binary dist", gitattributes, "binary")
+
+	status, _ := gitOutput(repoPath, "status")
+	rebaseInProgress := strings.Contains(status, "rebase in progress")
+	s.Assert("no rebase in progress", !rebaseInProgress,
+		"run: git -C "+repoPath+" rebase --abort")
+
+	indexLock := filepath.Join(gitDir, "index.lock")
+	_, lockErr := os.Stat(indexLock)
+	s.Assert("no stale index.lock", lockErr != nil,
+		"stale lock: rm "+indexLock)
+
+	pushStateFile := filepath.Join(p.HooksDir, "last-push-result.txt")
+	pushInfo, pushErr := os.Stat(pushStateFile)
+	s.Assert("last-push-result.txt exists", pushErr == nil,
+		"no push state recorded yet -- will be created on next sync")
+
+	if pushErr == nil {
+		data, _ := os.ReadFile(pushStateFile)
+		content := string(data)
+		s.Assert("last push was successful", strings.Contains(content, "result: success"),
+			"last push failed or deferred -- check "+pushStateFile)
+		withinDay := pushInfo.ModTime().After(time.Now().UTC().Add(-48 * time.Hour))
+		s.Assert("push state is recent (within 48h)", withinDay,
+			fmt.Sprintf("last push state: %s", pushInfo.ModTime().Format("2006-01-02 15:04 UTC")))
+	}
+
+	return s
 }
 
 // suiteToolchainFreshness warns when the cursor-tools binary is older than its source.

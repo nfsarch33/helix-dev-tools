@@ -116,7 +116,7 @@ func TestHousekeepingSyncRepoPullRepoAndHandle(t *testing.T) {
 	gitLog := filepath.Join(binDir, "git.log")
 	restorePath := prependPath(t, binDir)
 	defer restorePath()
-	writeExecutable(t, binDir, "git", "#!/bin/sh\necho \"$@\" >> \""+gitLog+"\"\ncase \"$*\" in\n  *\"status --porcelain\"*) echo \" M changed.go\" ;;\n  *\"pull --rebase\"*) exit 1 ;;\n  *) exit 0 ;;\nesac\n")
+	writeExecutable(t, binDir, "git", "#!/bin/sh\necho \"$@\" >> \""+gitLog+"\"\ncase \"$*\" in\n  *\"status --porcelain\"*) echo \" M changed.go\" ;;\n  *\"pull --rebase\"*) exit 1 ;;\n  *\"status\"*) echo \"nothing to commit\" ;;\n  *) exit 0 ;;\nesac\n")
 
 	p := config.DefaultPaths()
 	for _, dir := range []string{p.HooksDir, filepath.Join(p.GlobalKB, ".git")} {
@@ -137,10 +137,23 @@ func TestHousekeepingSyncRepoPullRepoAndHandle(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitText := string(gitData)
-	for _, want := range []string{"-C " + p.GlobalKB + " add -A", "-C " + p.GlobalKB + " commit -m auto: session sync", "-C " + p.GlobalKB + " pull --rebase origin main", "-C " + p.GlobalKB + " pull --ff-only origin main", "-C " + p.GlobalKB + " push", "-C " + p.GlobalKB + " fetch origin --quiet", "-C " + p.GlobalKB + " merge --ff-only origin/main"} {
+	for _, want := range []string{
+		"-C " + p.GlobalKB + " config --local rerere.enabled true",
+		"-C " + p.GlobalKB + " add -A",
+		"-C " + p.GlobalKB + " commit -m auto: session sync",
+		"-C " + p.GlobalKB + " pull --rebase origin main",
+		"-C " + p.GlobalKB + " push origin main",
+		"-C " + p.GlobalKB + " fetch origin --quiet",
+		"-C " + p.GlobalKB + " merge --ff-only origin/main",
+	} {
 		if !strings.Contains(gitText, want) {
 			t.Fatalf("git log missing %q in %q", want, gitText)
 		}
+	}
+
+	pushState := filepath.Join(p.HooksDir, "last-push-result.txt")
+	if _, err := os.Stat(pushState); err != nil {
+		t.Fatalf("last-push-result.txt not created: %v", err)
 	}
 
 	resp, err := h.Handle(context.Background(), &hookio.Input{Status: "completed"})

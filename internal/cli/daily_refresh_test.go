@@ -297,10 +297,21 @@ func TestDailyRefreshStepsAndRunner(t *testing.T) {
 		t.Fatal(err)
 	}
 	gitText := string(gitData)
-	for _, want := range []string{"-C " + p.GlobalKB + " pull --rebase --autostash origin main", "-C " + p.GlobalKB + " add -A", "-C " + p.GlobalKB + " commit -m auto: daily sync", "-C " + p.GlobalKB + " push origin main"} {
+	for _, want := range []string{
+		"-C " + p.GlobalKB + " config --local rerere.enabled true",
+		"-C " + p.GlobalKB + " pull --rebase origin main",
+		"-C " + p.GlobalKB + " add -A",
+		"-C " + p.GlobalKB + " commit -m auto: daily sync",
+		"-C " + p.GlobalKB + " push origin main",
+	} {
 		if !strings.Contains(gitText, want) {
 			t.Fatalf("git log missing %q in %q", want, gitText)
 		}
+	}
+
+	pushState := filepath.Join(p.HooksDir, "last-push-result.txt")
+	if _, err := os.Stat(pushState); err != nil {
+		t.Fatalf("last-push-result.txt not created: %v", err)
 	}
 
 	oldDryRun := dailyRefreshDryRun

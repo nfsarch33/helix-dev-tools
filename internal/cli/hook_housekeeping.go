@@ -132,6 +132,7 @@ func (h *housekeepingHandler) syncRepo() {
 		return
 	}
 	h.setSSHCommand()
+	ensureGitSyncConfig(repoPath)
 
 	if hasChanges(repoPath) {
 		gitCmd(repoPath, "add", "-A")
@@ -145,14 +146,16 @@ func (h *housekeepingHandler) syncRepo() {
 		h.log.Log("committed: unified-memory")
 	}
 
-	if err := gitCmd(repoPath, "pull", "--rebase", "origin", "main"); err != nil {
-		_ = gitCmd(repoPath, "pull", "--ff-only", "origin", "main")
+	if err := safeRebase(repoPath); err != nil {
+		h.log.Log(fmt.Sprintf("WARN: initial rebase failed: %v", err))
 	}
 
-	if err := gitCmd(repoPath, "push"); err != nil {
-		h.log.Log("WARN: push failed for unified-memory")
+	result := pushWithRetry(repoPath, 3)
+	writePushState(h.paths.HooksDir, result)
+	if result.Err != nil {
+		h.log.Log(fmt.Sprintf("WARN: push failed after %d attempt(s): %v", result.Attempts, result.Err))
 	} else {
-		h.log.Log("synced: unified-memory")
+		h.log.Log(fmt.Sprintf("synced: unified-memory (%d attempt(s))", result.Attempts))
 	}
 }
 
@@ -221,6 +224,100 @@ func gitCmd(repoPath string, args ...string) error {
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 	return cmd.Run()
+}
+
+// gitCmdOutput runs a git command and returns combined stdout+stderr.
+func gitCmdOutput(repoPath string, args ...string) (string, error) {
+	fullArgs := append([]string{"-C", repoPath}, args...)
+	cmd := exec.Command("git", fullArgs...)
+	out, err := cmd.CombinedOutput()
+	return strings.TrimSpace(string(out)), err
+}
+
+// safeRebase pulls with rebase and auto-aborts on conflict, preventing a
+// half-rebased working tree. Returns nil when rebase succeeds or there is
+// nothing to rebase.
+func safeRebase(repoPath string) error {
+	if err := gitCmd(repoPath, "pull", "--rebase", "origin", "main"); err == nil {
+		return nil
+	}
+
+	status, _ := gitCmdOutput(repoPath, "status")
+	if strings.Contains(status, "rebase in progress") {
+		conflicted, _ := gitCmdOutput(repoPath, "diff", "--name-only", "--diff-filter=U")
+		_ = gitCmd(repoPath, "rebase", "--abort")
+		if conflicted != "" {
+			return fmt.Errorf("rebase conflict in: %s", conflicted)
+		}
+		return fmt.Errorf("rebase conflict (aborted)")
+	}
+
+	return fmt.Errorf("pull --rebase failed (offline or non-fast-forward)")
+}
+
+type pushResult struct {
+	Attempts    int
+	Err         error
+	Conflicting string
+}
+
+// pushWithRetry attempts git push up to maxRetries times with exponential
+// backoff. Between retries it re-pulls with safeRebase to incorporate any
+// remote changes that caused the push rejection.
+func pushWithRetry(repoPath string, maxRetries int) pushResult {
+	var lastConflict string
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if err := gitCmd(repoPath, "push", "origin", "main"); err == nil {
+			return pushResult{Attempts: attempt}
+		}
+
+		if attempt >= maxRetries {
+			break
+		}
+
+		delay := time.Duration(attempt*2) * time.Second
+		time.Sleep(delay)
+
+		if err := safeRebase(repoPath); err != nil {
+			lastConflict = err.Error()
+			return pushResult{
+				Attempts:    attempt,
+				Err:         fmt.Errorf("rebase conflict on retry %d: %w", attempt, err),
+				Conflicting: lastConflict,
+			}
+		}
+	}
+	return pushResult{
+		Attempts:    maxRetries,
+		Err:         fmt.Errorf("push rejected after %d attempts", maxRetries),
+		Conflicting: lastConflict,
+	}
+}
+
+// ensureGitSyncConfig sets up rerere and the "ours" merge driver in the
+// repo-local git config. Idempotent -- safe to call on every sync.
+func ensureGitSyncConfig(repoPath string) {
+	_ = gitCmd(repoPath, "config", "--local", "rerere.enabled", "true")
+	_ = gitCmd(repoPath, "config", "--local", "rerere.autoupdate", "true")
+	_ = gitCmd(repoPath, "config", "--local", "merge.ours.driver", "true")
+}
+
+// writePushState persists a small state file so doctor/health-check can
+// report on the last sync outcome.
+func writePushState(hooksDir string, r pushResult) {
+	stateFile := filepath.Join(hooksDir, "last-push-result.txt")
+	_ = os.MkdirAll(hooksDir, 0o755)
+
+	status := "success"
+	if r.Err != nil {
+		status = "failed"
+	}
+	content := fmt.Sprintf("timestamp: %s\nresult: %s\nattempts: %d\n",
+		time.Now().UTC().Format(time.RFC3339), status, r.Attempts)
+	if r.Conflicting != "" {
+		content += "conflicting: " + r.Conflicting + "\n"
+	}
+	_ = os.WriteFile(stateFile, []byte(content), 0o644) // #nosec G306 -- personal state file
 }
 
 func runHousekeeping(stdin *os.File, stdout *os.File) error {
