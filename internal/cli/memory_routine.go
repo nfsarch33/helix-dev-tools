@@ -86,6 +86,11 @@ func runMemoryRoutine(_ *cobra.Command, _ []string) error {
 }
 
 func syncMemoryRoutineDocs(p config.Paths) error {
+	if keyPath := p.SSHKeyPath(); keyPath != "" {
+		if _, err := os.Stat(keyPath); err == nil {
+			_ = os.Setenv("GIT_SSH_COMMAND", fmt.Sprintf("ssh -i %s -o StrictHostKeyChecking=no", keyPath))
+		}
+	}
 	_, err := runCommandOutput(2*time.Minute, "git", "-C", p.GlobalKB, "pull", "--ff-only", "origin", "main")
 	return err
 }
