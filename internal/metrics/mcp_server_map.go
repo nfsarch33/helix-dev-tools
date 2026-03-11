@@ -73,6 +73,16 @@ var MCPToolServerMap = map[string]string{
 	"ctx_stats":           "context-mode",
 	"ctx_doctor":          "context-mode",
 	"ctx_upgrade":         "context-mode",
+	// mem0
+	"add_memory":          "mem0",
+	"search_memories":     "mem0",
+	"get_memories":        "mem0",
+	"get_memory":          "mem0",
+	"update_memory":       "mem0",
+	"delete_memory":       "mem0",
+	"delete_all_memories": "mem0",
+	"delete_entities":     "mem0",
+	"list_entities":       "mem0",
 	// allPepper-memory-bank
 	"memory_bank_read":   "allPepper-memory-bank",
 	"memory_bank_write":  "allPepper-memory-bank",

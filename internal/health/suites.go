@@ -27,6 +27,7 @@ func BuildAllSuites(p config.Paths) []*Suite {
 		suiteHooksSubagentsCommandsMCP(p),
 		suiteInstallReadiness(p),
 		suiteMCPReadiness(p),
+		suiteMem0Connectivity(p),
 		suitePlatformReadiness(p),
 		suiteResumeReadiness(p),
 		suiteMemoryRouting(p),
@@ -64,6 +65,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Hooks, Sub-agents, Commands, MCP": true,
 			"Install Readiness":                true,
 			"MCP Readiness":                    true,
+			"Mem0 Connectivity":                true,
 			"Platform Readiness":               true,
 			"Global Cursor Config":             true,
 			"Cross-Machine Sync":               true,
@@ -94,6 +96,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Automation Pipeline":             true,
 			"Data Integrity":                  true,
 			"MCP Readiness":                   true,
+			"Mem0 Connectivity":               true,
 			"Toolchain Freshness":             true,
 			"Toolchain Cross-Platform":        true,
 			"Handoff Acknowledgement":         true,
@@ -385,7 +388,7 @@ func suiteMCPReadiness(p config.Paths) *Suite {
 	s.Assert("mcpServers present", len(cfg.MCPServers) >= 9, itoa(len(cfg.MCPServers)))
 
 	requiredServers := []string{
-		"allPepper-memory-bank", "context-mode", "context7", "git-mcp-server",
+		"mem0", "context-mode", "context7", "git-mcp-server",
 		"github-official", "duckduckgo", "fetch",
 	}
 	for _, name := range requiredServers {
@@ -408,6 +411,42 @@ func suiteMCPReadiness(p config.Paths) *Suite {
 		s.Assert("Absolute args exist: "+name, absArgsExist(spec.Args), "missing absolute arg path")
 	}
 	s.Assert("active MCP servers >= 9", activeServers >= 9, itoa(activeServers))
+
+	return s
+}
+
+func suiteMem0Connectivity(p config.Paths) *Suite {
+	s := &Suite{Name: "Mem0 Connectivity"}
+	mcpPath := p.CursorMCPConfig()
+	s.AssertFileExists("mcp.json exists", mcpPath)
+
+	cfg, err := loadMCPHealthConfig(mcpPath)
+	if err != nil {
+		s.Fail("mcp.json parses", err.Error())
+		return s
+	}
+	s.Pass("mcp.json parses")
+
+	mem0, ok := cfg.MCPServers["mem0"]
+	s.Assert("mem0 configured", ok, "add mem0 to ~/.cursor/mcp.json")
+	if !ok {
+		return s
+	}
+
+	s.Assert("mem0 enabled", !mem0.Disabled, "mem0 is disabled")
+	s.Assert("mem0 command resolvable", commandResolvable(mem0.Command), "command not found: "+mem0.Command)
+	s.Assert("mem0 env ready", envReady(mem0.Env), "MEM0_API_KEY or MEM0_DEFAULT_USER_ID missing")
+	s.Assert("mem0 default user id configured", strings.TrimSpace(mem0.Env["MEM0_DEFAULT_USER_ID"]) != "", "set MEM0_DEFAULT_USER_ID")
+	s.Assert("mem0 api key configured", strings.TrimSpace(mem0.Env["MEM0_API_KEY"]) != "", "set MEM0_API_KEY")
+
+	if allPepper, hasAllPepper := cfg.MCPServers["allPepper-memory-bank"]; hasAllPepper {
+		s.Assert("allPepper disabled during Mem0 migration", allPepper.Disabled, "disable allPepper-memory-bank after Mem0 cutover")
+	} else {
+		s.Pass("allPepper absent or removed")
+	}
+
+	memoryTask := filepath.Join(p.CommandsDir, "memory-task.md")
+	s.AssertFileContains("memory task routes to mem0", memoryTask, "mem0")
 
 	return s
 }
@@ -470,11 +509,16 @@ func suiteMemoryRouting(p config.Paths) *Suite {
 	s.AssertFileContains("routing mentions L1", dailyPrompt, "L1")
 	s.AssertFileContains("routing mentions L2", dailyPrompt, "L2")
 	s.AssertFileContains("routing mentions memo", dailyPrompt, "memo")
+	s.AssertFileContains("routing mentions Mem0", dailyPrompt, "Mem0")
 
 	selfImproveSkill := filepath.Join(p.SkillsDir, "self-improving-agent", "SKILL.md")
 	s.AssertFileExists("self-improving-agent skill exists", selfImproveSkill)
 	s.AssertFileContains("skill has memory architecture", selfImproveSkill, "Memory")
 	s.AssertFileContains("skill has promotion rules", selfImproveSkill, "Promote")
+
+	memorySystemSkill := filepath.Join(p.SkillsDir, "memory-system", "SKILL.md")
+	s.AssertFileExists("memory-system skill exists", memorySystemSkill)
+	s.AssertFileContains("memory-system uses mem0", memorySystemSkill, "mem0")
 
 	return s
 }

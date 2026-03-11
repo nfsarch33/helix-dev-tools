@@ -139,7 +139,7 @@ func TestPostEditSyncCountsAndPromoteLearnings(t *testing.T) {
 		t.Fatal(err)
 	}
 	logText := string(logData)
-	for _, want := range []string{"sync-counts --apply", "promote --workspace " + workspace, "promote "} {
+	for _, want := range []string{"sync-counts --apply", "promote --workspace " + workspace} {
 		if !strings.Contains(logText, want) {
 			t.Fatalf("helper log missing %q in %q", want, logText)
 		}

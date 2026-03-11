@@ -20,7 +20,7 @@ import (
 
 var postEditCmd = &cobra.Command{
 	Use:   "post-edit",
-	Short: "afterFileEdit: format files, sync counts, promote learnings",
+	Short: "afterFileEdit: format files, sync counts, promote local learnings",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		return runPostEdit(os.Stdin, os.Stdout)
 	},
@@ -166,9 +166,7 @@ func (h *postEditHandler) promoteLearningsIfNeeded(filePath string) {
 			h.log.Log(fmt.Sprintf("PROMOTE: learnings from %s", wsDir))
 		}
 	case learningsGlobal:
-		cmd := exec.Command(selfBin, "promote")
-		_ = cmd.Run()
-		h.log.Log("PROMOTE: consolidated L1/L2 digests")
+		h.log.Log("PROMOTE: skipped archived global learnings edit (Mem0-first routing)")
 	}
 }
 

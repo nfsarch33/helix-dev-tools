@@ -47,7 +47,7 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	installedSkills := countSkillDirs(p.SkillsDir, map[string]bool{"00-index": true}) + countSkillDirs(p.AgentsSkillsDir, nil)
 	installedSubagents := countFiles(p.AgentsDir, ".md")
 	alwaysOnMCP := []string{
-		"git-mcp-server", "context-mode", "allPepper-memory-bank", "github-official",
+		"git-mcp-server", "context-mode", "mem0", "github-official",
 		"context7", "duckduckgo", "perplexity", "fetch", "wolfram-alpha",
 	}
 
