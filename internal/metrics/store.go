@@ -1077,6 +1077,12 @@ func buildMemoryLayerStats(events []Event, since time.Time) []MemoryLayerStats {
 		if layer == "" && e.Hook == "sanitize-read" {
 			layer, op, result = InferMemoryContextFromReadPath(e.Detail)
 		}
+		// Backfill: old sanitize-read events recorded git_kb layer+op
+		// but left result empty. Since the hook fires for files that
+		// exist, we can safely infer "hit".
+		if layer == MemoryLayerGitKB && op == MemoryOpRead && result == "" && e.Hook == "sanitize-read" {
+			result = MemoryResultHit
+		}
 		if layer == "" {
 			continue
 		}

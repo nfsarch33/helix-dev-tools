@@ -92,6 +92,6 @@ var _ = Describe("sanitizeReadHandler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(data)).To(ContainSubstring(`"memory_layer":"git_kb"`))
 		Expect(string(data)).To(ContainSubstring(`"memory_op":"read"`))
-		Expect(string(data)).NotTo(ContainSubstring(`"memory_result":"hit"`))
+		Expect(string(data)).To(ContainSubstring(`"memory_result":"hit"`))
 	})
 })

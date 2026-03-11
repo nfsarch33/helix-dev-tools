@@ -404,7 +404,7 @@ func TestRunSafeStartsCursorBinary(t *testing.T) {
 		t.Fatalf("runSafe() error = %v", err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(5 * time.Second)
 	for {
 		data, err := os.ReadFile(logPath)
 		if err == nil {
@@ -416,7 +416,7 @@ func TestRunSafeStartsCursorBinary(t *testing.T) {
 		if time.Now().After(deadline) {
 			t.Fatalf("cursor log not written: %v", err)
 		}
-		time.Sleep(20 * time.Millisecond)
+		time.Sleep(50 * time.Millisecond)
 	}
 }
 

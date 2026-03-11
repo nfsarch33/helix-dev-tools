@@ -649,6 +649,14 @@ func suiteMemoryEvidence(p config.Paths) *Suite {
 				"retrieval attempts exist without tracked outcomes — run memory validation or improve automatic tracking")
 			s.Assert(layer.Layer+" outcome coverage is at least 50%", ok && coverage >= 50,
 				fmt.Sprintf("coverage=%.1f%% observed=%d attempts=%d", coverage, layer.Observed, attempts))
+		case metrics.MemoryLayerGitKB:
+			attempts := layer.Searches + layer.Reads
+			if attempts == 0 {
+				continue
+			}
+			coverage, ok := layer.OutcomeCoverage()
+			s.Assert(layer.Layer+" outcome coverage is at least 90%", ok && coverage >= 90,
+				fmt.Sprintf("coverage=%.1f%% observed=%d attempts=%d — git_kb reads should auto-infer hit", coverage, layer.Observed, attempts))
 		}
 	}
 
