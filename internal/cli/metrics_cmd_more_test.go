@@ -52,6 +52,7 @@ func TestRunMetricsRicherBranches(t *testing.T) {
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-shell", Action: "deny", Category: "shell", LatencyMs: 10, Detail: "rm -rf /"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", DurationMs: 42, Detail: "skill-a"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", LatencyMs: 30, Detail: "perplexity:perplexity_search"},
+		{Timestamp: now.Add(-30 * time.Minute), Hook: "track", Action: "record", Category: "mcp", DurationMs: 5, Detail: "mem0:search_memories", MemoryLayer: "mem0", MemoryOp: "search", MemoryResult: "hit", ResultCount: 2},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "subagent", DurationMs: 5, Detail: "go-architect"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "doctor", Action: "pass", Category: "check", DurationMs: 11, Detail: "doctor", PassedCount: 5, TotalCount: 5},
 	}
@@ -79,7 +80,7 @@ func TestRunMetricsRicherBranches(t *testing.T) {
 		t.Fatal(err)
 	}
 	reportText := string(report)
-	for _, want := range []string{"Task Adoption Coverage", "Skill task coverage", "MCP task coverage"} {
+	for _, want := range []string{"Task Adoption Coverage", "Skill task coverage", "MCP task coverage", "Memory Layer KPIs", "mem0"} {
 		if !strings.Contains(reportText, want) {
 			t.Fatalf("export missing %q in %q", want, reportText)
 		}

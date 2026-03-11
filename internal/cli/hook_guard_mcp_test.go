@@ -92,4 +92,15 @@ var _ = Describe("guardMcpHandler", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(string(data)).To(ContainSubstring("my-custom-server:search"))
 	})
+
+	It("records memory-layer metadata for mem0 tools", func() {
+		input := &hookio.Input{ToolName: "search_memories", ToolInput: `{"query":"lockfiles"}`}
+		_, err := handler.Handle(context.Background(), input)
+		Expect(err).NotTo(HaveOccurred())
+
+		data, err := os.ReadFile(metricsFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(data)).To(ContainSubstring(`"memory_layer":"mem0"`))
+		Expect(string(data)).To(ContainSubstring(`"memory_op":"search"`))
+	})
 })

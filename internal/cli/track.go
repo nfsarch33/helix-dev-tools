@@ -15,18 +15,23 @@ import (
 )
 
 var trackFlags struct {
-	category   string
-	name       string
-	durationMs int64
+	category     string
+	name         string
+	durationMs   int64
+	memoryLayer  string
+	memoryOp     string
+	memoryResult string
+	resultCount  int
 }
 
 var trackCmd = &cobra.Command{
 	Use:   "track [--cat CATEGORY] --name NAME [--ms DURATION] [-- COMMAND...]",
 	Short: "Record timed operation metrics for analytics",
-	Long: `Record execution timing for any operation: MCP tools, skills, subagents, scripts.
+	Long: `Record execution timing for any operation: MCP tools, skills, subagents, scripts, and memory usage outcomes.
 
 Two modes:
   Manual:  cursor-tools track --cat mcp --name context7.resolve --ms 1234
+  Memory:  cursor-tools track --cat mcp --name mem0:search_memories --memory-layer mem0 --memory-op search --memory-result hit --result-count 3
   Wrapper: cursor-tools track --cat skill --name ui-ux-pro-max -- uiux search grid
 
 Categories: mcp, shell, skill, subagent, script, tool, check, custom
@@ -39,6 +44,10 @@ func init() {
 	trackCmd.Flags().StringVar(&trackFlags.category, "cat", "custom", "Operation category (mcp, shell, skill, subagent, script, tool, check, custom)")
 	trackCmd.Flags().StringVar(&trackFlags.name, "name", "", "Operation name (required)")
 	trackCmd.Flags().Int64Var(&trackFlags.durationMs, "ms", 0, "Pre-measured duration in milliseconds (manual mode)")
+	trackCmd.Flags().StringVar(&trackFlags.memoryLayer, "memory-layer", "", "Memory layer for manual tracking (mem0, context_mode, git_kb, allpepper)")
+	trackCmd.Flags().StringVar(&trackFlags.memoryOp, "memory-op", "", "Memory operation for manual tracking (search, read, write, update)")
+	trackCmd.Flags().StringVar(&trackFlags.memoryResult, "memory-result", "", "Memory result for manual tracking (hit, miss, empty, write)")
+	trackCmd.Flags().IntVar(&trackFlags.resultCount, "result-count", 0, "Number of results returned by the memory operation")
 	_ = trackCmd.MarkFlagRequired("name")
 }
 
@@ -61,16 +70,24 @@ func runTrack(cmd *cobra.Command, args []string) error {
 	if trackFlags.name == "" {
 		return fmt.Errorf("--name is required")
 	}
+	if trackFlags.memoryLayer != "" && !metrics.IsValidMemoryLayer(trackFlags.memoryLayer) {
+		return fmt.Errorf("invalid --memory-layer %q; valid: %s", trackFlags.memoryLayer, strings.Join(metrics.ValidMemoryLayers, ", "))
+	}
+	if trackFlags.memoryOp != "" && !metrics.IsValidMemoryOp(trackFlags.memoryOp) {
+		return fmt.Errorf("invalid --memory-op %q; valid: %s", trackFlags.memoryOp, strings.Join(metrics.ValidMemoryOps, ", "))
+	}
+	if trackFlags.memoryResult != "" && !metrics.IsValidMemoryResult(trackFlags.memoryResult) {
+		return fmt.Errorf("invalid --memory-result %q; valid: %s", trackFlags.memoryResult, strings.Join(metrics.ValidMemoryResults, ", "))
+	}
+	if trackFlags.resultCount < 0 {
+		return fmt.Errorf("--result-count must be >= 0")
+	}
 
 	p := config.DefaultPaths()
 	metricsPath := p.MetricsFile()
 
-	if trackFlags.durationMs > 0 {
-		return recordManual(metricsPath)
-	}
-
 	if len(args) == 0 {
-		return fmt.Errorf("provide --ms for manual mode or a command after -- for wrapper mode")
+		return recordManual(metricsPath)
 	}
 
 	return recordWrapper(metricsPath, args)
@@ -78,12 +95,16 @@ func runTrack(cmd *cobra.Command, args []string) error {
 
 func recordManual(metricsPath string) error {
 	evt := metrics.Event{
-		Hook:       "track",
-		Action:     "record",
-		Category:   trackFlags.category,
-		Detail:     trackFlags.name,
-		DurationMs: trackFlags.durationMs,
-		LatencyMs:  0,
+		Hook:         "track",
+		Action:       "record",
+		Category:     trackFlags.category,
+		Detail:       trackFlags.name,
+		DurationMs:   trackFlags.durationMs,
+		LatencyMs:    0,
+		MemoryLayer:  trackFlags.memoryLayer,
+		MemoryOp:     trackFlags.memoryOp,
+		MemoryResult: trackFlags.memoryResult,
+		ResultCount:  trackFlags.resultCount,
 	}
 	if err := metrics.Record(metricsPath, evt); err != nil {
 		return fmt.Errorf("recording metric: %w", err)
@@ -115,13 +136,17 @@ func recordWrapper(metricsPath string, args []string) error {
 	}
 
 	evt := metrics.Event{
-		Hook:       "track",
-		Action:     "record",
-		Category:   trackFlags.category,
-		Detail:     trackFlags.name,
-		DurationMs: dur,
-		LatencyMs:  0,
-		ExitCode:   exitCode,
+		Hook:         "track",
+		Action:       "record",
+		Category:     trackFlags.category,
+		Detail:       trackFlags.name,
+		DurationMs:   dur,
+		LatencyMs:    0,
+		ExitCode:     exitCode,
+		MemoryLayer:  trackFlags.memoryLayer,
+		MemoryOp:     trackFlags.memoryOp,
+		MemoryResult: trackFlags.memoryResult,
+		ResultCount:  trackFlags.resultCount,
 	}
 	if recErr := metrics.Record(metricsPath, evt); recErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to record metric: %v\n", recErr)

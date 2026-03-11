@@ -22,8 +22,8 @@ var mcpIndexFlags struct {
 
 var mcpIndexCmd = &cobra.Command{
 	Use:   "mcp-index",
-	Short: "Refresh Pepper MCP index from local ~/.cursor/mcp.json (values redacted)",
-	Long:  "Reads the Cursor MCP config, redacts env values, and writes a Markdown index to Pepper.",
+	Short: "Refresh MCP index from local ~/.cursor/mcp.json",
+	Long:  "Reads the Cursor MCP config, redacts env values, and writes a Markdown index for the Git-backed startup docs.",
 	RunE:  runMCPIndex,
 }
 
@@ -45,11 +45,12 @@ func init() {
 
 // mcpServerSpec mirrors the relevant fields of an MCP server entry.
 type mcpServerSpec struct {
-	Command string            `json:"command"`
-	Args    []string          `json:"args"`
-	Env     map[string]string `json:"env"`
-	Type    string            `json:"type"`
-	URL     string            `json:"url"`
+	Command  string            `json:"command"`
+	Args     []string          `json:"args"`
+	Env      map[string]string `json:"env"`
+	Type     string            `json:"type"`
+	URL      string            `json:"url"`
+	Disabled bool              `json:"disabled"`
 }
 
 type mcpConfig struct {
@@ -108,7 +109,7 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 
 	b.WriteString("## Why this exists\n")
 	b.WriteString("When you have hundreds of MCP tools, the goal is fast, safe selection with minimal context switching.\n")
-	b.WriteString("This file is canonical in Pepper (git): `~/memo/global-memories/mcp-index-and-selection-sop.md`.\n\n")
+	b.WriteString("This file is canonical in the Git-backed startup docs: `~/memo/global-memories/mcp-index-and-selection-sop.md`.\n\n")
 
 	b.WriteString("## Tool selection SOP (KISS)\n")
 	b.WriteString("- If the task is read-only codebase investigation: use `context-mode` first, then `ReadFile`, `rg`, and `Glob`.\n")
@@ -156,6 +157,14 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	for _, name := range names {
 		spec := servers[name]
 		b.WriteString("### " + name + "\n")
+		if spec.Disabled {
+			b.WriteString("- status: `disabled`\n")
+			if name == "allPepper-memory-bank" {
+				b.WriteString("- note: legacy fallback only; do not use for active memory work in the Mem0-first model\n")
+			}
+		} else {
+			b.WriteString("- status: `enabled`\n")
+		}
 		b.WriteString("- command: `" + spec.Command + "`\n")
 		safeArgs := redactArgs(spec.Args)
 		b.WriteString(fmt.Sprintf("- args: `%v`\n", safeArgs))

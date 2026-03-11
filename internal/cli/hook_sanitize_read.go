@@ -42,12 +42,16 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 
 	record := func(action, detail string) {
 		if h.metricsPath != "" {
+			memoryLayer, memoryOp, memoryResult := metrics.InferMemoryContextFromReadPath(detail)
 			_ = metrics.Record(h.metricsPath, metrics.Event{
-				Hook:      "sanitize-read",
-				Action:    action,
-				Category:  "tool",
-				LatencyMs: time.Since(start).Milliseconds(),
-				Detail:    detail,
+				Hook:         "sanitize-read",
+				Action:       action,
+				Category:     "tool",
+				LatencyMs:    time.Since(start).Milliseconds(),
+				Detail:       detail,
+				MemoryLayer:  memoryLayer,
+				MemoryOp:     memoryOp,
+				MemoryResult: memoryResult,
 			})
 		}
 	}
@@ -83,7 +87,7 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 		}
 	}
 
-	record("allow", basename)
+	record("allow", input.FilePath)
 
 	// Record skill file reads separately so they don't inflate material skill usage.
 	if basename == "SKILL.md" && strings.Contains(input.FilePath, "/skills/") {

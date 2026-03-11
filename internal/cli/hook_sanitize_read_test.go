@@ -81,4 +81,17 @@ var _ = Describe("sanitizeReadHandler", func() {
 		Expect(extractSkillName("/Users/test/.cursor/skills/go-clean-architecture/SKILL.md")).To(Equal("go-clean-architecture"))
 		Expect(extractSkillName("/home/user/.agents/skills/mcp-builder/SKILL.md")).To(Equal("mcp-builder"))
 	})
+
+	It("records git_kb memory-layer metadata for KB reads", func() {
+		input := &hookio.Input{FilePath: "/Users/test/Code/global-kb/global-memories/daily-startup-prompt.md"}
+		resp, err := handler.Handle(context.Background(), input)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(resp.Permission).To(Equal("allow"))
+
+		data, err := os.ReadFile(metricsFile)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(data)).To(ContainSubstring(`"memory_layer":"git_kb"`))
+		Expect(string(data)).To(ContainSubstring(`"memory_op":"read"`))
+		Expect(string(data)).To(ContainSubstring(`"memory_result":"hit"`))
+	})
 })

@@ -131,3 +131,35 @@ func TestAnalyseFlagsHeuristicTrackingGaps(t *testing.T) {
 		}
 	}
 }
+
+func TestMemoryLayerHelpersAndSummary(t *testing.T) {
+	now := time.Now().UTC()
+	if layer, op := InferMemoryContextFromMCPDetail("search_memories"); layer != MemoryLayerMem0 || op != MemoryOpSearch {
+		t.Fatalf("InferMemoryContextFromMCPDetail(search_memories) = %q/%q", layer, op)
+	}
+	if layer, op, result := InferMemoryContextFromReadPath("/Users/jason.lian/Code/global-kb/global-memories/daily-startup-prompt.md"); layer != MemoryLayerGitKB || op != MemoryOpRead || result != MemoryResultHit {
+		t.Fatalf("InferMemoryContextFromReadPath() = %q/%q/%q", layer, op, result)
+	}
+
+	events := []Event{
+		{Timestamp: now.Add(-5 * time.Minute), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "mem0:search_memories", MemoryLayer: MemoryLayerMem0, MemoryOp: MemoryOpSearch},
+		{Timestamp: now.Add(-4 * time.Minute), Hook: "track", Action: "record", Category: "mcp", Detail: "mem0:search_memories", MemoryLayer: MemoryLayerMem0, MemoryOp: MemoryOpSearch, MemoryResult: MemoryResultHit, ResultCount: 3},
+		{Timestamp: now.Add(-3 * time.Minute), Hook: "track", Action: "record", Category: "mcp", Detail: "context-mode:ctx_search", MemoryLayer: MemoryLayerContextMode, MemoryOp: MemoryOpSearch, MemoryResult: MemoryResultMiss},
+		{Timestamp: now.Add(-2 * time.Minute), Hook: "sanitize-read", Action: "allow", Category: "tool", Detail: "/Users/jason.lian/Code/global-kb/sop/mcp-tools-reference.md", MemoryLayer: MemoryLayerGitKB, MemoryOp: MemoryOpRead, MemoryResult: MemoryResultHit},
+	}
+
+	summary := Summarise(events, now.Add(-24*time.Hour))
+	if len(summary.MemoryLayers) < 3 {
+		t.Fatalf("expected memory layers, got %+v", summary.MemoryLayers)
+	}
+
+	md := summary.Markdown()
+	if !strings.Contains(md, "Memory Layer KPIs") || !strings.Contains(md, MemoryLayerMem0) || !strings.Contains(md, MemoryLayerGitKB) {
+		t.Fatalf("Markdown() missing memory section: %q", md)
+	}
+
+	compact := summary.Compact(7)
+	if !strings.Contains(compact, "memory=") || !strings.Contains(compact, "mem0=") {
+		t.Fatalf("Compact() missing memory summary: %q", compact)
+	}
+}

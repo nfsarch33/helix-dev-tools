@@ -211,6 +211,10 @@ var _ = Describe("Track execution paths", func() {
 		trackFlags.category = "custom"
 		trackFlags.name = ""
 		trackFlags.durationMs = 0
+		trackFlags.memoryLayer = ""
+		trackFlags.memoryOp = ""
+		trackFlags.memoryResult = ""
+		trackFlags.resultCount = 0
 	})
 
 	It("records manual track events", func() {
@@ -226,6 +230,25 @@ var _ = Describe("Track execution paths", func() {
 		Expect(events[0].Category).To(Equal("skill"))
 		Expect(events[0].Detail).To(Equal("manual-skill"))
 		Expect(events[0].DurationMs).To(Equal(int64(123)))
+	})
+
+	It("records manual memory tracking fields without a duration", func() {
+		trackFlags.category = "mcp"
+		trackFlags.name = "mem0:search_memories"
+		trackFlags.memoryLayer = "mem0"
+		trackFlags.memoryOp = "search"
+		trackFlags.memoryResult = "hit"
+		trackFlags.resultCount = 2
+
+		Expect(runTrack(nil, nil)).To(Succeed())
+
+		events, err := metrics.Load(filepath.Join(tmpDir, ".cursor", "hooks", "metrics.jsonl"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(events).To(HaveLen(1))
+		Expect(events[0].MemoryLayer).To(Equal("mem0"))
+		Expect(events[0].MemoryOp).To(Equal("search"))
+		Expect(events[0].MemoryResult).To(Equal("hit"))
+		Expect(events[0].ResultCount).To(Equal(2))
 	})
 
 	It("records wrapper executions", func() {
@@ -248,5 +271,14 @@ var _ = Describe("Track execution paths", func() {
 		err := runTrack(nil, nil)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("invalid category"))
+	})
+
+	It("rejects invalid memory layers", func() {
+		trackFlags.category = "mcp"
+		trackFlags.name = "bad-memory"
+		trackFlags.memoryLayer = "bogus"
+		err := runTrack(nil, nil)
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("invalid --memory-layer"))
 	})
 })

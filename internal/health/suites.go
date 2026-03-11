@@ -510,6 +510,7 @@ func suiteMemoryRouting(p config.Paths) *Suite {
 	s.AssertFileContains("routing mentions L2", dailyPrompt, "L2")
 	s.AssertFileContains("routing mentions memo", dailyPrompt, "memo")
 	s.AssertFileContains("routing mentions Mem0", dailyPrompt, "Mem0")
+	s.AssertFileNotContains("daily prompt does not route primary memory to allPepper", dailyPrompt, "L1 Pepper")
 
 	selfImproveSkill := filepath.Join(p.SkillsDir, "self-improving-agent", "SKILL.md")
 	s.AssertFileExists("self-improving-agent skill exists", selfImproveSkill)
@@ -519,6 +520,20 @@ func suiteMemoryRouting(p config.Paths) *Suite {
 	memorySystemSkill := filepath.Join(p.SkillsDir, "memory-system", "SKILL.md")
 	s.AssertFileExists("memory-system skill exists", memorySystemSkill)
 	s.AssertFileContains("memory-system uses mem0", memorySystemSkill, "mem0")
+
+	memoryTask := filepath.Join(p.CommandsDir, "memory-task.md")
+	s.AssertFileExists("memory-task command exists", memoryTask)
+	s.AssertFileContains("memory-task searches mem0 first", memoryTask, "search_memories")
+	s.AssertFileContains("memory-task records memory outcomes", memoryTask, "--memory-layer mem0")
+
+	selfImproveRule := filepath.Join(p.RulesDir, "self-improvement.md")
+	s.AssertFileExists("self-improvement rule exists", selfImproveRule)
+	s.AssertFileContains("self-improvement promotes to Mem0", selfImproveRule, "promote to Mem0")
+	s.AssertFileNotContains("self-improvement no longer uses memo learnings as primary shared store", selfImproveRule, "~/memo/learnings/")
+
+	mcpIndex := filepath.Join(p.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md")
+	s.AssertFileContains("mcp index marks allPepper disabled", mcpIndex, "### allPepper-memory-bank")
+	s.AssertFileContains("mcp index marks allPepper legacy", mcpIndex, "legacy fallback only")
 
 	return s
 }

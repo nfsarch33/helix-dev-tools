@@ -13,20 +13,24 @@ import (
 
 // Event represents a single hook or command execution metric.
 type Event struct {
-	Timestamp   time.Time `json:"ts"`
-	Hook        string    `json:"hook"`
-	Action      string    `json:"action"`
-	LatencyMs   int64     `json:"latency_ms"`
-	Detail      string    `json:"detail,omitempty"`
-	BytesIn     int64     `json:"bytes_in,omitempty"`
-	BytesOut    int64     `json:"bytes_out,omitempty"`
-	Category    string    `json:"cat,omitempty"`
-	DurationMs  int64     `json:"dur_ms,omitempty"`
-	ExitCode    int       `json:"exit,omitempty"`
-	PassedCount int       `json:"pass_count,omitempty"`
-	TotalCount  int       `json:"total_count,omitempty"`
-	TurnID      string    `json:"turn_id,omitempty"`
-	TaskSource  string    `json:"task_source,omitempty"`
+	Timestamp    time.Time `json:"ts"`
+	Hook         string    `json:"hook"`
+	Action       string    `json:"action"`
+	LatencyMs    int64     `json:"latency_ms"`
+	Detail       string    `json:"detail,omitempty"`
+	BytesIn      int64     `json:"bytes_in,omitempty"`
+	BytesOut     int64     `json:"bytes_out,omitempty"`
+	Category     string    `json:"cat,omitempty"`
+	DurationMs   int64     `json:"dur_ms,omitempty"`
+	ExitCode     int       `json:"exit,omitempty"`
+	PassedCount  int       `json:"pass_count,omitempty"`
+	TotalCount   int       `json:"total_count,omitempty"`
+	TurnID       string    `json:"turn_id,omitempty"`
+	TaskSource   string    `json:"task_source,omitempty"`
+	MemoryLayer  string    `json:"memory_layer,omitempty"`
+	MemoryOp     string    `json:"memory_op,omitempty"`
+	MemoryResult string    `json:"memory_result,omitempty"`
+	ResultCount  int       `json:"result_count,omitempty"`
 }
 
 // Record appends an event as a JSONL line. Uses O_APPEND for atomic writes.
@@ -211,6 +215,21 @@ type MCPServerStats struct {
 	AvgMs  float64
 }
 
+// MemoryLayerStats holds usage and outcome data for a memory layer.
+type MemoryLayerStats struct {
+	Layer          string
+	Total          int
+	Searches       int
+	Reads          int
+	WriteOps       int
+	UpdateOps      int
+	Hits           int
+	Misses         int
+	Empty          int
+	Unknown        int
+	AvgResultCount float64
+}
+
 // CheckStats holds aggregated pass/fail data for doctor/health-check/selftest runs.
 type CheckStats struct {
 	Name              string
@@ -244,11 +263,12 @@ type Summary struct {
 	TopDenied   []FreqEntry
 	Trend       Trend
 
-	Skills     []SkillStats
-	MCPServers []MCPServerStats
-	Subagents  []FreqEntry
-	Checks     []CheckStats
-	Tasks      TaskCoverage
+	Skills       []SkillStats
+	MCPServers   []MCPServerStats
+	MemoryLayers []MemoryLayerStats
+	Subagents    []FreqEntry
+	Checks       []CheckStats
+	Tasks        TaskCoverage
 }
 
 // Summarise aggregates events since the given time and computes period-over-period trend.
@@ -301,6 +321,7 @@ func Summarise(events []Event, since time.Time) *Summary {
 	s.TopDenied = topN(denyFreq, 10)
 	s.Categories = buildCategoryStats(events, since)
 	s.Skills, s.MCPServers, s.Subagents = buildAdoptionStats(events, since)
+	s.MemoryLayers = buildMemoryLayerStats(events, since)
 	s.Checks = buildCheckStats(events, since)
 	s.Tasks = buildTaskCoverage(events, since)
 
@@ -466,6 +487,51 @@ func (s *Summary) Analyse() []Recommendation {
 		}
 	}
 
+	mem0Uses := 0
+	gitKBUses := 0
+	contextModeUses := 0
+	for _, layer := range s.MemoryLayers {
+		switch layer.Layer {
+		case MemoryLayerMem0:
+			mem0Uses = layer.Total
+			known := layer.Hits + layer.Misses + layer.Empty
+			if known > 0 {
+				hitRate := float64(layer.Hits) / float64(known) * 100
+				if hitRate < 40 {
+					recs = append(recs, Recommendation{
+						Severity: "warn",
+						Category: "memory",
+						Message:  fmt.Sprintf("Mem0 reported hit rate is low (%.1f%%). Review write quality, metadata, and search phrasing.", hitRate),
+					})
+				}
+			}
+		case MemoryLayerContextMode:
+			contextModeUses = layer.Total
+		case MemoryLayerGitKB:
+			gitKBUses = layer.Total
+		case MemoryLayerAllPepper:
+			recs = append(recs, Recommendation{
+				Severity: "warn",
+				Category: "memory",
+				Message:  "Legacy allPepper memory usage detected. Hard cutover expects zero allPepper activity.",
+			})
+		}
+	}
+	if gitKBUses > 0 && mem0Uses == 0 {
+		recs = append(recs, Recommendation{
+			Severity: "warn",
+			Category: "memory",
+			Message:  "Git KB reads are being used without any Mem0 usage in this window. Search Mem0 first before falling back to Git-backed docs.",
+		})
+	}
+	if contextModeUses > 0 && mem0Uses == 0 {
+		recs = append(recs, Recommendation{
+			Severity: "warn",
+			Category: "memory",
+			Message:  "Context Mode usage is present without Mem0 usage in this window. Hard cutover expects Mem0 to be the primary hot-memory entry point.",
+		})
+	}
+
 	if s.Tasks.Total >= 5 && len(s.Skills) == 0 {
 		recs = append(recs, Recommendation{
 			Severity: "warn",
@@ -571,6 +637,26 @@ func (s *Summary) Markdown() string {
 		b.WriteString(fmt.Sprintf("- Task grouping confidence: exact=%d, turn-based=%d, heuristic=%d\n", s.Tasks.ExactTasks, s.Tasks.TurnTasks, s.Tasks.HeuristicTasks))
 		b.WriteString(fmt.Sprintf("- Explicit task groups: %d\n", s.Tasks.ExplicitTasks))
 		b.WriteString("- Task grouping uses explicit task IDs when available, falls back to turn IDs, and finally to timestamp clustering for older history.\n")
+	}
+
+	if len(s.MemoryLayers) > 0 {
+		b.WriteString("\n## Memory Layer KPIs\n\n")
+		b.WriteString("| Layer | Uses | Search | Read | Write | Update | Hit | Miss | Empty | Unknown | Hit Rate | Avg Result Count |\n")
+		b.WriteString("|-------|------|--------|------|-------|--------|-----|------|-------|---------|----------|------------------|\n")
+		for _, layer := range s.MemoryLayers {
+			hitRate := "n/a"
+			known := layer.Hits + layer.Misses + layer.Empty
+			if known > 0 {
+				hitRate = fmt.Sprintf("%.1f%%", float64(layer.Hits)/float64(known)*100)
+			}
+			avgCount := "n/a"
+			if layer.AvgResultCount > 0 {
+				avgCount = fmt.Sprintf("%.1f", layer.AvgResultCount)
+			}
+			b.WriteString(fmt.Sprintf("| %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %s | %s |\n",
+				layer.Layer, layer.Total, layer.Searches, layer.Reads, layer.WriteOps, layer.UpdateOps, layer.Hits, layer.Misses, layer.Empty, layer.Unknown, hitRate, avgCount))
+		}
+		b.WriteString("\n- `unknown` means the layer usage was recorded but the final search outcome was not explicitly tracked.\n")
 	}
 
 	var totalBytesIn, totalBytesOut int64
@@ -680,6 +766,13 @@ func (s *Summary) Compact(days int) string {
 			percentageInt(s.Tasks.IronclawTasks, s.Tasks.Total),
 			percentageInt(s.Tasks.SubagentTasks, s.Tasks.Total),
 		)
+	}
+	if len(s.MemoryLayers) > 0 {
+		parts := make([]string, 0, len(s.MemoryLayers))
+		for _, layer := range s.MemoryLayers {
+			parts = append(parts, fmt.Sprintf("%s=%d", layer.Layer, layer.Total))
+		}
+		catPart += " | memory=" + strings.Join(parts, ",")
 	}
 	return fmt.Sprintf("metrics: %d events %dd | deny=%d warn=%d | avg_lat=%dms | trend=%s%s",
 		s.TotalEvents, days, deny, warn, avgLat, trend, catPart)
@@ -883,6 +976,134 @@ func buildAdoptionStats(events []Event, since time.Time) ([]SkillStats, []MCPSer
 
 	subagents := topN(subFreq, 10)
 	return skills, mcpServers, subagents
+}
+
+func buildMemoryLayerStats(events []Event, since time.Time) []MemoryLayerStats {
+	acc := make(map[string]*struct {
+		total          int
+		searches       int
+		reads          int
+		writes         int
+		updates        int
+		hits           int
+		misses         int
+		empty          int
+		unknown        int
+		resultCountSum int
+		resultCountN   int
+	})
+
+	for _, e := range events {
+		if e.Timestamp.Before(since) {
+			continue
+		}
+
+		layer := e.MemoryLayer
+		op := e.MemoryOp
+		result := e.MemoryResult
+		resultCount := e.ResultCount
+
+		if layer == "" && e.Category == "mcp" {
+			layer, op = InferMemoryContextFromMCPDetail(e.Detail)
+		}
+		if layer == "" && e.Hook == "sanitize-read" {
+			layer, op, result = InferMemoryContextFromReadPath(e.Detail)
+		}
+		if layer == "" {
+			continue
+		}
+
+		entry := acc[layer]
+		if entry == nil {
+			entry = &struct {
+				total          int
+				searches       int
+				reads          int
+				writes         int
+				updates        int
+				hits           int
+				misses         int
+				empty          int
+				unknown        int
+				resultCountSum int
+				resultCountN   int
+			}{}
+			acc[layer] = entry
+		}
+		entry.total++
+		switch op {
+		case MemoryOpSearch:
+			entry.searches++
+		case MemoryOpRead:
+			entry.reads++
+		case MemoryOpWrite:
+			entry.writes++
+		case MemoryOpUpdate:
+			entry.updates++
+		}
+		switch result {
+		case MemoryResultHit:
+			entry.hits++
+		case MemoryResultMiss:
+			entry.misses++
+		case MemoryResultEmpty:
+			entry.empty++
+		case MemoryResultWrite:
+			// write/update confirmation is not part of retrieval hit rate
+		default:
+			entry.unknown++
+		}
+		if resultCount > 0 {
+			entry.resultCountSum += resultCount
+			entry.resultCountN++
+		}
+	}
+
+	out := make([]MemoryLayerStats, 0, len(acc))
+	for layer, entry := range acc {
+		avgCount := 0.0
+		if entry.resultCountN > 0 {
+			avgCount = float64(entry.resultCountSum) / float64(entry.resultCountN)
+		}
+		out = append(out, MemoryLayerStats{
+			Layer:          layer,
+			Total:          entry.total,
+			Searches:       entry.searches,
+			Reads:          entry.reads,
+			WriteOps:       entry.writes,
+			UpdateOps:      entry.updates,
+			Hits:           entry.hits,
+			Misses:         entry.misses,
+			Empty:          entry.empty,
+			Unknown:        entry.unknown,
+			AvgResultCount: avgCount,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		ri := memoryLayerRank(out[i].Layer)
+		rj := memoryLayerRank(out[j].Layer)
+		if ri != rj {
+			return ri < rj
+		}
+		return out[i].Total > out[j].Total
+	})
+	return out
+}
+
+func memoryLayerRank(layer string) int {
+	switch layer {
+	case MemoryLayerMem0:
+		return 0
+	case MemoryLayerContextMode:
+		return 1
+	case MemoryLayerGitKB:
+		return 2
+	case MemoryLayerAllPepper:
+		return 3
+	default:
+		return 9
+	}
 }
 
 func buildCheckStats(events []Event, since time.Time) []CheckStats {
