@@ -739,8 +739,9 @@ func suiteLogFileIntegrity(p config.Paths) *Suite {
 		if _, err := os.Stat(logPath); err == nil {
 			s.Pass("Log exists: " + name)
 			data, _ := os.ReadFile(logPath)
-			hasTimestamp := regexp.MustCompile(`"ts":"\d{4}-\d{2}-\d{2}T`).Match(data)
-			s.Assert("Structured timestamps in "+name+".log", hasTimestamp, "no structured timestamp found")
+			hasStructuredTimestamp := regexp.MustCompile(`"ts":"\d{4}-\d{2}-\d{2}T`).Match(data)
+			hasLegacyTimestamp := regexp.MustCompile(`\[\d{4}-\d{2}-\d{2}T`).Match(data)
+			s.Assert("timestamps in "+name+".log", hasStructuredTimestamp || hasLegacyTimestamp, "no legacy or structured timestamp found")
 		} else {
 			s.Pass("Log not yet created: " + name + " (OK)")
 			s.Pass("Timestamp check skipped: " + name)

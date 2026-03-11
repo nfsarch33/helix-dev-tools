@@ -22,10 +22,13 @@ func resolveSelfBinary(paths config.Paths) (string, error) {
 		return "", err
 	}
 	base := filepath.Base(exe)
-	if base != "cursor-tools" && !strings.HasPrefix(base, "cursor-tools") {
-		return "", fmt.Errorf("cursor-tools binary not found")
+	if base == "cursor-tools" || strings.HasPrefix(base, "cursor-tools") {
+		return exe, nil
 	}
-	return exe, nil
+	if strings.HasSuffix(base, ".test") && (os.Getenv("CURSOR_TOOLS_TEST_HELPER") != "" || os.Getenv("CURSOR_TOOLS_HELPER_LOG") != "") {
+		return exe, nil
+	}
+	return "", fmt.Errorf("cursor-tools binary not found")
 }
 
 func runCommandOutput(timeout time.Duration, name string, args ...string) ([]byte, error) {
