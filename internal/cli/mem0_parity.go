@@ -762,7 +762,10 @@ func stringMetadata(metadata map[string]any, key string) string {
 }
 
 func (r parityReport) Proven() bool {
-	return len(r.Missing) == 0 && r.RemoteWithoutProvenance == 0 && len(r.ExactMatches) == r.ManifestEntries
+	// Parity means every manifest entry is present in Mem0 with matching provenance.
+	// Extra remote memories without provenance (e.g. session-added) are expected and
+	// should not block parity. They are still reported as an informational metric.
+	return len(r.Missing) == 0 && len(r.ExactMatches) == r.ManifestEntries
 }
 
 func (r parityReport) Markdown() string {
