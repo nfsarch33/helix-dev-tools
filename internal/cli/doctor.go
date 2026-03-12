@@ -15,6 +15,8 @@ var doctorSyncCountsApply = SyncCountsApply
 var doctorBuildSuites = health.BuildDoctorSuites
 var doctorRunSuites = runSuites
 var doctorRecordCheckRun = recordCheckRunWithContext
+var doctorWriteCheckJSON = writeCheckJSON
+var doctorOutputJSON bool
 
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
@@ -49,6 +51,14 @@ var doctorPlatformCmd = &cobra.Command{
 	},
 }
 
+var doctorDepsCmd = &cobra.Command{
+	Use:   "deps",
+	Short: "Verify required CLI dependencies and core toolchain versions",
+	RunE: func(_ *cobra.Command, _ []string) error {
+		return runDoctorProfile("deps")
+	},
+}
+
 var doctorResumeCmd = &cobra.Command{
 	Use:   "resume",
 	Short: "Verify intermediate-state sync, docs, and resume readiness",
@@ -61,7 +71,9 @@ func init() {
 	doctorCmd.AddCommand(doctorInstallCmd)
 	doctorCmd.AddCommand(doctorMCPCmd)
 	doctorCmd.AddCommand(doctorPlatformCmd)
+	doctorCmd.AddCommand(doctorDepsCmd)
 	doctorCmd.AddCommand(doctorResumeCmd)
+	doctorCmd.PersistentFlags().BoolVar(&doctorOutputJSON, "json", false, "Output results as JSON")
 }
 
 func runDoctorProfile(profile string) error {
@@ -86,9 +98,17 @@ func runDoctorProfile(profile string) error {
 	}
 
 	suites := doctorBuildSuites(p, profile)
-	pass, total := doctorRunSuites(title, suites)
+	pass, total := summarizeSuites(suites)
+	if !doctorOutputJSON {
+		pass, total = doctorRunSuites(title, suites)
+	}
 	runID := doctorRecordCheckRun(metricName, "doctor", metricProfile, started, pass, total)
 	recordCheckSuiteRuns("doctor", metricProfile, runID, suites)
+	if doctorOutputJSON {
+		if err := doctorWriteCheckJSON(title, "doctor", metricProfile, runID, suites); err != nil {
+			return err
+		}
+	}
 	if pass < total {
 		return fmt.Errorf("%s failed: %d/%d passed", metricName, pass, total)
 	}

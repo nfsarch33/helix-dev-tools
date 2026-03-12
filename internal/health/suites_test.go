@@ -23,7 +23,7 @@ var _ = Describe("BuildAllSuites", func() {
 	It("returns 33 suites", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites).To(HaveLen(33))
+		Expect(suites).To(HaveLen(34))
 	})
 
 	It("includes Memory Evidence in the shared catalog", func() {
@@ -63,10 +63,66 @@ var _ = Describe("BuildAllSuites", func() {
 		Expect(names).To(ContainElement("Git Sync Resilience"))
 	})
 
+	It("builds doctor deps suites from the shared catalog", func() {
+		p := config.DefaultPaths()
+		suites := health.BuildDoctorSuites(p, "deps")
+		Expect(suites).NotTo(BeEmpty())
+		names := make([]string, 0, len(suites))
+		for _, suite := range suites {
+			names = append(names, suite.Name)
+		}
+		Expect(names).To(ContainElement("Dependency Readiness"))
+		Expect(names).To(ContainElement("Platform Readiness"))
+	})
+
 	It("includes Git Sync Resilience as Suite 33", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
 		Expect(suites[32].Name).To(Equal("Git Sync Resilience"))
+	})
+
+	It("includes Dependency Readiness as Suite 34", func() {
+		p := config.DefaultPaths()
+		suites := health.BuildAllSuites(p)
+		Expect(suites[33].Name).To(Equal("Dependency Readiness"))
+	})
+})
+
+var _ = Describe("Dependency Readiness", func() {
+	It("passes when required tools are available and optional tools are absent", func() {
+		tmpDir := GinkgoT().TempDir()
+		oldPath := os.Getenv("PATH")
+		Expect(os.Setenv("PATH", tmpDir)).To(Succeed())
+		defer os.Setenv("PATH", oldPath)
+
+		for _, name := range []string{
+			"git", "go", "gh", "ssh", "node", "npm", "python3",
+			"uv", "docker", "nvidia-smi", "jq", "curl", "make", "rtk",
+		} {
+			path := filepath.Join(tmpDir, name)
+			script := "#!/bin/sh\n"
+			switch name {
+			case "docker":
+				script += "if [ \"$1\" = \"compose\" ] && [ \"$2\" = \"version\" ]; then echo \"Docker Compose version v2.33.1\"; exit 0; fi\necho \"Docker version 27.0.0\"\n"
+			case "go":
+				script += "echo \"go version go1.24.1 linux/amd64\"\n"
+			default:
+				script += "echo \"" + name + " version 1.0.0\"\n"
+			}
+			Expect(os.WriteFile(path, []byte(script), 0o755)).To(Succeed())
+		}
+
+		p := config.DefaultPaths()
+		suites := health.BuildDoctorSuites(p, "deps")
+		var target *health.Suite
+		for _, suite := range suites {
+			if suite.Name == "Dependency Readiness" {
+				target = suite
+				break
+			}
+		}
+		Expect(target).NotTo(BeNil())
+		Expect(target.PassCount()).To(Equal(target.Total()))
 	})
 })
 

@@ -19,7 +19,7 @@ var _ = Describe("doctor command wiring", func() {
 		for _, cmd := range doctorCmd.Commands() {
 			names = append(names, cmd.Name())
 		}
-		Expect(names).To(ContainElements("install", "mcp", "platform", "resume"))
+		Expect(names).To(ContainElements("install", "mcp", "platform", "resume", "deps"))
 	})
 
 	It("registers doctor on the root command", func() {

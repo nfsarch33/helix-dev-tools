@@ -57,6 +57,7 @@ var suiteCatalog = []suiteSpec{
 	{name: "Toolchain Cross-Platform", builder: suiteToolchainCrossPlatform},
 	{name: "Handoff Acknowledgement", builder: suiteHandoffAcknowledgement},
 	{name: "Git Sync Resilience", builder: suiteGitSyncResilience},
+	{name: "Dependency Readiness", builder: suiteDependencyReadiness},
 }
 
 var suiteCatalogByName = func() map[string]suiteSpec {
@@ -132,6 +133,11 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Cross-Machine Sync",
 			"Global Cursor Config",
 			"DevContainer Compliance",
+		}
+	case "deps":
+		names = []string{
+			"Dependency Readiness",
+			"Platform Readiness",
 		}
 	case "resume":
 		names = []string{
@@ -1381,6 +1387,113 @@ func suiteToolchainCrossPlatform(p config.Paths) *Suite {
 	}
 
 	return s
+}
+
+func suiteDependencyReadiness(p config.Paths) *Suite {
+	s := &Suite{Name: "Dependency Readiness"}
+
+	type dependencyCheck struct {
+		name        string
+		versionArgs []string
+		required    bool
+	}
+
+	checks := []dependencyCheck{
+		{name: "git", versionArgs: []string{"--version"}, required: true},
+		{name: "go", versionArgs: []string{"version"}, required: true},
+		{name: "gh", versionArgs: []string{"--version"}, required: true},
+		{name: "ssh", versionArgs: []string{"-V"}, required: true},
+		{name: "node", versionArgs: []string{"--version"}, required: true},
+		{name: "npm", versionArgs: []string{"--version"}, required: true},
+		{name: "python3", versionArgs: []string{"--version"}, required: true},
+		{name: "uv", versionArgs: []string{"--version"}, required: true},
+		{name: "docker", versionArgs: []string{"--version"}, required: true},
+		{name: "jq", versionArgs: []string{"--version"}, required: true},
+		{name: "curl", versionArgs: []string{"--version"}, required: true},
+		{name: "make", versionArgs: []string{"--version"}, required: true},
+		{name: "rtk", versionArgs: []string{"--version"}, required: true},
+		{name: "kubectl", versionArgs: []string{"version", "--client", "--output=yaml"}, required: false},
+		{name: "terraform", versionArgs: []string{"version"}, required: false},
+		{name: "helm", versionArgs: []string{"version"}, required: false},
+	}
+
+	for _, check := range checks {
+		path, err := exec.LookPath(check.name)
+		if err != nil {
+			if check.required {
+				s.Fail(check.name+" on PATH", check.name+" not found")
+			} else {
+				s.Pass(check.name + " optional (not installed)")
+			}
+			continue
+		}
+
+		version := strings.TrimSpace(firstLine(commandVersion(path, check.versionArgs...)))
+		assertionName := check.name + " available"
+		if version != "" {
+			assertionName += " (" + version + ")"
+		}
+		s.Pass(assertionName)
+
+		if check.name == "go" {
+			s.Assert("go >= 1.24", goVersionAtLeast(version, 1, 24), "upgrade Go to 1.24+")
+		}
+		if check.name == "docker" {
+			composeVersion := strings.TrimSpace(firstLine(commandVersion(path, "compose", "version")))
+			s.Assert("docker compose plugin available", composeVersion != "", "docker compose version failed")
+		}
+	}
+
+	if p.PlatformProfile() == "macos" {
+		s.Pass("nvidia-smi optional on macOS")
+	} else {
+		path, err := exec.LookPath("nvidia-smi")
+		s.Assert("nvidia-smi on PATH", err == nil, "nvidia-smi not found")
+		if err == nil {
+			version := strings.TrimSpace(firstLine(commandVersion(path, "--version")))
+			assertionName := "nvidia-smi responds"
+			if version != "" {
+				assertionName += " (" + version + ")"
+			}
+			s.Pass(assertionName)
+		}
+	}
+
+	return s
+}
+
+func commandVersion(name string, args ...string) string {
+	output, err := runCombinedOutput(5*time.Second, name, args...)
+	if err != nil {
+		return ""
+	}
+	return string(output)
+}
+
+func firstLine(value string) string {
+	for _, line := range strings.Split(value, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			return line
+		}
+	}
+	return ""
+}
+
+func goVersionAtLeast(version string, major, minor int) bool {
+	matches := regexp.MustCompile(`go(\d+)\.(\d+)`).FindStringSubmatch(version)
+	if len(matches) != 3 {
+		return false
+	}
+	var gotMajor, gotMinor int
+	_, err := fmt.Sscanf(matches[1]+"."+matches[2], "%d.%d", &gotMajor, &gotMinor)
+	if err != nil {
+		return false
+	}
+	if gotMajor != major {
+		return gotMajor > major
+	}
+	return gotMinor >= minor
 }
 
 func isWSLEnv() bool {

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -38,11 +39,15 @@ func TestRunDoctorProfile(t *testing.T) {
 	oldBuild := doctorBuildSuites
 	oldRun := doctorRunSuites
 	oldRecord := doctorRecordCheckRun
+	oldJSON := doctorWriteCheckJSON
+	oldDoctorJSONFlag := doctorOutputJSON
 	defer func() {
 		doctorSyncCountsApply = oldSync
 		doctorBuildSuites = oldBuild
 		doctorRunSuites = oldRun
 		doctorRecordCheckRun = oldRecord
+		doctorWriteCheckJSON = oldJSON
+		doctorOutputJSON = oldDoctorJSONFlag
 	}()
 
 	t.Run("install profile syncs counts and records success", func(t *testing.T) {
@@ -109,6 +114,86 @@ func TestRunDoctorProfile(t *testing.T) {
 			t.Fatalf("runDoctorProfile() error = %v, want doctor-mcp failure", err)
 		}
 	})
+
+	t.Run("deps profile skips sync and records success", func(t *testing.T) {
+		var gotProfile string
+		var gotTitle string
+		var gotMetric string
+
+		doctorSyncCountsApply = func(bool, bool) (int, int) {
+			t.Fatal("syncCounts should not run for deps profile")
+			return 0, 0
+		}
+		doctorBuildSuites = func(_ config.Paths, profile string) []*health.Suite {
+			gotProfile = profile
+			return []*health.Suite{{Name: "deps"}}
+		}
+		doctorRunSuites = func(title string, _ []*health.Suite) (int, int) {
+			gotTitle = title
+			return 4, 4
+		}
+		doctorRecordCheckRun = func(name, command, profile string, _ time.Time, pass, total int) string {
+			gotMetric = name
+			if command != "doctor" || profile != "deps" {
+				t.Fatalf("unexpected command/profile: %q %q", command, profile)
+			}
+			if pass != 4 || total != 4 {
+				t.Fatalf("recorded %d/%d, want 4/4", pass, total)
+			}
+			return "run-deps"
+		}
+
+		if err := runDoctorProfile("deps"); err != nil {
+			t.Fatalf("runDoctorProfile() error = %v", err)
+		}
+		if gotProfile != "deps" || gotTitle != "cursor-tools doctor deps" || gotMetric != "doctor-deps" {
+			t.Fatalf("unexpected doctor values: profile=%q title=%q metric=%q", gotProfile, gotTitle, gotMetric)
+		}
+	})
+
+	t.Run("json output writes report without tty runner", func(t *testing.T) {
+		doctorOutputJSON = true
+		doctorSyncCountsApply = func(bool, bool) (int, int) {
+			t.Fatal("syncCounts should not run for mcp profile")
+			return 0, 0
+		}
+		suite := &health.Suite{Name: "json-suite", DurationMs: 12}
+		suite.Pass("a")
+		suite.Fail("b", "missing")
+		doctorBuildSuites = func(_ config.Paths, profile string) []*health.Suite {
+			if profile != "mcp" {
+				t.Fatalf("profile = %q, want mcp", profile)
+			}
+			return []*health.Suite{suite}
+		}
+		doctorRunSuites = func(string, []*health.Suite) (int, int) {
+			t.Fatal("runSuites should not run when --json is enabled")
+			return 0, 0
+		}
+		doctorRecordCheckRun = func(name, command, profile string, _ time.Time, pass, total int) string {
+			if name != "doctor-mcp" || command != "doctor" || profile != "mcp" {
+				t.Fatalf("unexpected metrics context: %q %q %q", name, command, profile)
+			}
+			if pass != 1 || total != 2 {
+				t.Fatalf("recorded %d/%d, want 1/2", pass, total)
+			}
+			return "run-json"
+		}
+		doctorWriteCheckJSON = func(title, command, profile, runID string, suites []*health.Suite) error {
+			if title != "cursor-tools doctor mcp" || command != "doctor" || profile != "mcp" || runID != "run-json" {
+				t.Fatalf("unexpected json context: %q %q %q %q", title, command, profile, runID)
+			}
+			if len(suites) != 1 || suites[0].Name != "json-suite" {
+				t.Fatalf("unexpected suites passed to json writer: %+v", suites)
+			}
+			return nil
+		}
+
+		err := runDoctorProfile("mcp")
+		if err == nil || !strings.Contains(err.Error(), "doctor-mcp failed: 1/2 passed") {
+			t.Fatalf("runDoctorProfile() error = %v, want doctor-mcp failure", err)
+		}
+	})
 }
 
 func TestRunHealthCheck(t *testing.T) {
@@ -123,11 +208,15 @@ func TestRunHealthCheck(t *testing.T) {
 	oldBuild := healthCheckBuildSuites
 	oldRun := healthCheckRunSuites
 	oldRecord := healthCheckRecordCheckRun
+	oldJSON := healthCheckWriteCheckJSON
+	oldHealthJSONFlag := healthCheckOutputJSON
 	defer func() {
 		healthCheckSyncCountsApply = oldSync
 		healthCheckBuildSuites = oldBuild
 		healthCheckRunSuites = oldRun
 		healthCheckRecordCheckRun = oldRecord
+		healthCheckWriteCheckJSON = oldJSON
+		healthCheckOutputJSON = oldHealthJSONFlag
 	}()
 
 	syncCalled := 0
@@ -170,6 +259,86 @@ func TestRunHealthCheck(t *testing.T) {
 	healthCheckRecordCheckRun = func(string, string, string, time.Time, int, int) string { return "run-4" }
 	if err := runHealthCheck(nil, nil); err == nil || !strings.Contains(err.Error(), "health-check failed: 3/4 passed") {
 		t.Fatalf("runHealthCheck() error = %v, want health-check failure", err)
+	}
+
+	healthCheckOutputJSON = true
+	suite := &health.Suite{Name: "json-health", DurationMs: 8}
+	suite.Pass("a")
+	suite.Fail("b", "bad")
+	healthCheckBuildSuites = func(config.Paths) []*health.Suite {
+		return []*health.Suite{suite}
+	}
+	healthCheckRunSuites = func(string, []*health.Suite) (int, int) {
+		t.Fatal("runSuites should not run when health-check --json is enabled")
+		return 0, 0
+	}
+	healthCheckRecordCheckRun = func(name, command, profile string, _ time.Time, pass, total int) string {
+		if name != "health-check" || command != "health-check" || profile != "" {
+			t.Fatalf("unexpected metrics context: %q %q %q", name, command, profile)
+		}
+		if pass != 1 || total != 2 {
+			t.Fatalf("recorded %d/%d, want 1/2", pass, total)
+		}
+		return "run-health-json"
+	}
+	healthCheckWriteCheckJSON = func(title, command, profile, runID string, suites []*health.Suite) error {
+		if title != "cursor-tools health-check" || command != "health-check" || profile != "" || runID != "run-health-json" {
+			t.Fatalf("unexpected json context: %q %q %q %q", title, command, profile, runID)
+		}
+		if len(suites) != 1 || suites[0].Name != "json-health" {
+			t.Fatalf("unexpected suites passed to json writer: %+v", suites)
+		}
+		return nil
+	}
+	if err := runHealthCheck(nil, nil); err == nil || !strings.Contains(err.Error(), "health-check failed: 1/2 passed") {
+		t.Fatalf("runHealthCheck() error = %v, want health-check failure", err)
+	}
+}
+
+func TestBuildCheckReportJSON(t *testing.T) {
+	suite := &health.Suite{Name: "Dependency Readiness", DurationMs: 42}
+	suite.Pass("git present")
+	suite.Fail("docker present", "missing")
+
+	data, err := buildCheckReportJSON("cursor-tools doctor deps", "doctor", "deps", "run-123", []*health.Suite{suite})
+	if err != nil {
+		t.Fatalf("buildCheckReportJSON() error = %v", err)
+	}
+
+	var payload struct {
+		Title     string `json:"title"`
+		Command   string `json:"command"`
+		Profile   string `json:"profile"`
+		RunID     string `json:"run_id"`
+		Status    string `json:"status"`
+		Passed    int    `json:"passed"`
+		Total     int    `json:"total"`
+		Summaries []struct {
+			Name    string `json:"name"`
+			Passed  int    `json:"passed"`
+			Total   int    `json:"total"`
+			Status  string `json:"status"`
+			Results []struct {
+				Name   string `json:"name"`
+				Passed bool   `json:"passed"`
+				Detail string `json:"detail,omitempty"`
+			} `json:"results"`
+		} `json:"suites"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+	if payload.Title != "cursor-tools doctor deps" || payload.Command != "doctor" || payload.Profile != "deps" || payload.RunID != "run-123" {
+		t.Fatalf("unexpected report metadata: %+v", payload)
+	}
+	if payload.Status != "fail" || payload.Passed != 1 || payload.Total != 2 {
+		t.Fatalf("unexpected report summary: %+v", payload)
+	}
+	if len(payload.Summaries) != 1 || payload.Summaries[0].Name != "Dependency Readiness" || payload.Summaries[0].Status != "fail" {
+		t.Fatalf("unexpected suite summaries: %+v", payload.Summaries)
+	}
+	if len(payload.Summaries[0].Results) != 2 || payload.Summaries[0].Results[1].Detail != "missing" {
+		t.Fatalf("unexpected suite results: %+v", payload.Summaries[0].Results)
 	}
 }
 

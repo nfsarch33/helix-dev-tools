@@ -1,7 +1,9 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +13,32 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/logger"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
+
+type checkReport struct {
+	Title   string             `json:"title"`
+	Command string             `json:"command"`
+	Profile string             `json:"profile,omitempty"`
+	RunID   string             `json:"run_id,omitempty"`
+	Status  string             `json:"status"`
+	Passed  int                `json:"passed"`
+	Total   int                `json:"total"`
+	Suites  []checkSuiteReport `json:"suites"`
+}
+
+type checkSuiteReport struct {
+	Name       string              `json:"name"`
+	Status     string              `json:"status"`
+	Passed     int                 `json:"passed"`
+	Total      int                 `json:"total"`
+	DurationMs int64               `json:"duration_ms,omitempty"`
+	Results    []checkResultReport `json:"results"`
+}
+
+type checkResultReport struct {
+	Name   string `json:"name"`
+	Passed bool   `json:"passed"`
+	Detail string `json:"detail,omitempty"`
+}
 
 func runSuites(title string, suites []*health.Suite) (int, int) {
 	clilog.Header(title)
@@ -125,4 +153,70 @@ func levelForCheckAction(action string) string {
 	default:
 		return "info"
 	}
+}
+
+func summarizeSuites(suites []*health.Suite) (int, int) {
+	totalPass := 0
+	totalCount := 0
+	for _, suite := range suites {
+		if suite == nil {
+			continue
+		}
+		totalPass += suite.PassCount()
+		totalCount += suite.Total()
+	}
+	return totalPass, totalCount
+}
+
+func buildCheckReportJSON(title, command, profile, runID string, suites []*health.Suite) ([]byte, error) {
+	totalPass, totalCount := summarizeSuites(suites)
+	report := checkReport{
+		Title:   title,
+		Command: command,
+		Profile: profile,
+		RunID:   runID,
+		Status:  "pass",
+		Passed:  totalPass,
+		Total:   totalCount,
+		Suites:  make([]checkSuiteReport, 0, len(suites)),
+	}
+	if totalPass < totalCount {
+		report.Status = "fail"
+	}
+	for _, suite := range suites {
+		if suite == nil {
+			continue
+		}
+		suiteReport := checkSuiteReport{
+			Name:       suite.Name,
+			Status:     "pass",
+			Passed:     suite.PassCount(),
+			Total:      suite.Total(),
+			DurationMs: suite.DurationMs,
+			Results:    make([]checkResultReport, 0, len(suite.Results)),
+		}
+		if suiteReport.Passed < suiteReport.Total {
+			suiteReport.Status = "fail"
+		}
+		for _, result := range suite.Results {
+			suiteReport.Results = append(suiteReport.Results, checkResultReport{
+				Name:   result.Name,
+				Passed: result.Passed,
+				Detail: result.Detail,
+			})
+		}
+		report.Suites = append(report.Suites, suiteReport)
+	}
+	return json.MarshalIndent(report, "", "  ")
+}
+
+func writeCheckJSON(title, command, profile, runID string, suites []*health.Suite) error {
+	data, err := buildCheckReportJSON(title, command, profile, runID, suites)
+	if err != nil {
+		return err
+	}
+	if _, err := os.Stdout.Write(append(data, '\n')); err != nil {
+		return err
+	}
+	return nil
 }
