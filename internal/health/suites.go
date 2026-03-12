@@ -1292,8 +1292,13 @@ func suiteGitSyncResilience(p config.Paths) *Suite {
 	if pushErr == nil {
 		data, _ := os.ReadFile(pushStateFile)
 		content := string(data)
-		s.Assert("last push was successful", strings.Contains(content, "result: success"),
-			"last push failed or deferred -- check "+pushStateFile)
+		branchStatus, _ := gitOutput(repoPath, "status", "--short", "--branch")
+		trackedAndSynced := strings.Contains(branchStatus, "...") &&
+			!strings.Contains(branchStatus, "ahead ") &&
+			!strings.Contains(branchStatus, "behind ")
+		s.Assert("last push was successful or branch is synced with upstream",
+			strings.Contains(content, "result: success") || trackedAndSynced,
+			"last push failed or deferred and branch is not synced with upstream -- check "+pushStateFile)
 		withinDay := pushInfo.ModTime().After(time.Now().UTC().Add(-48 * time.Hour))
 		s.Assert("push state is recent (within 48h)", withinDay,
 			fmt.Sprintf("last push state: %s", pushInfo.ModTime().Format("2006-01-02 15:04 UTC")))

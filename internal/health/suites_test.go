@@ -2,7 +2,9 @@ package health_test
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -123,6 +125,73 @@ var _ = Describe("Dependency Readiness", func() {
 		}
 		Expect(target).NotTo(BeNil())
 		Expect(target.PassCount()).To(Equal(target.Total()))
+	})
+})
+
+var _ = Describe("Git Sync Resilience", func() {
+	It("passes stale push state when the branch is already synced with upstream", func() {
+		tmpDir := GinkgoT().TempDir()
+		remote := filepath.Join(tmpDir, "remote.git")
+		local := filepath.Join(tmpDir, "repo")
+		hooksDir := filepath.Join(tmpDir, ".cursor", "hooks")
+
+		run := func(dir string, args ...string) {
+			cmd := exec.Command("git", args...)
+			cmd.Dir = dir
+			cmd.Env = append(os.Environ(),
+				"GIT_AUTHOR_NAME=Test",
+				"GIT_AUTHOR_EMAIL=test@example.com",
+				"GIT_COMMITTER_NAME=Test",
+				"GIT_COMMITTER_EMAIL=test@example.com",
+			)
+			out, err := cmd.CombinedOutput()
+			Expect(err).NotTo(HaveOccurred(), string(out))
+		}
+
+		run(tmpDir, "init", "--bare", remote)
+		run(tmpDir, "clone", remote, local)
+		Expect(os.WriteFile(filepath.Join(local, ".gitattributes"), []byte("*.lock merge=ours\n*.md merge=union\n*.bin binary\n"), 0o644)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(local, "README.md"), []byte("ok\n"), 0o644)).To(Succeed())
+		run(local, "checkout", "-b", "feat/test-sync-state")
+		run(local, "add", ".")
+		run(local, "commit", "-m", "test: init fixture repo")
+		run(local, "push", "-u", "origin", "HEAD")
+		run(local, "config", "--local", "rerere.enabled", "true")
+		run(local, "config", "--local", "merge.ours.driver", "true")
+
+		Expect(os.MkdirAll(hooksDir, 0o755)).To(Succeed())
+		Expect(os.WriteFile(filepath.Join(hooksDir, "last-push-result.txt"), []byte(strings.Join([]string{
+			"timestamp: " + time.Now().UTC().Format(time.RFC3339),
+			"result: failed",
+			"attempts: 3",
+			"",
+		}, "\n")), 0o644)).To(Succeed())
+
+		p := config.Paths{
+			Home:     tmpDir,
+			GlobalKB: local,
+			HooksDir: hooksDir,
+		}
+
+		suites := health.BuildDoctorSuites(p, "resume")
+		var target *health.Suite
+		for _, suite := range suites {
+			if suite.Name == "Git Sync Resilience" {
+				target = suite
+				break
+			}
+		}
+		Expect(target).NotTo(BeNil())
+
+		var syncedResult *health.Result
+		for i := range target.Results {
+			if target.Results[i].Name == "last push was successful or branch is synced with upstream" {
+				syncedResult = &target.Results[i]
+				break
+			}
+		}
+		Expect(syncedResult).NotTo(BeNil())
+		Expect(syncedResult.Passed).To(BeTrue())
 	})
 })
 
