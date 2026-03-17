@@ -1362,7 +1362,7 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 }
 
 func isSkillReadEvent(e Event) bool {
-	return e.Category == "skill" && strings.TrimSpace(e.Action) == "read"
+	return e.Category == "skill" && strings.TrimSpace(e.Action) == "read" && e.Hook != "skill-activate"
 }
 
 func eventMCPServer(e Event) string {
