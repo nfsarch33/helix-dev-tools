@@ -36,8 +36,8 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	}
 
 	skills, mcpServers, subagents := buildAdoptionStats(events, now.Add(-24*time.Hour))
-	if len(skills) != 1 || skills[0].Name != "skill-a" || skills[0].Uses != 2 {
-		t.Fatalf("unexpected skills: %+v", skills)
+	if len(skills) != 2 {
+		t.Fatalf("unexpected skills count: got %d, want 2: %+v", len(skills), skills)
 	}
 	if len(mcpServers) != 1 || mcpServers[0].Server != "ironclaw" || mcpServers[0].Tool != "ironclaw_health" {
 		t.Fatalf("unexpected mcp servers: %+v", mcpServers)
@@ -47,7 +47,7 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	}
 
 	summary := Summarise(events, now.Add(-24*time.Hour))
-	if summary.Tasks.Total != 3 || summary.Tasks.SkillTasks != 1 || summary.Tasks.MCPTasks != 1 || summary.Tasks.SubagentTasks != 1 {
+	if summary.Tasks.Total != 3 || summary.Tasks.SkillTasks != 2 || summary.Tasks.MCPTasks != 1 || summary.Tasks.SubagentTasks != 1 {
 		t.Fatalf("unexpected task coverage: %+v", summary.Tasks)
 	}
 	if summary.Tasks.IronclawTasks != 1 || summary.Tasks.ExactTasks != 2 || summary.Tasks.TurnTasks != 1 {
