@@ -58,6 +58,7 @@ var suiteCatalog = []suiteSpec{
 	{name: "Handoff Acknowledgement", builder: suiteHandoffAcknowledgement},
 	{name: "Git Sync Resilience", builder: suiteGitSyncResilience},
 	{name: "Dependency Readiness", builder: suiteDependencyReadiness},
+	{name: "Coordination Signals", builder: suiteCoordinationSignals},
 }
 
 var suiteCatalogByName = func() map[string]suiteSpec {
@@ -149,6 +150,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Data Integrity",
 			"MCP Readiness",
 			"Mem0 Connectivity",
+			"Coordination Signals",
 			"Toolchain Freshness",
 			"Toolchain Cross-Platform",
 			"Handoff Acknowledgement",
@@ -1536,6 +1538,29 @@ func suiteHandoffAcknowledgement(p config.Paths) *Suite {
 		s.Assert("state file has checked timestamp", strings.Contains(string(data), "checked:"),
 			"state file malformed — run 'cursor-tools handoff-review' to regenerate")
 	}
+
+	return s
+}
+
+// suiteCoordinationSignals checks that the Mem0-based cross-machine coordination
+// infrastructure is in place: the skill documents mention cursor-coordination,
+// the signal CLI subcommand is built, and the daily prompt references signals.
+func suiteCoordinationSignals(p config.Paths) *Suite {
+	s := &Suite{Name: "Coordination Signals"}
+
+	memorySkill := filepath.Join(p.SkillsDir, "memory-system", "SKILL.md")
+	s.AssertFileExists("memory-system skill exists", memorySkill)
+	s.AssertFileContains("memory-system mentions coordination", memorySkill, "cursor-coordination")
+
+	syncProtocol := filepath.Join(p.SOPDir(), "multi-cursor-sync-protocol.md")
+	s.AssertFileExists("multi-cursor-sync-protocol exists", syncProtocol)
+	s.AssertFileContains("sync protocol mentions Mem0 coordination", syncProtocol, "cursor-coordination")
+
+	dailyPrompt := filepath.Join(p.GlobalMemoriesDir(), "daily-startup-prompt.md")
+	s.AssertFileContains("daily prompt references signal list", dailyPrompt, "signal list")
+
+	signalBin := filepath.Join(p.BinDir, "cursor-tools")
+	s.AssertFileExists("cursor-tools binary exists", signalBin)
 
 	return s
 }

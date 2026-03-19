@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/coordination"
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/lockfile"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
@@ -76,6 +77,7 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 		h.runSessionHandoff()
 		h.runSyncCounts()
 		h.runPromoteLearnings()
+		h.cleanCoordinationSignals()
 		h.syncRepo()
 	} else {
 		h.pullRepo()
@@ -123,6 +125,41 @@ func (h *housekeepingHandler) runPromoteLearnings() {
 	} else {
 		_, _ = runSelfCommandOutput(2*time.Minute, h.paths, "promote")
 	}
+}
+
+// cleanCoordinationSignals is replaceable for testing.
+var cleanCoordinationSignalsFn = defaultCleanCoordinationSignals
+
+func defaultCleanCoordinationSignals(p config.Paths, log *logger.Logger) {
+	client, err := newCoordinationClient(p)
+	if err != nil {
+		log.Log(fmt.Sprintf("coordination cleanup skipped: %v", err))
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	deleted, err := client.CleanStaleSignals(ctx, 48*time.Hour)
+	if err != nil {
+		log.Log(fmt.Sprintf("coordination cleanup error: %v", err))
+		return
+	}
+	if deleted > 0 {
+		log.Log(fmt.Sprintf("coordination cleanup: removed %d stale signal(s)", deleted))
+	}
+}
+
+func (h *housekeepingHandler) cleanCoordinationSignals() {
+	cleanCoordinationSignalsFn(h.paths, h.log)
+}
+
+// SignalCleanupMaxAge controls how old a non-completed signal must be before
+// automatic cleanup. Exposed for testing. Default 48h.
+var SignalCleanupMaxAge = 48 * time.Hour
+
+// CleanCoordinationSignals runs the cleanup directly with an explicit client.
+// Useful for testing without Mem0 credential resolution.
+func CleanCoordinationSignals(ctx context.Context, client *coordination.Client, maxAge time.Duration) (int, error) {
+	return client.CleanStaleSignals(ctx, maxAge)
 }
 
 func (h *housekeepingHandler) syncRepo() {

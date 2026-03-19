@@ -174,6 +174,96 @@ func TestHousekeepingSyncRepoPullRepoAndHandle(t *testing.T) {
 	}
 }
 
+func TestCleanCoordinationSignals_CalledOnCompleted(t *testing.T) {
+	cleanCalled := false
+	origClean := cleanCoordinationSignalsFn
+	cleanCoordinationSignalsFn = func(_ config.Paths, _ *logger.Logger) {
+		cleanCalled = true
+	}
+	defer func() { cleanCoordinationSignalsFn = origClean }()
+
+	oldHome := os.Getenv("HOME")
+	oldHelper := os.Getenv(helperEnv)
+	oldHelperLog := os.Getenv("CURSOR_TOOLS_HELPER_LOG")
+	home := t.TempDir()
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv(helperEnv, "1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("CURSOR_TOOLS_HELPER_LOG", filepath.Join(home, "helper.log")); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = os.Setenv("HOME", oldHome)
+		_ = os.Setenv(helperEnv, oldHelper)
+		_ = os.Setenv("CURSOR_TOOLS_HELPER_LOG", oldHelperLog)
+	}()
+
+	binDir := t.TempDir()
+	restorePath := prependPath(t, binDir)
+	defer restorePath()
+	writeExecutable(t, binDir, "git", "#!/bin/sh\nexit 0\n")
+
+	p := config.DefaultPaths()
+	for _, dir := range []string{p.HooksDir, filepath.Join(p.GlobalKB, ".git")} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := &housekeepingHandler{
+		log:   logger.New(filepath.Join(home, "housekeeping.log")),
+		paths: p,
+	}
+
+	_, err := h.Handle(context.Background(), &hookio.Input{Status: "completed"})
+	if err != nil {
+		t.Fatalf("Handle() error = %v", err)
+	}
+	if !cleanCalled {
+		t.Error("cleanCoordinationSignals was not called on 'completed' status")
+	}
+}
+
+func TestCleanCoordinationSignals_SkippedOnNonCompleted(t *testing.T) {
+	cleanCalled := false
+	origClean := cleanCoordinationSignalsFn
+	cleanCoordinationSignalsFn = func(_ config.Paths, _ *logger.Logger) {
+		cleanCalled = true
+	}
+	defer func() { cleanCoordinationSignalsFn = origClean }()
+
+	oldHome := os.Getenv("HOME")
+	home := t.TempDir()
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Setenv("HOME", oldHome)
+
+	binDir := t.TempDir()
+	restorePath := prependPath(t, binDir)
+	defer restorePath()
+	writeExecutable(t, binDir, "git", "#!/bin/sh\nexit 0\n")
+
+	p := config.DefaultPaths()
+	os.MkdirAll(p.HooksDir, 0o755)
+	os.MkdirAll(filepath.Join(p.GlobalKB, ".git"), 0o755)
+
+	h := &housekeepingHandler{
+		log:   logger.New(filepath.Join(home, "housekeeping.log")),
+		paths: p,
+	}
+
+	_, err := h.Handle(context.Background(), &hookio.Input{Status: "pending"})
+	if err != nil {
+		t.Fatalf("Handle() error = %v", err)
+	}
+	if cleanCalled {
+		t.Error("cleanCoordinationSignals should NOT be called on 'pending' status")
+	}
+}
+
 func TestRunHousekeepingWritesEmptyResponseOnBadInput(t *testing.T) {
 	oldHome := os.Getenv("HOME")
 	home := t.TempDir()

@@ -41,6 +41,7 @@ func init() {
 	rootCmd.AddCommand(openclawCmd)
 	rootCmd.AddCommand(sessionHandoffCmd)
 	rootCmd.AddCommand(handoffReviewCmd)
+	rootCmd.AddCommand(signalCmd)
 	rootCmd.AddCommand(autoUpdateCmd)
 	rootCmd.AddCommand(versionCmd)
 }
