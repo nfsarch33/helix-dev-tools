@@ -6,11 +6,37 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+// ClientMetrics holds atomic counters for coordination operations.
+type ClientMetrics struct {
+	SignalsAdded    atomic.Int64
+	SignalsListed   atomic.Int64
+	SignalsDeleted  atomic.Int64
+	SignalsSearched atomic.Int64
+	CleanupRuns     atomic.Int64
+	CleanupDeleted  atomic.Int64
+	Errors          atomic.Int64
+}
+
+// Snapshot returns a point-in-time copy of all counters.
+func (m *ClientMetrics) Snapshot() map[string]int64 {
+	return map[string]int64{
+		"ironclaw_coordination_signals_added_total":    m.SignalsAdded.Load(),
+		"ironclaw_coordination_signals_listed_total":   m.SignalsListed.Load(),
+		"ironclaw_coordination_signals_deleted_total":  m.SignalsDeleted.Load(),
+		"ironclaw_coordination_signals_searched_total": m.SignalsSearched.Load(),
+		"ironclaw_coordination_cleanup_runs_total":     m.CleanupRuns.Load(),
+		"ironclaw_coordination_cleanup_deleted_total":  m.CleanupDeleted.Load(),
+		"ironclaw_coordination_errors_total":           m.Errors.Load(),
+	}
+}
 
 // Client interacts with the Mem0 API for coordination signals.
 type Client struct {
@@ -18,6 +44,8 @@ type Client struct {
 	UserID  string
 	BaseURL string
 	HTTP    *http.Client
+	Log     *slog.Logger
+	Stats   *ClientMetrics
 }
 
 // NewClient creates a coordination client. If baseURL is empty, defaults to
@@ -31,7 +59,15 @@ func NewClient(apiKey, userID, baseURL string) *Client {
 		UserID:  userID,
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
+		Log:     slog.Default(),
+		Stats:   &ClientMetrics{},
 	}
+}
+
+// WithLogger returns the client with the given slog logger.
+func (c *Client) WithLogger(l *slog.Logger) *Client {
+	c.Log = l
+	return c
 }
 
 type mem0AddPayload struct {
@@ -77,7 +113,14 @@ func (c *Client) AddSignal(ctx context.Context, s Signal) error {
 		Metadata: s.Mem0Metadata(),
 		Infer:    false,
 	}
-	return c.doJSON(ctx, http.MethodPost, "/v1/memories/", payload)
+	if err := c.doJSON(ctx, http.MethodPost, "/v1/memories/", payload); err != nil {
+		c.Stats.Errors.Add(1)
+		c.Log.Warn("coordination signal add failed", "type", s.Type, "machine", s.Machine, "error", err)
+		return err
+	}
+	c.Stats.SignalsAdded.Add(1)
+	c.Log.Info("coordination signal added", "type", s.Type, "machine", s.Machine, "target_for", s.TargetFor)
+	return nil
 }
 
 // SearchSignals queries Mem0 for coordination signals matching the query.
@@ -98,9 +141,18 @@ func (c *Client) SearchSignals(ctx context.Context, query string, limit int) ([]
 
 	body, err := c.doJSONResponse(ctx, http.MethodPost, "/v1/memories/search/", payload)
 	if err != nil {
+		c.Stats.Errors.Add(1)
+		c.Log.Warn("coordination signal search failed", "query", query, "error", err)
 		return nil, err
 	}
-	return parseSearchResults(body)
+	signals, err := parseSearchResults(body)
+	if err != nil {
+		c.Stats.Errors.Add(1)
+		return nil, err
+	}
+	c.Stats.SignalsSearched.Add(1)
+	c.Log.Debug("coordination signals searched", "query", query, "results", len(signals))
+	return signals, nil
 }
 
 // ListSignals retrieves all coordination signals (paginated).
@@ -120,11 +172,14 @@ func (c *Client) ListSignals(ctx context.Context) ([]Signal, error) {
 
 		body, err := c.doJSONResponse(ctx, http.MethodPost, "/v2/memories/", payload)
 		if err != nil {
+			c.Stats.Errors.Add(1)
+			c.Log.Warn("coordination signal list failed", "page", page, "error", err)
 			return nil, err
 		}
 
 		signals, total, err := parseListResults(body)
 		if err != nil {
+			c.Stats.Errors.Add(1)
 			return nil, err
 		}
 		all = append(all, signals...)
@@ -132,16 +187,26 @@ func (c *Client) ListSignals(ctx context.Context) ([]Signal, error) {
 			break
 		}
 	}
+	c.Stats.SignalsListed.Add(1)
+	c.Log.Debug("coordination signals listed", "count", len(all))
 	return all, nil
 }
 
 // DeleteSignal removes a single coordination signal by Mem0 memory ID.
 func (c *Client) DeleteSignal(ctx context.Context, memoryID string) error {
-	return c.doJSON(ctx, http.MethodDelete, "/v1/memories/"+memoryID+"/", nil)
+	if err := c.doJSON(ctx, http.MethodDelete, "/v1/memories/"+memoryID+"/", nil); err != nil {
+		c.Stats.Errors.Add(1)
+		c.Log.Warn("coordination signal delete failed", "memory_id", memoryID, "error", err)
+		return err
+	}
+	c.Stats.SignalsDeleted.Add(1)
+	c.Log.Info("coordination signal deleted", "memory_id", memoryID)
+	return nil
 }
 
 // CleanStaleSignals deletes signals older than maxAge. Returns the count deleted.
 func (c *Client) CleanStaleSignals(ctx context.Context, maxAge time.Duration) (int, error) {
+	c.Stats.CleanupRuns.Add(1)
 	signals, err := c.ListSignals(ctx)
 	if err != nil {
 		return 0, fmt.Errorf("listing signals for cleanup: %w", err)
@@ -160,6 +225,8 @@ func (c *Client) CleanStaleSignals(ctx context.Context, maxAge time.Duration) (i
 			deleted++
 		}
 	}
+	c.Stats.CleanupDeleted.Add(int64(deleted))
+	c.Log.Info("coordination cleanup complete", "deleted", deleted, "total_signals", len(signals), "max_age", maxAge.String())
 	return deleted, nil
 }
 

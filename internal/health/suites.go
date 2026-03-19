@@ -1562,5 +1562,45 @@ func suiteCoordinationSignals(p config.Paths) *Suite {
 	signalBin := filepath.Join(p.BinDir, "cursor-tools")
 	s.AssertFileExists("cursor-tools binary exists", signalBin)
 
+	// Live check: run signal list and report pending tasks
+	pendingCount, listErr := probeCoordinationSignals(signalBin)
+	s.Assert("signal list reachable", listErr == nil,
+		fmt.Sprintf("cursor-tools signal list: %v", listErr))
+	if listErr == nil && pendingCount > 0 {
+		s.Assert("no pending cross-machine tasks", false,
+			fmt.Sprintf("%d pending task(s) -- run: cursor-tools signal list", pendingCount))
+	}
+
 	return s
+}
+
+// probeCoordinationSignals runs cursor-tools signal list and counts pending tasks.
+// Returns -1 on error.
+func probeCoordinationSignals(binPath string) (int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binPath, "signal", "list", "--json")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		// Fallback: signal list without --json (counts "pending" lines)
+		cmd2 := exec.CommandContext(ctx, binPath, "signal", "list")
+		out2, err2 := cmd2.CombinedOutput()
+		if err2 != nil {
+			return -1, fmt.Errorf("signal list failed: %w", err2)
+		}
+		count := 0
+		for _, line := range strings.Split(string(out2), "\n") {
+			if strings.Contains(line, "task-dispatch") {
+				count++
+			}
+		}
+		return count, nil
+	}
+	count := 0
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.Contains(line, "task-dispatch") {
+			count++
+		}
+	}
+	return count, nil
 }

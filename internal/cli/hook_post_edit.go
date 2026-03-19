@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/coordination"
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
@@ -39,6 +41,7 @@ func (h *postEditHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 	h.formatFile(input.FilePath)
 	h.syncCountsIfNeeded(input.FilePath)
 	h.promoteLearningsIfNeeded(input.FilePath)
+	h.checkCoordinationSignalsIfNeeded(input.FilePath)
 
 	_ = metrics.Record(h.paths.MetricsFile(), metrics.Event{
 		Hook:      "post-edit",
@@ -223,6 +226,52 @@ func findGitRoot(dir string) string {
 func isDir(path string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
+}
+
+// checkCoordinationSignalsIfNeeded runs a lightweight signal check when editing
+// sprint/session files, so pending cross-machine tasks are noticed promptly.
+var checkCoordinationSignalsFn = defaultCheckCoordinationSignals
+
+func defaultCheckCoordinationSignals(p config.Paths, log *logger.Logger) {
+	client, err := newCoordinationClient(p)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	signals, err := client.ListSignals(ctx)
+	if err != nil {
+		return
+	}
+	machine := coordination.LocalMachine()
+	pending := coordination.FilterPendingTasks(signals, machine)
+	if len(pending) > 0 {
+		log.LogEntry(logger.Entry{
+			Level:   "warn",
+			Message: fmt.Sprintf("coordination: %d pending task(s) for %s", len(pending), machine),
+			Hook:    "post-edit",
+			Result:  "pending-tasks",
+			Fields: map[string]any{
+				"pending_count": len(pending),
+			},
+		})
+	}
+}
+
+func (h *postEditHandler) checkCoordinationSignalsIfNeeded(filePath string) {
+	triggers := []string{
+		"session-handoff-",
+		"sprint-plans/",
+		"SESSION.md",
+		"daily-startup-prompt.md",
+	}
+	base := filepath.Base(filePath)
+	for _, t := range triggers {
+		if strings.Contains(filePath, t) || strings.EqualFold(base, t) {
+			checkCoordinationSignalsFn(h.paths, h.log)
+			return
+		}
+	}
 }
 
 func jsonReformat(buf *strings.Builder, data []byte) error {

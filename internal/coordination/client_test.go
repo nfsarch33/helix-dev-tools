@@ -1,8 +1,10 @@
 package coordination
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -411,5 +413,185 @@ func TestSignalFromMem0_RoundTrip(t *testing.T) {
 	}
 	if restored.Sprint != original.Sprint {
 		t.Errorf("Sprint = %q, want %q", restored.Sprint, original.Sprint)
+	}
+}
+
+// --- slog + metrics tests ---
+
+func newTestLogger(buf *bytes.Buffer) *slog.Logger {
+	return slog.New(slog.NewJSONHandler(buf, &slog.HandlerOptions{Level: slog.LevelDebug}))
+}
+
+func TestAddSignal_SlogOutput(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"ok"}`))
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	c := NewClient("key", "user", srv.URL).WithLogger(newTestLogger(&buf))
+	err := c.AddSignal(context.Background(), Signal{Type: SignalBlocker, Machine: "macos", Message: "test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), "coordination signal added") {
+		t.Errorf("slog output missing expected message, got: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), `"type":"blocker"`) {
+		t.Errorf("slog output missing signal type, got: %s", buf.String())
+	}
+}
+
+func TestAddSignal_ErrorIncrementsCounter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`error`))
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	c := NewClient("key", "user", srv.URL).WithLogger(newTestLogger(&buf))
+	_ = c.AddSignal(context.Background(), Signal{Type: SignalBlocker, Machine: "wsl", Message: "fail"})
+	if c.Stats.Errors.Load() != 1 {
+		t.Errorf("Errors = %d, want 1", c.Stats.Errors.Load())
+	}
+	if c.Stats.SignalsAdded.Load() != 0 {
+		t.Errorf("SignalsAdded = %d, want 0 on failure", c.Stats.SignalsAdded.Load())
+	}
+	if !strings.Contains(buf.String(), "coordination signal add failed") {
+		t.Errorf("slog missing warn message, got: %s", buf.String())
+	}
+}
+
+func TestListSignals_CounterAndSlog(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		resp := mem0ListResult{
+			Results: []mem0SearchResult{
+				{ID: "1", Memory: "test", Metadata: map[string]string{"type": "active-state", "machine": "wsl"}},
+			},
+			Total: 1,
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	c := NewClient("key", "user", srv.URL).WithLogger(newTestLogger(&buf))
+	signals, err := c.ListSignals(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(signals) != 1 {
+		t.Fatalf("got %d signals, want 1", len(signals))
+	}
+	if c.Stats.SignalsListed.Load() != 1 {
+		t.Errorf("SignalsListed = %d, want 1", c.Stats.SignalsListed.Load())
+	}
+	if !strings.Contains(buf.String(), "coordination signals listed") {
+		t.Errorf("slog missing list message, got: %s", buf.String())
+	}
+}
+
+func TestSearchSignals_CounterAndSlog(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		json.NewEncoder(w).Encode([]mem0SearchResult{
+			{ID: "1", Memory: "hit", Metadata: map[string]string{"type": "blocker", "machine": "wsl"}},
+		})
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	c := NewClient("key", "user", srv.URL).WithLogger(newTestLogger(&buf))
+	signals, err := c.SearchSignals(context.Background(), "test", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(signals) != 1 {
+		t.Fatalf("got %d, want 1", len(signals))
+	}
+	if c.Stats.SignalsSearched.Load() != 1 {
+		t.Errorf("SignalsSearched = %d, want 1", c.Stats.SignalsSearched.Load())
+	}
+}
+
+func TestDeleteSignal_CounterAndSlog(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	c := NewClient("key", "user", srv.URL).WithLogger(newTestLogger(&buf))
+	if err := c.DeleteSignal(context.Background(), "mem-99"); err != nil {
+		t.Fatal(err)
+	}
+	if c.Stats.SignalsDeleted.Load() != 1 {
+		t.Errorf("SignalsDeleted = %d, want 1", c.Stats.SignalsDeleted.Load())
+	}
+	if !strings.Contains(buf.String(), "coordination signal deleted") {
+		t.Errorf("slog missing delete message, got: %s", buf.String())
+	}
+}
+
+func TestCleanStaleSignals_CleanupCounters(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		resp := mem0ListResult{
+			Results: []mem0SearchResult{
+				{ID: "c1", Memory: "done", Metadata: map[string]string{"type": "completed", "machine": "wsl"}},
+				{ID: "a1", Memory: "active", Metadata: map[string]string{"type": "active-state", "machine": "wsl"}},
+			},
+			Total: 2,
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	c := NewClient("key", "user", srv.URL).WithLogger(newTestLogger(&buf))
+	deleted, err := c.CleanStaleSignals(context.Background(), 24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted != 1 {
+		t.Errorf("deleted = %d, want 1", deleted)
+	}
+	if c.Stats.CleanupRuns.Load() != 1 {
+		t.Errorf("CleanupRuns = %d, want 1", c.Stats.CleanupRuns.Load())
+	}
+	if c.Stats.CleanupDeleted.Load() != 1 {
+		t.Errorf("CleanupDeleted = %d, want 1", c.Stats.CleanupDeleted.Load())
+	}
+	if !strings.Contains(buf.String(), "coordination cleanup complete") {
+		t.Errorf("slog missing cleanup message, got: %s", buf.String())
+	}
+}
+
+func TestClientMetrics_Snapshot(t *testing.T) {
+	m := &ClientMetrics{}
+	m.SignalsAdded.Add(3)
+	m.Errors.Add(1)
+	snap := m.Snapshot()
+	if snap["ironclaw_coordination_signals_added_total"] != 3 {
+		t.Errorf("added = %d, want 3", snap["ironclaw_coordination_signals_added_total"])
+	}
+	if snap["ironclaw_coordination_errors_total"] != 1 {
+		t.Errorf("errors = %d, want 1", snap["ironclaw_coordination_errors_total"])
+	}
+	if snap["ironclaw_coordination_signals_listed_total"] != 0 {
+		t.Errorf("listed = %d, want 0", snap["ironclaw_coordination_signals_listed_total"])
+	}
+}
+
+func TestWithLogger_Replaces(t *testing.T) {
+	var buf bytes.Buffer
+	l := newTestLogger(&buf)
+	c := NewClient("key", "user", "http://localhost").WithLogger(l)
+	if c.Log != l {
+		t.Error("WithLogger did not replace logger")
 	}
 }

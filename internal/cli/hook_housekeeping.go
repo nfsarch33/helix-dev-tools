@@ -81,6 +81,7 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 		h.syncRepo()
 	} else {
 		h.pullRepo()
+		h.pullCoordinationSignals()
 	}
 
 	return hookio.Empty(), nil
@@ -150,6 +151,44 @@ func defaultCleanCoordinationSignals(p config.Paths, log *logger.Logger) {
 
 func (h *housekeepingHandler) cleanCoordinationSignals() {
 	cleanCoordinationSignalsFn(h.paths, h.log)
+}
+
+// pullCoordinationSignalsFn is replaceable for testing.
+var pullCoordinationSignalsFn = defaultPullCoordinationSignals
+
+func defaultPullCoordinationSignals(p config.Paths, log *logger.Logger) {
+	client, err := newCoordinationClient(p)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	signals, err := client.ListSignals(ctx)
+	if err != nil {
+		log.Log(fmt.Sprintf("coordination signal pull skipped: %v", err))
+		return
+	}
+	machine := coordination.LocalMachine()
+	pending := coordination.FilterPendingTasks(signals, machine)
+	if len(pending) > 0 {
+		log.LogEntry(logger.Entry{
+			Level:   "warn",
+			Message: fmt.Sprintf("coordination: %d pending task(s) from other machines", len(pending)),
+			Hook:    "housekeeping",
+			Result:  "pending-tasks",
+			Fields: map[string]any{
+				"machine":       machine,
+				"pending_count": len(pending),
+				"total_signals": len(signals),
+			},
+		})
+	} else {
+		log.Log(fmt.Sprintf("coordination: %d signal(s), 0 pending tasks for %s", len(signals), machine))
+	}
+}
+
+func (h *housekeepingHandler) pullCoordinationSignals() {
+	pullCoordinationSignalsFn(h.paths, h.log)
 }
 
 // SignalCleanupMaxAge controls how old a non-completed signal must be before
