@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -23,6 +24,7 @@ type ClientMetrics struct {
 	CleanupRuns     atomic.Int64
 	CleanupDeleted  atomic.Int64
 	Errors          atomic.Int64
+	Retries         atomic.Int64
 }
 
 // Snapshot returns a point-in-time copy of all counters.
@@ -35,17 +37,20 @@ func (m *ClientMetrics) Snapshot() map[string]int64 {
 		"ironclaw_coordination_cleanup_runs_total":     m.CleanupRuns.Load(),
 		"ironclaw_coordination_cleanup_deleted_total":  m.CleanupDeleted.Load(),
 		"ironclaw_coordination_errors_total":           m.Errors.Load(),
+		"ironclaw_coordination_retries_total":          m.Retries.Load(),
 	}
 }
 
 // Client interacts with the Mem0 API for coordination signals.
 type Client struct {
-	APIKey  string
-	UserID  string
-	BaseURL string
-	HTTP    *http.Client
-	Log     *slog.Logger
-	Stats   *ClientMetrics
+	APIKey         string
+	UserID         string
+	BaseURL        string
+	HTTP           *http.Client
+	Log            *slog.Logger
+	Stats          *ClientMetrics
+	MaxRetries     int
+	RetryBaseDelay time.Duration
 }
 
 // NewClient creates a coordination client. If baseURL is empty, defaults to
@@ -55,12 +60,14 @@ func NewClient(apiKey, userID, baseURL string) *Client {
 		baseURL = "https://api.mem0.ai"
 	}
 	return &Client{
-		APIKey:  apiKey,
-		UserID:  userID,
-		BaseURL: strings.TrimRight(baseURL, "/"),
-		HTTP:    &http.Client{Timeout: 30 * time.Second},
-		Log:     slog.Default(),
-		Stats:   &ClientMetrics{},
+		APIKey:         apiKey,
+		UserID:         userID,
+		BaseURL:        strings.TrimRight(baseURL, "/"),
+		HTTP:           &http.Client{Timeout: 30 * time.Second},
+		Log:            slog.Default(),
+		Stats:          &ClientMetrics{},
+		MaxRetries:     3,
+		RetryBaseDelay: 500 * time.Millisecond,
 	}
 }
 
@@ -252,34 +259,78 @@ func FilterPendingTasks(signals []Signal, machine string) []Signal {
 	return tasks
 }
 
+// isRetryable returns true for status codes that indicate a transient server
+// error worth retrying (5xx and 429 Too Many Requests). 4xx errors (except 429)
+// are client errors and must NOT be retried.
+func isRetryable(statusCode int) bool {
+	return statusCode == http.StatusTooManyRequests || statusCode >= 500
+}
+
+// doHTTP executes an HTTP request with exponential backoff retry for transient
+// errors. It returns the response body on success or the last error after all
+// retries are exhausted.
+func (c *Client) doHTTP(ctx context.Context, method, path string, payload []byte) ([]byte, error) {
+	maxAttempts := 1 + c.MaxRetries
+	var lastErr error
+
+	for attempt := 0; attempt < maxAttempts; attempt++ {
+		if attempt > 0 {
+			delay := c.RetryBaseDelay * (1 << (attempt - 1))
+			jitter := time.Duration(float64(delay) * 0.1 * rand.Float64())
+			delay += jitter
+			c.Stats.Retries.Add(1)
+			c.Log.Warn("retrying", "attempt", attempt, "status", lastErr, "delay", delay)
+
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(delay):
+			}
+		}
+
+		var bodyReader io.Reader
+		if payload != nil {
+			bodyReader = bytes.NewReader(payload)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bodyReader)
+		if err != nil {
+			return nil, fmt.Errorf("building request: %w", err)
+		}
+		req.Header.Set("Authorization", "Token "+c.APIKey)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json")
+
+		resp, err := c.HTTP.Do(req)
+		if err != nil {
+			return nil, fmt.Errorf("sending request: %w", err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if resp.StatusCode < 300 {
+			return body, nil
+		}
+
+		lastErr = fmt.Errorf("status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		if !isRetryable(resp.StatusCode) {
+			return nil, lastErr
+		}
+	}
+	return nil, lastErr
+}
+
 func (c *Client) doJSON(ctx context.Context, method, path string, payload interface{}) error {
-	var bodyReader io.Reader
+	var data []byte
 	if payload != nil {
-		data, err := json.Marshal(payload)
+		var err error
+		data, err = json.Marshal(payload)
 		if err != nil {
 			return fmt.Errorf("encoding payload: %w", err)
 		}
-		bodyReader = bytes.NewReader(data)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bodyReader)
-	if err != nil {
-		return fmt.Errorf("building request: %w", err)
-	}
-	req.Header.Set("Authorization", "Token "+c.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return fmt.Errorf("sending request: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	return nil
+	_, err := c.doHTTP(ctx, method, path, data)
+	return err
 }
 
 func (c *Client) doJSONResponse(ctx context.Context, method, path string, payload interface{}) ([]byte, error) {
@@ -287,25 +338,7 @@ func (c *Client) doJSONResponse(ctx context.Context, method, path string, payloa
 	if err != nil {
 		return nil, fmt.Errorf("encoding payload: %w", err)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+path, bytes.NewReader(data))
-	if err != nil {
-		return nil, fmt.Errorf("building request: %w", err)
-	}
-	req.Header.Set("Authorization", "Token "+c.APIKey)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := c.HTTP.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("sending request: %w", err)
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	return body, nil
+	return c.doHTTP(ctx, method, path, data)
 }
 
 func parseSearchResults(data []byte) ([]Signal, error) {

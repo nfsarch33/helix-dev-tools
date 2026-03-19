@@ -595,3 +595,197 @@ func TestWithLogger_Replaces(t *testing.T) {
 		t.Error("WithLogger did not replace logger")
 	}
 }
+
+// --- retry tests ---
+
+func TestAddSignal_RetryOn500(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts <= 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`{"error":"Internal error processing memories"}`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"ok"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("key", "user", srv.URL)
+	c.MaxRetries = 3
+	c.RetryBaseDelay = time.Millisecond
+	err := c.AddSignal(context.Background(), Signal{Type: SignalBlocker, Machine: "wsl", Message: "retry test"})
+	if err != nil {
+		t.Fatalf("AddSignal() should succeed after retries, got: %v", err)
+	}
+	if attempts != 3 {
+		t.Errorf("attempts = %d, want 3 (2 failures + 1 success)", attempts)
+	}
+	if c.Stats.SignalsAdded.Load() != 1 {
+		t.Errorf("SignalsAdded = %d, want 1", c.Stats.SignalsAdded.Load())
+	}
+}
+
+func TestAddSignal_NoRetryOn400(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"bad request"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("key", "user", srv.URL)
+	c.MaxRetries = 3
+	c.RetryBaseDelay = time.Millisecond
+	err := c.AddSignal(context.Background(), Signal{Type: SignalBlocker, Machine: "wsl", Message: "bad"})
+	if err == nil {
+		t.Fatal("expected error on 400")
+	}
+	if attempts != 1 {
+		t.Errorf("attempts = %d, want 1 (no retry on 4xx)", attempts)
+	}
+}
+
+func TestAddSignal_RetryExhausted(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"always failing"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("key", "user", srv.URL)
+	c.MaxRetries = 2
+	c.RetryBaseDelay = time.Millisecond
+	err := c.AddSignal(context.Background(), Signal{Type: SignalBlocker, Machine: "wsl", Message: "exhaust"})
+	if err == nil {
+		t.Fatal("expected error when retries exhausted")
+	}
+	// 1 initial + 2 retries = 3 total attempts
+	if attempts != 3 {
+		t.Errorf("attempts = %d, want 3 (1 initial + 2 retries)", attempts)
+	}
+	if !strings.Contains(err.Error(), "500") {
+		t.Errorf("error should contain status code, got: %v", err)
+	}
+}
+
+func TestListSignals_RetryOn503(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			w.Write([]byte(`{"error":"service unavailable"}`))
+			return
+		}
+		resp := mem0ListResult{
+			Results: []mem0SearchResult{
+				{ID: "1", Memory: "test", Metadata: map[string]string{"type": "active-state", "machine": "wsl"}},
+			},
+			Total: 1,
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := NewClient("key", "user", srv.URL)
+	c.MaxRetries = 3
+	c.RetryBaseDelay = time.Millisecond
+	signals, err := c.ListSignals(context.Background())
+	if err != nil {
+		t.Fatalf("ListSignals() should succeed after retry, got: %v", err)
+	}
+	if len(signals) != 1 {
+		t.Fatalf("got %d signals, want 1", len(signals))
+	}
+	if attempts != 2 {
+		t.Errorf("attempts = %d, want 2 (1 failure + 1 success)", attempts)
+	}
+}
+
+func TestRetry_RespectsContextCancellation(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte(`{"error":"fail"}`))
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	c := NewClient("key", "user", srv.URL)
+	c.MaxRetries = 10
+	c.RetryBaseDelay = 50 * time.Millisecond
+
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		cancel()
+	}()
+
+	err := c.AddSignal(ctx, Signal{Type: SignalBlocker, Machine: "wsl", Message: "cancel"})
+	if err == nil {
+		t.Fatal("expected error on cancelled context")
+	}
+	if attempts > 5 {
+		t.Errorf("attempts = %d, expected early cancellation (well below MaxRetries=10)", attempts)
+	}
+}
+
+func TestRetry_CounterIncrement(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts <= 2 {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`error`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"ok"}`))
+	}))
+	defer srv.Close()
+
+	c := NewClient("key", "user", srv.URL)
+	c.MaxRetries = 3
+	c.RetryBaseDelay = time.Millisecond
+	_ = c.AddSignal(context.Background(), Signal{Type: SignalBlocker, Machine: "wsl", Message: "counter"})
+	if c.Stats.Retries.Load() != 2 {
+		t.Errorf("Retries = %d, want 2", c.Stats.Retries.Load())
+	}
+	snap := c.Stats.Snapshot()
+	if snap["ironclaw_coordination_retries_total"] != 2 {
+		t.Errorf("snapshot retries = %d, want 2", snap["ironclaw_coordination_retries_total"])
+	}
+}
+
+func TestRetry_SlogOutput(t *testing.T) {
+	attempts := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.WriteHeader(http.StatusInternalServerError)
+			w.Write([]byte(`error`))
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"id":"ok"}`))
+	}))
+	defer srv.Close()
+
+	var buf bytes.Buffer
+	c := NewClient("key", "user", srv.URL).WithLogger(newTestLogger(&buf))
+	c.MaxRetries = 3
+	c.RetryBaseDelay = time.Millisecond
+	_ = c.AddSignal(context.Background(), Signal{Type: SignalBlocker, Machine: "wsl", Message: "slog"})
+	logOut := buf.String()
+	if !strings.Contains(logOut, "retrying") {
+		t.Errorf("slog missing retry message, got: %s", logOut)
+	}
+	if !strings.Contains(logOut, "500") {
+		t.Errorf("slog missing status code, got: %s", logOut)
+	}
+}
