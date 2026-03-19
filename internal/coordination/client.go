@@ -77,10 +77,16 @@ func (c *Client) WithLogger(l *slog.Logger) *Client {
 	return c
 }
 
+type mem0Message struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
 type mem0AddPayload struct {
 	UserID   string            `json:"user_id"`
 	AppID    string            `json:"app_id"`
 	Text     string            `json:"text"`
+	Messages []mem0Message     `json:"messages"`
 	Metadata map[string]string `json:"metadata,omitempty"`
 	Infer    bool              `json:"infer"`
 }
@@ -113,10 +119,12 @@ type mem0ListResult struct {
 
 // AddSignal writes a coordination signal to Mem0.
 func (c *Client) AddSignal(ctx context.Context, s Signal) error {
+	text := s.Mem0Text()
 	payload := mem0AddPayload{
 		UserID:   c.UserID,
 		AppID:    AppID,
-		Text:     s.Mem0Text(),
+		Text:     text,
+		Messages: []mem0Message{{Role: "user", Content: text}},
 		Metadata: s.Mem0Metadata(),
 		Infer:    false,
 	}
