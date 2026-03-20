@@ -67,12 +67,21 @@ var doctorResumeCmd = &cobra.Command{
 	},
 }
 
+var doctorStackCmd = &cobra.Command{
+	Use:   "stack",
+	Short: "Run agent-doctor checks across evolver, research, selfimprove subsystems",
+	RunE: func(_ *cobra.Command, _ []string) error {
+		return runDoctorProfile("stack")
+	},
+}
+
 func init() {
 	doctorCmd.AddCommand(doctorInstallCmd)
 	doctorCmd.AddCommand(doctorMCPCmd)
 	doctorCmd.AddCommand(doctorPlatformCmd)
 	doctorCmd.AddCommand(doctorDepsCmd)
 	doctorCmd.AddCommand(doctorResumeCmd)
+	doctorCmd.AddCommand(doctorStackCmd)
 	doctorCmd.PersistentFlags().BoolVar(&doctorOutputJSON, "json", false, "Output results as JSON")
 }
 

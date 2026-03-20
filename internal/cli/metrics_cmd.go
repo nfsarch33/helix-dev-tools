@@ -1,8 +1,12 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -18,6 +22,7 @@ var metricsFlags struct {
 	export  string
 	compact bool
 	analyse bool
+	doctor  bool
 }
 
 var metricsCmd = &cobra.Command{
@@ -32,6 +37,7 @@ func init() {
 	metricsCmd.Flags().StringVar(&metricsFlags.export, "export", "", "Export markdown report to file (e.g. ~/memo/global-memories/system-performance.md)")
 	metricsCmd.Flags().BoolVar(&metricsFlags.compact, "compact", false, "Single-line output for embedding in prompts")
 	metricsCmd.Flags().BoolVar(&metricsFlags.analyse, "analyse", false, "Show actionable recommendations from data patterns")
+	metricsCmd.Flags().BoolVar(&metricsFlags.doctor, "doctor", false, "Include agent-doctor subsystem health summary")
 }
 
 func runMetrics(_ *cobra.Command, _ []string) error {
@@ -253,6 +259,10 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 		}
 	}
 
+	if metricsFlags.doctor {
+		printDoctorMetrics(p)
+	}
+
 	if metricsFlags.export != "" {
 		md := summary.Markdown()
 		if err := os.WriteFile(metricsFlags.export, []byte(md), 0o644); err != nil {
@@ -323,4 +333,69 @@ func percentage(numerator, denominator int) float64 {
 		return 0
 	}
 	return float64(numerator) / float64(denominator) * 100
+}
+
+func printDoctorMetrics(p config.Paths) {
+	agentDoctorBin := filepath.Join(p.Home, "ai-agent-business-stack", "go", "bin", "agent-doctor")
+	if _, err := os.Stat(agentDoctorBin); err != nil {
+		var lookErr error
+		agentDoctorBin, lookErr = exec.LookPath("agent-doctor")
+		if lookErr != nil {
+			clilog.Info("agent-doctor not installed, skipping --doctor section")
+			return
+		}
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, agentDoctorBin, "all", "--json")
+	out, _ := cmd.CombinedOutput()
+	if len(out) == 0 {
+		clilog.Warn("agent-doctor produced no output")
+		return
+	}
+
+	var report struct {
+		Suites []struct {
+			Name   string `json:"name"`
+			Checks []struct {
+				Name    string `json:"name"`
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			} `json:"checks"`
+			DurationMs int64 `json:"duration_ms"`
+		} `json:"suites"`
+		Overall    string `json:"overall"`
+		DurationMs int64  `json:"duration_ms"`
+	}
+	if err := json.Unmarshal(out, &report); err != nil {
+		clilog.Warn("agent-doctor output not parseable: %v", err)
+		return
+	}
+
+	fmt.Println("  Agent Doctor Health:")
+	fmt.Printf("  %-16s %-6s %5s %5s %5s %10s\n", "Suite", "Health", "Pass", "Warn", "Fail", "Time(ms)")
+	clilog.Divider()
+	for _, suite := range report.Suites {
+		pass, warn, fail := 0, 0, 0
+		for _, check := range suite.Checks {
+			switch check.Status {
+			case "pass", "ok":
+				pass++
+			case "warn", "warning":
+				warn++
+			case "fail", "critical":
+				fail++
+			}
+		}
+		health := "ok"
+		if fail > 0 {
+			health = "FAIL"
+		} else if warn > 0 {
+			health = "warn"
+		}
+		fmt.Printf("  %-16s %-6s %5d %5d %5d %10d\n", suite.Name, health, pass, warn, fail, suite.DurationMs)
+	}
+	fmt.Printf("\n  Overall: %s (ran in %dms)\n\n", report.Overall, report.DurationMs)
 }

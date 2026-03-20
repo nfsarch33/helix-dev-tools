@@ -59,6 +59,7 @@ var suiteCatalog = []suiteSpec{
 	{name: "Git Sync Resilience", builder: suiteGitSyncResilience},
 	{name: "Dependency Readiness", builder: suiteDependencyReadiness},
 	{name: "Coordination Signals", builder: suiteCoordinationSignals},
+	{name: "Agent Stack Health", builder: suiteAgentStackHealth},
 }
 
 var suiteCatalogByName = func() map[string]suiteSpec {
@@ -155,6 +156,15 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Toolchain Cross-Platform",
 			"Handoff Acknowledgement",
 			"Git Sync Resilience",
+		}
+	case "stack":
+		names = []string{
+			"IronClaw Readiness",
+			"Agent Stack Health",
+			"MCP Readiness",
+			"Mem0 Connectivity",
+			"Coordination Signals",
+			"Platform Readiness",
 		}
 	default:
 		return BuildAllSuites(p)
@@ -1570,6 +1580,63 @@ func suiteCoordinationSignals(p config.Paths) *Suite {
 		s.Assert("no pending cross-machine tasks", false,
 			fmt.Sprintf("%d pending task(s) -- run: cursor-tools signal list", pendingCount))
 	}
+
+	return s
+}
+
+// suiteAgentStackHealth shells out to agent-doctor all --json if the binary exists
+// and merges results into the cursor-tools health report.
+func suiteAgentStackHealth(p config.Paths) *Suite {
+	s := &Suite{Name: "Agent Stack Health"}
+
+	agentDoctorBin := filepath.Join(p.Home, "ai-agent-business-stack", "go", "bin", "agent-doctor")
+	if _, err := os.Stat(agentDoctorBin); err != nil {
+		altPath, lookErr := exec.LookPath("agent-doctor")
+		if lookErr != nil {
+			s.Pass("agent-doctor not installed (optional — build with: cd ~/ai-agent-business-stack/go && go build -o bin/agent-doctor ./cmd/agent-doctor/)")
+			return s
+		}
+		agentDoctorBin = altPath
+	}
+	s.Pass("agent-doctor binary found: " + agentDoctorBin)
+
+	out, err := runCombinedOutput(20*time.Second, agentDoctorBin, "all", "--json")
+	if err != nil && len(out) == 0 {
+		s.Fail("agent-doctor all --json executes", "error: "+err.Error())
+		return s
+	}
+	s.Pass("agent-doctor all --json executes")
+
+	var report struct {
+		Suites []struct {
+			Name   string `json:"name"`
+			Checks []struct {
+				Name    string `json:"name"`
+				Status  string `json:"status"`
+				Message string `json:"message"`
+			} `json:"checks"`
+		} `json:"suites"`
+		Overall string `json:"overall"`
+	}
+	if jsonErr := json.Unmarshal(out, &report); jsonErr != nil {
+		s.Fail("agent-doctor JSON parses", jsonErr.Error())
+		return s
+	}
+	s.Pass("agent-doctor JSON parses")
+
+	for _, suite := range report.Suites {
+		for _, check := range suite.Checks {
+			passed := check.Status == "pass" || check.Status == "ok"
+			detail := check.Message
+			if !passed && detail == "" {
+				detail = "status: " + check.Status
+			}
+			s.Assert(suite.Name+"/"+check.Name, passed, detail)
+		}
+	}
+
+	s.Assert("agent stack overall healthy", report.Overall == "healthy",
+		"overall: "+report.Overall)
 
 	return s
 }

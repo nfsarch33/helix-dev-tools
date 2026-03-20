@@ -22,10 +22,10 @@ func TestHealth(t *testing.T) {
 }
 
 var _ = Describe("BuildAllSuites", func() {
-	It("returns 35 suites", func() {
+	It("returns 36 suites", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites).To(HaveLen(35))
+		Expect(suites).To(HaveLen(36))
 	})
 
 	It("includes Memory Evidence in the shared catalog", func() {
