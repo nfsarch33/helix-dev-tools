@@ -43,6 +43,7 @@ func init() {
 	rootCmd.AddCommand(handoffReviewCmd)
 	rootCmd.AddCommand(signalCmd)
 	rootCmd.AddCommand(autoUpdateCmd)
+	rootCmd.AddCommand(claudeUsageCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 
