@@ -44,6 +44,7 @@ func init() {
 	rootCmd.AddCommand(signalCmd)
 	rootCmd.AddCommand(autoUpdateCmd)
 	rootCmd.AddCommand(claudeUsageCmd)
+	rootCmd.AddCommand(claudeRunCmd)
 	rootCmd.AddCommand(versionCmd)
 }
 

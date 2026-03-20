@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/nfsarch33/cursor-tools/internal/claude"
 	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
@@ -230,6 +231,8 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 
 	fmt.Println()
 
+	printClaudeUsageSection(metricsFlags.days)
+
 	recs := summary.Analyse()
 	if metricsFlags.analyse || len(recs) > 0 {
 		if len(recs) > 0 {
@@ -259,6 +262,60 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+func printClaudeUsageSection(days int) {
+	dir := claude.DefaultUsageDir()
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return
+	}
+
+	now := time.Now().UTC()
+	var allRecords []claude.Usage
+	for i := 0; i < days; i++ {
+		day := now.AddDate(0, 0, -i)
+		path := claude.UsageFilePath(dir, day)
+		records, err := claude.ReadUsage(path)
+		if err != nil {
+			continue
+		}
+		allRecords = append(allRecords, records...)
+	}
+
+	if len(allRecords) == 0 {
+		return
+	}
+
+	var totalPromptBytes, totalOutputBytes int
+	var totalDurMs int64
+	var totalCost float64
+	var errCount int
+	backends := map[string]int{}
+
+	for _, r := range allRecords {
+		totalPromptBytes += r.PromptBytes
+		totalOutputBytes += r.OutputBytes
+		totalDurMs += r.DurationMs
+		totalCost += r.Cost
+		if r.ExitCode != 0 {
+			errCount++
+		}
+		backends[r.Backend]++
+	}
+
+	fmt.Println("  Claude CLI Usage:")
+	fmt.Printf("    Invocations:   %d\n", len(allRecords))
+	fmt.Printf("    Prompt bytes:  %s\n", formatBytes(totalPromptBytes))
+	fmt.Printf("    Output bytes:  %s\n", formatBytes(totalOutputBytes))
+	fmt.Printf("    Duration:      %s\n", formatDuration(totalDurMs))
+	if totalCost > 0 {
+		fmt.Printf("    Cost:          $%.4f\n", totalCost)
+	}
+	fmt.Printf("    Errors:        %d / %d\n", errCount, len(allRecords))
+	for b, c := range backends {
+		fmt.Printf("    Backend %-10s %d calls\n", b+":", c)
+	}
+	fmt.Println()
 }
 
 func percentage(numerator, denominator int) float64 {
