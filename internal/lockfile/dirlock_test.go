@@ -3,6 +3,7 @@ package lockfile_test
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"sync"
 	"testing"
@@ -222,6 +223,9 @@ var _ = Describe("FileLock", func() {
 		})
 
 		It("returns error when lock parent dir is unwritable", func() {
+			if runtime.GOOS == "windows" {
+				Skip("read-only directory semantics via chmod are not reliable on Windows")
+			}
 			readOnlyDir := filepath.Join(tmpDir, "readonly")
 			Expect(os.Mkdir(readOnlyDir, 0o444)).To(Succeed())
 			defer os.Chmod(readOnlyDir, 0o755)
@@ -233,6 +237,9 @@ var _ = Describe("FileLock", func() {
 		})
 
 		It("returns error when target parent dir is unwritable", func() {
+			if runtime.GOOS == "windows" {
+				Skip("read-only directory semantics via chmod are not reliable on Windows")
+			}
 			readOnlyDir := filepath.Join(tmpDir, "readonly-target")
 			Expect(os.MkdirAll(readOnlyDir, 0o444)).To(Succeed())
 			defer os.Chmod(readOnlyDir, 0o755)
