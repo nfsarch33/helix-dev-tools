@@ -444,9 +444,10 @@ func suiteMCPReadiness(p config.Paths) *Suite {
 	s.Pass("mcp.json parses")
 	s.Assert("mcpServers present", len(cfg.MCPServers) >= 9, itoa(len(cfg.MCPServers)))
 
+	// github-official omitted: WSL fleet uses git-mcp-server + gh; Windows native omits PAT-heavy Docker GitHub MCP per daily-startup.
 	requiredServers := []string{
 		"mem0", "context-mode", "context7", "git-mcp-server",
-		"github-official", "duckduckgo", "fetch",
+		"duckduckgo", "fetch",
 	}
 	for _, name := range requiredServers {
 		_, ok := cfg.MCPServers[name]
