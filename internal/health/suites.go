@@ -1162,12 +1162,41 @@ func gitOutput(repoPath string, args ...string) (string, error) {
 	return string(out), err
 }
 
+// rtkBinaryInstalled returns true if rtk is on PATH or present in the user's bin dir
+// or configured BinDir. Tests often use an isolated HOME without PATH inheritance to ~/bin;
+// checking standard install locations keeps health checks and unit tests aligned.
+func rtkBinaryInstalled(p config.Paths) bool {
+	if _, err := exec.LookPath("rtk"); err == nil {
+		return true
+	}
+	if runtime.GOOS == "windows" {
+		if _, err := exec.LookPath("rtk.exe"); err == nil {
+			return true
+		}
+	}
+	candidates := []string{
+		filepath.Join(p.BinDir, "rtk"),
+		filepath.Join(p.BinDir, "rtk.exe"),
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates,
+			filepath.Join(home, "bin", "rtk"),
+			filepath.Join(home, "bin", "rtk.exe"),
+		)
+	}
+	for _, c := range candidates {
+		if st, err := os.Stat(c); err == nil && !st.IsDir() {
+			return true
+		}
+	}
+	return false
+}
+
 func suiteRTKTokenOptimization(p config.Paths) *Suite {
 	s := &Suite{Name: "rtk Token Optimization"}
 
-	rtkBinary, err := exec.LookPath("rtk")
-	s.Assert("rtk binary on PATH", err == nil, "rtk not found; install via brew (macOS) or curl installer (Linux)")
-	_ = rtkBinary
+	s.Assert("rtk binary installed", rtkBinaryInstalled(p),
+		"rtk not found on PATH or in ~/bin or tools bindir; install per https://github.com/rtk-ai/rtk/releases")
 
 	rtkRule := filepath.Join(p.RulesDir, "rtk-token-optimization.md")
 	s.AssertFileExists("L0 rule rtk-token-optimization.md exists", rtkRule)
