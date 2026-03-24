@@ -12,8 +12,9 @@ func windowsHooksJSONPolicy(body string) (ok bool, detail string) {
 	if !strings.Contains(body, "cursor-tools") {
 		return false, "hooks.json missing cursor-tools routes"
 	}
-	if strings.Contains(body, "cursor-tools.exe") {
+	// Native Windows hook command must be a .exe (e.g. cursor-tools.exe or *cursor-tools*-noconsole.exe from make release).
+	if strings.Contains(body, ".exe") {
 		return true, ""
 	}
-	return false, "on Windows, prefer ...\\cursor-tools.exe with an absolute path (see sop/windows-cursor-hooks-console.md)"
+	return false, "on Windows, use an absolute path to a cursor-tools .exe (see sop/windows-cursor-hooks-console.md)"
 }

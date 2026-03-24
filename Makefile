@@ -1,5 +1,8 @@
 VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
+# Windows GUI subsystem: avoids allocating a console when Cursor spawns hook subprocesses (fewer flashes).
+# Stdio pipes from the parent still work; use for hooks only — interactive CLI may show no console.
+WINDOWS_GUI_LDFLAGS := $(LDFLAGS) -H windowsgui
 BINARY  := cursor-tools
 GOFLAGS := -race
 
@@ -75,7 +78,8 @@ release:
 	CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-linux-amd64 ./cmd/cursor-tools/
 	CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-linux-arm64 ./cmd/cursor-tools/
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-windows-amd64.exe ./cmd/cursor-tools/
-	@echo "Built: darwin-arm64, linux-amd64, linux-arm64, windows-amd64.exe"
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(WINDOWS_GUI_LDFLAGS)" -o dist/$(BINARY)-windows-amd64-noconsole.exe ./cmd/cursor-tools/
+	@echo "Built: darwin-arm64, linux-amd64, linux-arm64, windows-amd64.exe, windows-amd64-noconsole.exe"
 
 clean:
 	rm -rf bin/ coverage.out

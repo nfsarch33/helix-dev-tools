@@ -24,6 +24,16 @@ func TestWindowsHooksJSONPolicy(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name:   "noconsole_release_exe_accepted",
+			body:   `{"command":"C:\\Users\\x\\bin\\cursor-tools-windows-amd64-noconsole.exe hook guard-shell"}`,
+			wantOK: true,
+		},
+		{
+			name:   "no_exe_suffix_rejected",
+			body:   `{"command":"C:\\Users\\x\\bin\\cursor-tools hook guard-shell"}`,
+			wantOK: false,
+		},
+		{
 			name:   "missing_cursor_tools_rejected",
 			body:   `{"command":"echo hi"}`,
 			wantOK: false,
