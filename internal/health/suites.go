@@ -378,20 +378,38 @@ func suiteGitSync(p config.Paths) *Suite {
 	return s
 }
 
+// assertHooksJSONInstallState checks %USERPROFILE%\.cursor\hooks.json (or $HOME/.cursor on Unix).
+// On Windows a regular file with absolute cursor-tools.exe paths is expected; elsewhere a symlink
+// into the KB template is typical.
+func assertHooksJSONInstallState(p config.Paths, s *Suite) {
+	live := p.HooksJSONPath()
+	if p.PlatformProfile() == "windows" {
+		data, err := os.ReadFile(live)
+		if err != nil {
+			s.Fail("hooks.json readable", err.Error())
+		} else {
+			ok, detail := windowsHooksJSONPolicy(string(data))
+			s.Assert("hooks.json uses Windows-native cursor-tools path", ok, detail)
+		}
+	} else {
+		s.AssertSymlink("hooks.json is symlink", live)
+	}
+}
+
 func suiteHooksSubagentsCommandsMCP(p config.Paths) *Suite {
 	s := &Suite{Name: "Hooks, Sub-agents, Commands, MCP"}
 
 	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
 	s.AssertFileExists("cursor-tools binary exists", binaryPath)
 
-	hooksJSON := filepath.Join(p.CursorConfigDir(), "hooks.json")
-	s.AssertFileContains("hooks.json routes guard-shell to Go", hooksJSON, "cursor-tools hook guard-shell")
-	s.AssertFileContains("hooks.json routes sanitize-read to Go", hooksJSON, "cursor-tools hook sanitize-read")
-	s.AssertFileContains("hooks.json routes guard-mcp to Go", hooksJSON, "cursor-tools hook guard-mcp")
-	s.AssertFileContains("hooks.json routes post-edit to Go", hooksJSON, "cursor-tools hook post-edit")
-	s.AssertFileContains("hooks.json routes housekeeping to Go", hooksJSON, "cursor-tools hook housekeeping")
+	templateHooks := filepath.Join(p.CursorConfigDir(), "hooks.json")
+	s.AssertFileContains("hooks.json routes guard-shell to Go", templateHooks, "cursor-tools hook guard-shell")
+	s.AssertFileContains("hooks.json routes sanitize-read to Go", templateHooks, "cursor-tools hook sanitize-read")
+	s.AssertFileContains("hooks.json routes guard-mcp to Go", templateHooks, "cursor-tools hook guard-mcp")
+	s.AssertFileContains("hooks.json routes post-edit to Go", templateHooks, "cursor-tools hook post-edit")
+	s.AssertFileContains("hooks.json routes housekeeping to Go", templateHooks, "cursor-tools hook housekeeping")
 
-	s.AssertSymlink("hooks.json is symlink", filepath.Join(p.Home, ".cursor", "hooks.json"))
+	assertHooksJSONInstallState(p, s)
 
 	agentFiles := []string{"go-architect.md", "go-tester.md", "flutter-architect.md", "flutter-implementer.md", "agent-orchestrator.md", "memory-ops.md"}
 	for _, a := range agentFiles {
@@ -417,7 +435,7 @@ func suiteInstallReadiness(p config.Paths) *Suite {
 	s.AssertSymlink("rules symlink exists", p.RulesDir)
 	s.AssertSymlink("commands symlink exists", p.CommandsDir)
 	s.AssertSymlink("agents symlink exists", p.AgentsDir)
-	s.AssertSymlink("hooks.json symlink exists", p.HooksJSONPath())
+	assertHooksJSONInstallState(p, s)
 	s.AssertFileExists("MCP config exists", p.CursorMCPConfig())
 	s.AssertFileExists("bootstrap.sh exists", filepath.Join(p.CursorConfigDir(), "bootstrap.sh"))
 
@@ -512,7 +530,7 @@ func suiteMem0Connectivity(p config.Paths) *Suite {
 func suitePlatformReadiness(p config.Paths) *Suite {
 	s := &Suite{Name: "Platform Readiness"}
 	profile := p.PlatformProfile()
-	s.Assert("platform profile recognised", profile == "macos" || profile == "wsl" || profile == "linux", profile)
+	s.Assert("platform profile recognised", profile == "macos" || profile == "wsl" || profile == "linux" || profile == "windows", profile)
 
 	switch profile {
 	case "macos":
@@ -522,6 +540,12 @@ func suitePlatformReadiness(p config.Paths) *Suite {
 		s.Assert("WSL detected", true, "")
 		s.Assert("home path looks Linux", strings.HasPrefix(p.Home, "/home/"), p.Home)
 		s.AssertFileExists("WSL MCP extras doc exists", filepath.Join(p.CursorConfigDir(), "mcp-templates", "mcp-config-wsl-extras.md"))
+	case "windows":
+		s.Assert("GOOS is windows", runtime.GOOS == "windows", runtime.GOOS)
+		winHome := strings.HasPrefix(p.Home, `C:\Users\`) || strings.HasPrefix(p.Home, `c:\users\`) ||
+			strings.Contains(strings.ToLower(p.Home), `\users\`)
+		s.Assert("home path looks Windows", winHome || p.Home != "", p.Home)
+		s.AssertFileExists("Windows PowerShell Cursor onboarding SOP exists", filepath.Join(p.SOPDir(), "windows-powershell-cursor-onboarding-template.md"))
 	default:
 		s.Assert("home path looks Linux", strings.HasPrefix(p.Home, "/home/") || p.Home == "~", p.Home)
 		s.AssertFileExists("WSL MCP extras doc exists", filepath.Join(p.CursorConfigDir(), "mcp-templates", "mcp-config-wsl-extras.md"))
@@ -903,7 +927,7 @@ func suiteGlobalCursorConfig(p config.Paths) *Suite {
 	s.AssertSymlink("agents is symlink", p.AgentsDir)
 	s.AssertSymlink("agents-skills is symlink", p.AgentsSkillsDir)
 
-	s.AssertSymlink("hooks.json is symlink", filepath.Join(p.Home, ".cursor", "hooks.json"))
+	assertHooksJSONInstallState(p, s)
 
 	binaryPath := filepath.Join(p.BinDir, "cursor-tools")
 	s.AssertFileExists("cursor-tools binary in ~/bin", binaryPath)
