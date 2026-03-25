@@ -75,6 +75,15 @@ var doctorStackCmd = &cobra.Command{
 	},
 }
 
+var doctorDRLCmd = &cobra.Command{
+	Use:   "drl",
+	Short: "Probe DRL Prometheus, healthz, Pushgateway; Mem0, signals, self-improve pipeline",
+	Long:  "Soft by default when the DRL stack is down. Set FLEET_DRL_DOCTOR_STRICT=1 to require HTTP 2xx on probes. FLEET_DRL_DOCTOR_SKIP=1 skips HTTP probes.",
+	RunE: func(_ *cobra.Command, _ []string) error {
+		return runDoctorProfile("drl")
+	},
+}
+
 func init() {
 	doctorCmd.AddCommand(doctorInstallCmd)
 	doctorCmd.AddCommand(doctorMCPCmd)
@@ -82,6 +91,7 @@ func init() {
 	doctorCmd.AddCommand(doctorDepsCmd)
 	doctorCmd.AddCommand(doctorResumeCmd)
 	doctorCmd.AddCommand(doctorStackCmd)
+	doctorCmd.AddCommand(doctorDRLCmd)
 	doctorCmd.PersistentFlags().BoolVar(&doctorOutputJSON, "json", false, "Output results as JSON")
 }
 

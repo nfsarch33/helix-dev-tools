@@ -22,10 +22,10 @@ func TestHealth(t *testing.T) {
 }
 
 var _ = Describe("BuildAllSuites", func() {
-	It("returns 36 suites", func() {
+	It("returns 37 suites", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites).To(HaveLen(36))
+		Expect(suites).To(HaveLen(37))
 	})
 
 	It("includes Memory Evidence in the shared catalog", func() {
@@ -76,6 +76,19 @@ var _ = Describe("BuildAllSuites", func() {
 		}
 		Expect(names).To(ContainElement("Dependency Readiness"))
 		Expect(names).To(ContainElement("Platform Readiness"))
+	})
+
+	It("builds doctor drl suites from the shared catalog", func() {
+		p := config.DefaultPaths()
+		suites := health.BuildDoctorSuites(p, "drl")
+		Expect(suites).NotTo(BeEmpty())
+		names := make([]string, 0, len(suites))
+		for _, suite := range suites {
+			names = append(names, suite.Name)
+		}
+		Expect(names).To(ContainElement("DRL EvoLoop Observability"))
+		Expect(names).To(ContainElement("Mem0 Connectivity"))
+		Expect(names).To(ContainElement("Self-Improvement Pipeline"))
 	})
 
 	It("includes Git Sync Resilience as Suite 33", func() {

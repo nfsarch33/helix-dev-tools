@@ -60,6 +60,7 @@ var suiteCatalog = []suiteSpec{
 	{name: "Dependency Readiness", builder: suiteDependencyReadiness},
 	{name: "Coordination Signals", builder: suiteCoordinationSignals},
 	{name: "Agent Stack Health", builder: suiteAgentStackHealth},
+	{name: "DRL EvoLoop Observability", builder: suiteDRLEvoLoopObservability},
 }
 
 var suiteCatalogByName = func() map[string]suiteSpec {
@@ -165,6 +166,13 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Mem0 Connectivity",
 			"Coordination Signals",
 			"Platform Readiness",
+		}
+	case "drl":
+		names = []string{
+			"DRL EvoLoop Observability",
+			"Mem0 Connectivity",
+			"Coordination Signals",
+			"Self-Improvement Pipeline",
 		}
 	default:
 		return BuildAllSuites(p)
