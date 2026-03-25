@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -98,6 +99,16 @@ func redactArgs(args []string) []string {
 	return out
 }
 
+// urlQuerySecretRE masks likely API key or token values in query strings so generated indexes are safe to commit.
+var urlQuerySecretRE = regexp.MustCompile(`([?&][^=&]*(?:[Kk]ey|[Tt]oken|[Ss]ecret|apikey)[^=&]*)=([^&]*)`)
+
+func redactURLSecrets(raw string) string {
+	if raw == "" {
+		return raw
+	}
+	return urlQuerySecretRE.ReplaceAllString(raw, "${1}=***REDACTED***")
+}
+
 // renderMCPIndex generates the Markdown index content with env values and credential args redacted.
 func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	now := time.Now().Format(time.RFC3339)
@@ -115,7 +126,7 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- If the task is read-only codebase investigation: use `context-mode` first, then `ReadFile`, `rg`, and `Glob`.\n")
 	b.WriteString("- If the task mutates files or git state: use the normal edit tools for files and Shell for installs, builds, and git commands.\n")
 	b.WriteString("- If the task is Git operations: prefer `git-mcp-server` for repo inspection and Shell/`gh` for workflow actions that need full git semantics.\n")
-	b.WriteString("- If the task is live research or current docs: prefer `perplexity`, `context7`, and `fetch` before generic web browsing.\n")
+	b.WriteString("- If the task is live research or current docs: **tier order** — `perplexity_ask` / `perplexity_research` first; on **401, quota, or rate limit** → **`tavily`** / **`tavily-mcp`** MCP → **`exa`** MCP → then `duckduckgo`, `fetch`, `context7`, and `multi-search-engine` skill / built-in WebSearch before ad-hoc browsing.\n")
 	b.WriteString("- If the task is docs/word: use `word-document-server`.\n")
 	b.WriteString("- If the task is PDF ops: use `pdf-handler` (form fill/clear, comments, text, signatures, encrypt).\n")
 	b.WriteString("- If the task is shared memory, learnings, or recall across machines/agents: use `mem0` first (`search_memories`, `add_memory`, `update_memory`).\n")
@@ -134,7 +145,7 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- `git-mcp-server` -> repo rules + `github-identity` for identity-sensitive workflows\n")
 	b.WriteString("- `github-official` -> `code-review-pro`, `gh-fix-ci`, or `github-release`\n")
 	b.WriteString("- `context7` -> `context-hub`\n")
-	b.WriteString("- `duckduckgo`, `perplexity`, `fetch` -> `web-search-plus`\n")
+	b.WriteString("- `duckduckgo`, `perplexity`, `fetch`, `tavily`, `tavily-mcp`, `exa` -> `web-search-plus`\n")
 	b.WriteString("- `wolfram-alpha` -> `skill-routing` math/calculation route\n")
 	b.WriteString("- `ironclaw` -> `ironclaw-mcp` bridge repo, `daily-startup-prompt.md`, `ironclaw/docs/LLM_PROVIDERS.md`, and the `llm-cluster-router` / `openclaw-vllm` skills\n\n")
 
@@ -165,9 +176,23 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 		} else {
 			b.WriteString("- status: `enabled`\n")
 		}
-		b.WriteString("- command: `" + spec.Command + "`\n")
-		safeArgs := redactArgs(spec.Args)
-		b.WriteString(fmt.Sprintf("- args: `%v`\n", safeArgs))
+		if spec.Type != "" {
+			b.WriteString("- type: `" + spec.Type + "`\n")
+		}
+		if spec.URL != "" {
+			b.WriteString("- url: `" + redactURLSecrets(spec.URL) + "`\n")
+		}
+		if spec.Command != "" {
+			b.WriteString("- command: `" + spec.Command + "`\n")
+			safeArgs := redactArgs(spec.Args)
+			b.WriteString(fmt.Sprintf("- args: `%v`\n", safeArgs))
+		} else if spec.URL != "" {
+			b.WriteString("- command: `(HTTP / remote MCP — no local process)`\n")
+		} else {
+			b.WriteString("- command: `" + spec.Command + "`\n")
+			safeArgs := redactArgs(spec.Args)
+			b.WriteString(fmt.Sprintf("- args: `%v`\n", safeArgs))
+		}
 		if len(spec.Env) > 0 {
 			envKeys := make([]string, 0, len(spec.Env))
 			for k := range spec.Env {
