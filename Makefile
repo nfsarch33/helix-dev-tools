@@ -45,7 +45,8 @@ fuzz:
 	go test -fuzz=FuzzPatternMatcher -fuzztime=30s ./internal/patterns/
 
 install: build
-	cp bin/$(BINARY) ~/bin/$(BINARY)
+	@tmp=~/bin/.$(BINARY).$$$$.new; \
+	cp bin/$(BINARY) "$$tmp" && mv -f "$$tmp" ~/bin/$(BINARY)
 	@echo "Installed to ~/bin/$(BINARY)"
 
 dist-install:

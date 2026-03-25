@@ -490,6 +490,11 @@ func suiteMCPReadiness(p config.Paths) *Suite {
 			continue
 		}
 		activeServers++
+		// Remote HTTP/SSE MCP (e.g. exa) has no local command — Cursor connects via url.
+		if strings.TrimSpace(spec.URL) != "" {
+			s.Pass("MCP remote URL: " + name)
+			continue
+		}
 		s.Assert("Command resolvable: "+name, commandResolvable(spec.Command), "command not found: "+spec.Command)
 		s.Assert("Env ready: "+name, envReady(spec.Env), "missing env placeholder for enabled server")
 		s.Assert("Absolute args exist: "+name, absArgsExist(spec.Args), "missing absolute arg path")
@@ -1247,6 +1252,7 @@ type mcpHealthServerSpec struct {
 	Command  string            `json:"command"`
 	Args     []string          `json:"args"`
 	Env      map[string]string `json:"env"`
+	URL      string            `json:"url"`
 	Disabled bool              `json:"disabled"`
 }
 
