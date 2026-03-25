@@ -11,6 +11,43 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
 
+func TestDiscoverDRLComposeDir_FleetEnvRepoRoot(t *testing.T) {
+	td := t.TempDir()
+	repo := filepath.Join(td, "ai-agent-business-stack")
+	dockerDir := filepath.Join(repo, "docker")
+	if err := os.MkdirAll(dockerDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	yml := filepath.Join(dockerDir, "docker-compose.drl.yml")
+	if err := os.WriteFile(yml, []byte("version: '3'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEET_DRL_COMPOSE_DIR", repo)
+	t.Cleanup(func() { _ = os.Unsetenv("FLEET_DRL_COMPOSE_DIR") })
+	got, ok := discoverDRLComposeDir("/unused")
+	if !ok || got != dockerDir {
+		t.Fatalf("got %q ok=%v want %q", got, ok, dockerDir)
+	}
+}
+
+func TestDiscoverDRLComposeDir_FleetEnvDockerDir(t *testing.T) {
+	td := t.TempDir()
+	dockerDir := filepath.Join(td, "docker")
+	if err := os.MkdirAll(dockerDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	yml := filepath.Join(dockerDir, "docker-compose.drl.yml")
+	if err := os.WriteFile(yml, []byte("version: '3'\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("FLEET_DRL_COMPOSE_DIR", dockerDir)
+	t.Cleanup(func() { _ = os.Unsetenv("FLEET_DRL_COMPOSE_DIR") })
+	got, ok := discoverDRLComposeDir("/unused")
+	if !ok || got != dockerDir {
+		t.Fatalf("got %q ok=%v want %q", got, ok, dockerDir)
+	}
+}
+
 func TestPrometheusReadyURL(t *testing.T) {
 	if u := prometheusReadyURL("http://127.0.0.1:9099"); u != "http://127.0.0.1:9099/-/ready" {
 		t.Fatalf("got %q", u)
