@@ -46,6 +46,7 @@ func init() {
 	rootCmd.AddCommand(claudeUsageCmd)
 	rootCmd.AddCommand(claudeRunCmd)
 	rootCmd.AddCommand(versionCmd)
+	rootCmd.AddCommand(promPushCmd)
 }
 
 var versionCmd = &cobra.Command{
