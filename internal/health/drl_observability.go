@@ -45,10 +45,20 @@ func pushgatewayMetricsURL(base string) string {
 }
 
 func discoverDRLComposeDir(home string) (string, bool) {
+	// FLEET_DRL_COMPOSE_DIR: repo root (…/ai-agent-business-stack) or the docker/ dir containing the compose file.
+	if env := strings.TrimSpace(os.Getenv("FLEET_DRL_COMPOSE_DIR")); env != "" {
+		if _, err := os.Stat(filepath.Join(env, "docker", "docker-compose.drl.yml")); err == nil {
+			return filepath.Join(env, "docker"), true
+		}
+		if _, err := os.Stat(filepath.Join(env, "docker-compose.drl.yml")); err == nil {
+			return env, true
+		}
+	}
 	candidates := []string{
 		filepath.Join(home, "ai-agent-business-stack", "docker"),
 		filepath.Join(home, "Code", "ai-agent-business-stack", "docker"),
 		filepath.Join(home, "repo", "biz-stack", "ai-agent-business-stack", "docker"),
+		filepath.Join(home, "mnt", "f", "onedrive", "repo", "biz-stack", "ai-agent-business-stack", "docker"),
 	}
 	for _, d := range candidates {
 		if _, err := os.Stat(filepath.Join(d, "docker-compose.drl.yml")); err == nil {
