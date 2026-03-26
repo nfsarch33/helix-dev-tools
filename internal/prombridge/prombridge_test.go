@@ -1,6 +1,7 @@
 package prombridge
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -57,6 +58,29 @@ func TestFormat_Smoke(t *testing.T) {
 	}
 	if !strings.Contains(out, "ironclaw_evoloop_smoke_drl_service_ok 0") {
 		t.Fatalf("expected drl ok=0: %s", out)
+	}
+}
+
+// Pushgateway rejects exposition lines that include a sample timestamp (third field).
+var pushgatewayForbiddenSampleTS = regexp.MustCompile(` \d{13,}$`)
+
+func TestFormat_NoSampleTimestampsForPushgateway(t *testing.T) {
+	s := &metrics.Summary{
+		Until:       time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC),
+		TotalEvents: 3,
+		Hooks:       []metrics.HookStats{{Hook: "x", Total: 1, AvgLatency: 1}},
+		Tasks:       metrics.TaskCoverage{Total: 1, SkillTasks: 1, MCPTasks: 0},
+	}
+	smoke := &EvoloopSmoke{PrometheusHealthy: true, DRLServiceHealthy: true, CheckedAt: s.Until}
+	out := Format(s, "24h", smoke)
+	for _, line := range strings.Split(out, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if pushgatewayForbiddenSampleTS.MatchString(line) {
+			t.Fatalf("forbidden Pushgateway sample timestamp suffix: %q", line)
+		}
 	}
 }
 
