@@ -2,6 +2,8 @@ package cli
 
 import (
 	"context"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -261,6 +263,82 @@ func TestCleanCoordinationSignals_SkippedOnNonCompleted(t *testing.T) {
 	}
 	if cleanCalled {
 		t.Error("cleanCoordinationSignals should NOT be called on 'pending' status")
+	}
+}
+
+func TestMaybeFleetPreflight_SkippedWithoutEnv(t *testing.T) {
+	old := fleetPreflightHTTPGet
+	called := false
+	fleetPreflightHTTPGet = func(_ context.Context, _ *http.Client, _ string) (int, error) {
+		called = true
+		return 200, nil
+	}
+	defer func() { fleetPreflightHTTPGet = old }()
+
+	oldPref := os.Getenv("CURSOR_TOOLS_FLEET_PREFLIGHT")
+	_ = os.Unsetenv("CURSOR_TOOLS_FLEET_PREFLIGHT")
+	defer func() { _ = os.Setenv("CURSOR_TOOLS_FLEET_PREFLIGHT", oldPref) }()
+
+	home := t.TempDir()
+	h := &housekeepingHandler{
+		log:   logger.New(filepath.Join(home, "housekeeping.log")),
+		paths: config.DefaultPaths(),
+	}
+	h.maybeFleetPreflight()
+	if called {
+		t.Fatal("fleet preflight should not run without CURSOR_TOOLS_FLEET_PREFLIGHT=1")
+	}
+}
+
+func TestMaybeFleetPreflight_OK(t *testing.T) {
+	old := fleetPreflightHTTPGet
+	fleetPreflightHTTPGet = func(_ context.Context, _ *http.Client, _ string) (int, error) {
+		return 200, nil
+	}
+	defer func() { fleetPreflightHTTPGet = old }()
+
+	oldPref := os.Getenv("CURSOR_TOOLS_FLEET_PREFLIGHT")
+	_ = os.Setenv("CURSOR_TOOLS_FLEET_PREFLIGHT", "1")
+	defer func() { _ = os.Setenv("CURSOR_TOOLS_FLEET_PREFLIGHT", oldPref) }()
+
+	home := t.TempDir()
+	h := &housekeepingHandler{
+		log:   logger.New(filepath.Join(home, "housekeeping.log")),
+		paths: config.DefaultPaths(),
+	}
+	h.maybeFleetPreflight()
+	data, err := os.ReadFile(filepath.Join(home, "housekeeping.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "fleet preflight: ok drl-service") || !strings.Contains(string(data), "fleet preflight: ok prometheus") {
+		t.Fatalf("expected ok lines, got %q", string(data))
+	}
+}
+
+func TestMaybeFleetPreflight_WarnOnError(t *testing.T) {
+	old := fleetPreflightHTTPGet
+	fleetPreflightHTTPGet = func(_ context.Context, _ *http.Client, _ string) (int, error) {
+		return 0, fmt.Errorf("refused")
+	}
+	defer func() { fleetPreflightHTTPGet = old }()
+
+	oldPref := os.Getenv("CURSOR_TOOLS_FLEET_PREFLIGHT")
+	_ = os.Setenv("CURSOR_TOOLS_FLEET_PREFLIGHT", "1")
+	defer func() { _ = os.Setenv("CURSOR_TOOLS_FLEET_PREFLIGHT", oldPref) }()
+
+	home := t.TempDir()
+	h := &housekeepingHandler{
+		log:   logger.New(filepath.Join(home, "housekeeping.log")),
+		paths: config.DefaultPaths(),
+	}
+	h.maybeFleetPreflight()
+	data, err := os.ReadFile(filepath.Join(home, "housekeeping.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "fleet preflight: drl-service unreachable") {
+		t.Fatalf("expected warn, got %q", string(data))
 	}
 }
 

@@ -3,6 +3,8 @@ package cli
 import (
 	"context"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,6 +65,7 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	defer lock.Release()
 
 	h.rotateAllLogs()
+	h.maybeFleetPreflight()
 	h.log.LogEntry(logger.Entry{
 		Level:   "info",
 		Message: "stop event received",
@@ -85,6 +88,78 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	}
 
 	return hookio.Empty(), nil
+}
+
+// fleetPreflightHTTPGet is replaceable for tests (e.g. stub that never hits the network).
+var fleetPreflightHTTPGet = fleetPreflightHTTPGetDefault
+
+func fleetPreflightHTTPGetDefault(ctx context.Context, client *http.Client, url string) (int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return 0, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode, nil
+}
+
+// maybeFleetPreflight runs optional non-blocking DRL/Prometheus HTTP probes when
+// CURSOR_TOOLS_FLEET_PREFLIGHT=1. Logs warnings on failure; never blocks the hook.
+func (h *housekeepingHandler) maybeFleetPreflight() {
+	if strings.TrimSpace(os.Getenv("CURSOR_TOOLS_FLEET_PREFLIGHT")) != "1" {
+		return
+	}
+	drl := strings.TrimSpace(os.Getenv("FLEET_DRL_HEALTH_URL"))
+	if drl == "" {
+		drl = "http://127.0.0.1:8180/healthz"
+	}
+	prom := strings.TrimSpace(os.Getenv("FLEET_PROM_HEALTH_URL"))
+	if prom == "" {
+		prom = "http://127.0.0.1:9099/-/healthy"
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	client := &http.Client{Timeout: 4 * time.Second}
+	for _, name := range []struct {
+		label string
+		url   string
+	}{
+		{"drl-service", drl},
+		{"prometheus", prom},
+	} {
+		code, err := fleetPreflightHTTPGet(ctx, client, name.url)
+		if err != nil {
+			h.log.LogEntry(logger.Entry{
+				Level:   "warn",
+				Message: fmt.Sprintf("fleet preflight: %s unreachable (%s)", name.label, err.Error()),
+				Hook:    "housekeeping",
+				Result:  "fleet-preflight-warn",
+				Fields: map[string]any{
+					"url":   name.url,
+					"label": name.label,
+				},
+			})
+			continue
+		}
+		if code >= 400 {
+			h.log.LogEntry(logger.Entry{
+				Level:   "warn",
+				Message: fmt.Sprintf("fleet preflight: %s HTTP %d", name.label, code),
+				Hook:    "housekeeping",
+				Result:  "fleet-preflight-warn",
+				Fields: map[string]any{
+					"url":    name.url,
+					"status": code,
+				},
+			})
+			continue
+		}
+		h.log.Log(fmt.Sprintf("fleet preflight: ok %s (%s)", name.label, name.url))
+	}
 }
 
 func (h *housekeepingHandler) rotateAllLogs() {
