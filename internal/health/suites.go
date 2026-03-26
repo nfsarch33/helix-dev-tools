@@ -61,6 +61,7 @@ var suiteCatalog = []suiteSpec{
 	{name: "Coordination Signals", builder: suiteCoordinationSignals},
 	{name: "Agent Stack Health", builder: suiteAgentStackHealth},
 	{name: "DRL EvoLoop Observability", builder: suiteDRLEvoLoopObservability},
+	{name: "EvoLoop Cycle Freshness", builder: suiteStaleCycleAge},
 }
 
 var suiteCatalogByName = func() map[string]suiteSpec {
@@ -157,6 +158,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Toolchain Cross-Platform",
 			"Handoff Acknowledgement",
 			"Git Sync Resilience",
+			"EvoLoop Cycle Freshness",
 		}
 	case "stack":
 		names = []string{
@@ -170,6 +172,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 	case "drl":
 		names = []string{
 			"DRL EvoLoop Observability",
+			"EvoLoop Cycle Freshness",
 			"Mem0 Connectivity",
 			"Coordination Signals",
 			"Self-Improvement Pipeline",
