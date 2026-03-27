@@ -50,6 +50,22 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 		return hookio.Allow(), nil
 	}
 
+	if d := strictFleetPreflightDeny(); d != nil {
+		cmdShort := input.Command
+		if len(cmdShort) > 120 {
+			cmdShort = cmdShort[:120]
+		}
+		_ = metrics.Record(h.metricsPath, metrics.Event{
+			Hook:      "guard-shell",
+			Action:    "deny",
+			Category:  "shell",
+			LatencyMs: time.Since(start).Milliseconds(),
+			Detail:    "fleet-preflight-strict: " + cmdShort,
+			BytesIn:   int64(len(input.Command)),
+		})
+		return d, nil
+	}
+
 	action, matchedPattern := h.matcher.Match(input.Command)
 
 	cmdShort := input.Command

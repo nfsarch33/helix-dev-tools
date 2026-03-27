@@ -35,6 +35,17 @@ func (s *Suite) Fail(name, detail string) {
 	s.Results = append(s.Results, Result{Name: name, Passed: false, Detail: detail})
 }
 
+// FailCount returns the number of failed assertions.
+func (s *Suite) FailCount() int {
+	n := 0
+	for _, r := range s.Results {
+		if !r.Passed {
+			n++
+		}
+	}
+	return n
+}
+
 // Assert adds a pass or fail based on condition.
 func (s *Suite) Assert(name string, condition bool, detail string) {
 	if condition {

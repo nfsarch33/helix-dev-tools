@@ -14,6 +14,7 @@ import (
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/coordination"
+	"github.com/nfsarch33/cursor-tools/internal/health"
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/lockfile"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
@@ -114,51 +115,43 @@ func (h *housekeepingHandler) maybeFleetPreflight() {
 		return
 	}
 	drl := strings.TrimSpace(os.Getenv("FLEET_DRL_HEALTH_URL"))
-	if drl == "" {
-		drl = "http://127.0.0.1:8180/healthz"
-	}
 	prom := strings.TrimSpace(os.Getenv("FLEET_PROM_HEALTH_URL"))
-	if prom == "" {
-		prom = "http://127.0.0.1:9099/-/healthy"
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client := &http.Client{Timeout: 4 * time.Second}
-	for _, name := range []struct {
-		label string
-		url   string
-	}{
-		{"drl-service", drl},
-		{"prometheus", prom},
-	} {
-		code, err := fleetPreflightHTTPGet(ctx, client, name.url)
-		if err != nil {
+	ctx := context.Background()
+	res := health.RunFleetPreflight(ctx, health.FleetPreflightOptions{
+		DRLHealthURL:  drl,
+		PromHealthURL: prom,
+		HTTPGet: func(ctx context.Context, c *http.Client, u string) (int, error) {
+			return fleetPreflightHTTPGet(ctx, c, u)
+		},
+	})
+	for _, p := range res.Probes {
+		if p.Err != nil {
 			h.log.LogEntry(logger.Entry{
 				Level:   "warn",
-				Message: fmt.Sprintf("fleet preflight: %s unreachable (%s)", name.label, err.Error()),
+				Message: fmt.Sprintf("fleet preflight: %s unreachable (%s)", p.Label, p.Err.Error()),
 				Hook:    "housekeeping",
 				Result:  "fleet-preflight-warn",
 				Fields: map[string]any{
-					"url":   name.url,
-					"label": name.label,
+					"url":   p.URL,
+					"label": p.Label,
 				},
 			})
 			continue
 		}
-		if code >= 400 {
+		if p.Status >= 400 {
 			h.log.LogEntry(logger.Entry{
 				Level:   "warn",
-				Message: fmt.Sprintf("fleet preflight: %s HTTP %d", name.label, code),
+				Message: fmt.Sprintf("fleet preflight: %s HTTP %d", p.Label, p.Status),
 				Hook:    "housekeeping",
 				Result:  "fleet-preflight-warn",
 				Fields: map[string]any{
-					"url":    name.url,
-					"status": code,
+					"url":    p.URL,
+					"status": p.Status,
 				},
 			})
 			continue
 		}
-		h.log.Log(fmt.Sprintf("fleet preflight: ok %s (%s)", name.label, name.url))
+		h.log.Log(fmt.Sprintf("fleet preflight: ok %s (%s)", p.Label, p.URL))
 	}
 }
 
