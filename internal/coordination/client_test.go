@@ -114,7 +114,7 @@ func TestSearchSignals(t *testing.T) {
 				ID:     "mem-1",
 				Memory: "Task for wsl: Review the PR",
 				Score:  0.95,
-				Metadata: map[string]string{
+				Metadata: map[string]interface{}{
 					"type":       "task-dispatch",
 					"machine":    "macbook",
 					"target_for": "wsl",
@@ -125,7 +125,7 @@ func TestSearchSignals(t *testing.T) {
 				ID:     "mem-2",
 				Memory: "wsl working on: fuzz targets",
 				Score:  0.80,
-				Metadata: map[string]string{
+				Metadata: map[string]interface{}{
 					"type":    "active-state",
 					"machine": "wsl",
 				},
@@ -156,6 +156,33 @@ func TestSearchSignals(t *testing.T) {
 	}
 }
 
+func TestParseListResults_EmptyResultsObject(t *testing.T) {
+	signals, total, err := parseListResults([]byte(`{"results":[],"total":0}`))
+	if err != nil {
+		t.Fatalf("parseListResults: %v", err)
+	}
+	if len(signals) != 0 || total != 0 {
+		t.Fatalf("got len=%d total=%d", len(signals), total)
+	}
+}
+
+func TestListSignals_EmptyPage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		resp := mem0ListResult{Results: []mem0SearchResult{}, Total: 0}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+
+	c := NewClient("key", "user", srv.URL)
+	signals, err := c.ListSignals(context.Background())
+	if err != nil {
+		t.Fatalf("ListSignals() error = %v", err)
+	}
+	if len(signals) != 0 {
+		t.Fatalf("got %d signals, want 0", len(signals))
+	}
+}
+
 func TestListSignals(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !strings.HasSuffix(r.URL.Path, "/v2/memories/") {
@@ -167,7 +194,7 @@ func TestListSignals(t *testing.T) {
 				{
 					ID:       "mem-1",
 					Memory:   "wsl working on: tests",
-					Metadata: map[string]string{"type": "active-state", "machine": "wsl"},
+					Metadata: map[string]interface{}{"type": "active-state", "machine": "wsl"},
 				},
 			},
 			Total: 1,
@@ -235,17 +262,17 @@ func TestCleanStaleSignals(t *testing.T) {
 				{
 					ID:       "stale-1",
 					Memory:   "old state",
-					Metadata: map[string]string{"type": "active-state", "machine": "wsl"},
+					Metadata: map[string]interface{}{"type": "active-state", "machine": "wsl"},
 				},
 				{
 					ID:       "completed-1",
 					Memory:   "done item",
-					Metadata: map[string]string{"type": "completed", "machine": "wsl"},
+					Metadata: map[string]interface{}{"type": "completed", "machine": "wsl"},
 				},
 				{
 					ID:       "fresh-1",
 					Memory:   "current task",
-					Metadata: map[string]string{"type": "task-dispatch", "machine": "wsl", "target_for": "macbook"},
+					Metadata: map[string]interface{}{"type": "task-dispatch", "machine": "wsl", "target_for": "macbook"},
 				},
 			},
 			Total: 3,
@@ -392,10 +419,15 @@ func TestSignalFromMem0_RoundTrip(t *testing.T) {
 		Sprint:    "154",
 	}
 
+	meta := original.Mem0Metadata()
+	metaIF := make(map[string]interface{}, len(meta))
+	for k, v := range meta {
+		metaIF[k] = v
+	}
 	result := mem0SearchResult{
 		ID:       "mem-1",
 		Memory:   original.Mem0Text(),
-		Metadata: original.Mem0Metadata(),
+		Metadata: metaIF,
 	}
 
 	restored := signalFromMem0(result)
@@ -468,7 +500,7 @@ func TestListSignals_CounterAndSlog(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		resp := mem0ListResult{
 			Results: []mem0SearchResult{
-				{ID: "1", Memory: "test", Metadata: map[string]string{"type": "active-state", "machine": "wsl"}},
+				{ID: "1", Memory: "test", Metadata: map[string]interface{}{"type": "active-state", "machine": "wsl"}},
 			},
 			Total: 1,
 		}
@@ -496,7 +528,7 @@ func TestListSignals_CounterAndSlog(t *testing.T) {
 func TestSearchSignals_CounterAndSlog(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		json.NewEncoder(w).Encode([]mem0SearchResult{
-			{ID: "1", Memory: "hit", Metadata: map[string]string{"type": "blocker", "machine": "wsl"}},
+			{ID: "1", Memory: "hit", Metadata: map[string]interface{}{"type": "blocker", "machine": "wsl"}},
 		})
 	}))
 	defer srv.Close()
@@ -542,8 +574,8 @@ func TestCleanStaleSignals_CleanupCounters(t *testing.T) {
 		}
 		resp := mem0ListResult{
 			Results: []mem0SearchResult{
-				{ID: "c1", Memory: "done", Metadata: map[string]string{"type": "completed", "machine": "wsl"}},
-				{ID: "a1", Memory: "active", Metadata: map[string]string{"type": "active-state", "machine": "wsl"}},
+				{ID: "c1", Memory: "done", Metadata: map[string]interface{}{"type": "completed", "machine": "wsl"}},
+				{ID: "a1", Memory: "active", Metadata: map[string]interface{}{"type": "active-state", "machine": "wsl"}},
 			},
 			Total: 2,
 		}
@@ -684,7 +716,7 @@ func TestListSignals_RetryOn503(t *testing.T) {
 		}
 		resp := mem0ListResult{
 			Results: []mem0SearchResult{
-				{ID: "1", Memory: "test", Metadata: map[string]string{"type": "active-state", "machine": "wsl"}},
+				{ID: "1", Memory: "test", Metadata: map[string]interface{}{"type": "active-state", "machine": "wsl"}},
 			},
 			Total: 1,
 		}

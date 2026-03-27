@@ -10,6 +10,7 @@ import (
 	"math/rand"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -104,12 +105,12 @@ type mem0ListPayload struct {
 }
 
 type mem0SearchResult struct {
-	ID       string            `json:"id"`
-	Memory   string            `json:"memory"`
-	Score    float64           `json:"score"`
-	Metadata map[string]string `json:"metadata"`
-	UserID   string            `json:"user_id"`
-	AppID    string            `json:"app_id"`
+	ID       string                 `json:"id"`
+	Memory   string                 `json:"memory"`
+	Score    float64                `json:"score"`
+	Metadata map[string]interface{} `json:"metadata"`
+	UserID   string                 `json:"user_id"`
+	AppID    string                 `json:"app_id"`
 }
 
 type mem0ListResult struct {
@@ -362,8 +363,9 @@ func parseSearchResults(data []byte) ([]Signal, error) {
 }
 
 func parseListResults(data []byte) ([]Signal, int, error) {
+	// Mem0 v2 list returns an object: {"results":[...],"total":N} including N=0 and empty results.
 	var wrapped mem0ListResult
-	if err := json.Unmarshal(data, &wrapped); err == nil && len(wrapped.Results) > 0 {
+	if err := json.Unmarshal(data, &wrapped); err == nil {
 		signals := make([]Signal, 0, len(wrapped.Results))
 		for _, r := range wrapped.Results {
 			signals = append(signals, signalFromMem0(r))
@@ -397,11 +399,26 @@ func signalFromMem0(r mem0SearchResult) Signal {
 	return s
 }
 
-func metaValue(m map[string]string, key string) string {
+func metaValue(m map[string]interface{}, key string) string {
 	if m == nil {
 		return ""
 	}
-	return m[key]
+	v, ok := m[key]
+	if !ok || v == nil {
+		return ""
+	}
+	switch x := v.(type) {
+	case string:
+		return x
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(x)
+	case json.Number:
+		return x.String()
+	default:
+		return fmt.Sprint(x)
+	}
 }
 
 // ResolveCredentials reads Mem0 API key and user ID from env or MCP config.
