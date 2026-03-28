@@ -12,11 +12,20 @@ import (
 )
 
 // cycleRecord is the minimal shape of an EvoLoop cycle JSONL entry.
+// Production EvoLoop lines use recorded_at; older tooling may use timestamp.
 type cycleRecord struct {
-	CycleID   string    `json:"cycle_id"`
-	Timestamp time.Time `json:"timestamp"`
-	KPIAfter  float64   `json:"kpi_after"`
-	Completed bool      `json:"completed"`
+	CycleID    string    `json:"cycle_id"`
+	Timestamp  time.Time `json:"timestamp"`
+	RecordedAt time.Time `json:"recorded_at"`
+	KPIAfter   float64   `json:"kpi_after"`
+	Completed  bool      `json:"completed"`
+}
+
+func effectiveCycleTime(rec cycleRecord) time.Time {
+	if !rec.Timestamp.IsZero() {
+		return rec.Timestamp
+	}
+	return rec.RecordedAt
 }
 
 // staleCycleThreshold is the maximum age of the last cycle before warning.
@@ -51,7 +60,12 @@ func suiteStaleCycleAge(p config.Paths) *Suite {
 		return s
 	}
 
-	age := time.Since(last.Timestamp)
+	ts := effectiveCycleTime(last)
+	if ts.IsZero() {
+		s.Pass("last cycle has no usable timestamp — cannot assess freshness")
+		return s
+	}
+	age := time.Since(ts)
 	kpiStr := fmt.Sprintf("%.4f", last.KPIAfter)
 
 	if age > staleCycleThreshold {

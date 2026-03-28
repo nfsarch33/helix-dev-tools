@@ -18,6 +18,26 @@ func TestSuiteStaleCycleAge_NoFile(t *testing.T) {
 	}
 }
 
+func TestSuiteStaleCycleAge_RecordedAtOnly(t *testing.T) {
+	dir := t.TempDir()
+	fleetDir := filepath.Join(dir, "fleet")
+	if err := os.MkdirAll(fleetDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	// Production EvoLoop JSONL uses recorded_at, not timestamp.
+	recAt := time.Now().Add(-30 * time.Minute).Format(time.RFC3339Nano)
+	line := `{"cycle_id":"ev-test","recorded_at":"` + recAt + `","kpi_after":4.4,"completed":true}` + "\n"
+	logPath := filepath.Join(fleetDir, "evoloop-cycles.jsonl")
+	if err := os.WriteFile(logPath, []byte(line), 0644); err != nil {
+		t.Fatal(err)
+	}
+	p := config.Paths{Home: dir}
+	s := suiteStaleCycleAge(p)
+	if s.FailCount() > 0 {
+		t.Error("should pass when only recorded_at is set and cycle is recent")
+	}
+}
+
 func TestSuiteStaleCycleAge_RecentCycle(t *testing.T) {
 	dir := t.TempDir()
 	fleetDir := filepath.Join(dir, "fleet")
