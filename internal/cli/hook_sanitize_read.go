@@ -117,7 +117,8 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	record("allow", input.FilePath)
 
 	// Record skill file reads separately so they don't inflate material skill usage.
-	if basename == "SKILL.md" && strings.Contains(input.FilePath, "/skills/") {
+	// Match /skills/, /skills-cursor/, /agents/skills/, /agents-skills/, and plugin cache paths.
+	if basename == "SKILL.md" && isSkillPath(input.FilePath) {
 		skillName := extractSkillName(input.FilePath)
 		if skillName != "" && h.metricsPath != "" {
 			_ = metrics.Record(h.metricsPath, metrics.Event{
@@ -131,6 +132,15 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	}
 
 	return hookio.Allow(), nil
+}
+
+// isSkillPath returns true if the file path is inside a known skills directory.
+// Covers: /skills/, /skills-cursor/, /agents/skills/, /agents-skills/, and plugin cache paths.
+func isSkillPath(path string) bool {
+	return strings.Contains(path, "/skills/") ||
+		strings.Contains(path, "/skills-cursor/") ||
+		strings.Contains(path, "/agents-skills/") ||
+		strings.Contains(path, "/agents/skills/")
 }
 
 // extractSkillName pulls the skill directory name from a SKILL.md path.
