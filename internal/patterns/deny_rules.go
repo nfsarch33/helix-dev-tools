@@ -163,6 +163,16 @@ var ShellWarnPatterns = []string{
 	`docker volume rm`,
 }
 
+// PrePushChecks maps repo directory names to the formatter command that
+// MUST be run before pushing. The guard-shell hook can reference this
+// to emit a soft warning when a git push targets one of these repos
+// without a recent formatter run in the session.
+var PrePushChecks = map[string]string{
+	"zendesk_console":         "prettier --write",
+	"contact-center-frontend": "prettier --write",
+	"contact-center":          "gofmt -w",
+}
+
 // MCPDenyTools are MCP tool names that MUST be blocked.
 // Ported from guard-mcp.sh DENY_TOOLS array.
 var MCPDenyTools = []string{

@@ -62,6 +62,7 @@ var suiteCatalog = []suiteSpec{
 	{name: "Agent Stack Health", builder: suiteAgentStackHealth},
 	{name: "DRL EvoLoop Observability", builder: suiteDRLEvoLoopObservability},
 	{name: "EvoLoop Cycle Freshness", builder: suiteStaleCycleAge},
+	{name: "Pre-Push Readiness", builder: suitePrePushReadiness},
 }
 
 var suiteCatalogByName = func() map[string]suiteSpec {
@@ -159,6 +160,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Handoff Acknowledgement",
 			"Git Sync Resilience",
 			"EvoLoop Cycle Freshness",
+			"Pre-Push Readiness",
 		}
 	case "stack":
 		names = []string{
@@ -1741,4 +1743,41 @@ func probeCoordinationSignals(binPath string) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// suitePrePushReadiness checks that formatting tools are configured for
+// Zendesk repos and that the pre-push skill covers TypeScript repos.
+func suitePrePushReadiness(p config.Paths) *Suite {
+	s := &Suite{Name: "Pre-Push Readiness"}
+
+	prePushSkill := filepath.Join(p.SkillsDir, "pre-push", "SKILL.md")
+	if _, err := os.Stat(prePushSkill); err == nil {
+		data, _ := os.ReadFile(prePushSkill)
+		content := string(data)
+		s.Assert("pre-push skill covers prettier", strings.Contains(content, "prettier"), "pre-push SKILL.md missing prettier step for TS repos")
+		s.Assert("pre-push skill covers gofmt", strings.Contains(content, "gofmt"), "pre-push SKILL.md missing gofmt step for Go repos")
+	} else {
+		s.Pass("pre-push skill (workspace-specific, not in global path)")
+	}
+
+	evidenceRule := filepath.Join(p.RulesDir, "evidence-based-development.mdc")
+	if _, err := os.Stat(evidenceRule); err == nil {
+		data, _ := os.ReadFile(evidenceRule)
+		content := string(data)
+		s.Assert("evidence rule has CI verification", strings.Contains(content, "CI Status Claims"), "evidence-based-development.mdc missing CI Status Claims section")
+		s.Assert("evidence rule has rebase strategy", strings.Contains(content, "Monorepo Rebase Strategy"), "evidence-based-development.mdc missing Monorepo Rebase Strategy section")
+	} else {
+		s.Pass("evidence-based-development rule (workspace-specific)")
+	}
+
+	prDiscipline := filepath.Join(p.RulesDir, "zendesk-pr-discipline.mdc")
+	if _, err := os.Stat(prDiscipline); err == nil {
+		data, _ := os.ReadFile(prDiscipline)
+		content := string(data)
+		s.Assert("PR discipline has pre-push formatting", strings.Contains(content, "Pre-Push Formatting"), "zendesk-pr-discipline.mdc missing Pre-Push Formatting section")
+	} else {
+		s.Pass("PR discipline rule (workspace-specific)")
+	}
+
+	return s
 }
