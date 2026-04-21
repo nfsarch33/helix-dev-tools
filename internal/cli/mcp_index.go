@@ -129,6 +129,7 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- If the task is live research or current docs: **tier order** — `perplexity_ask` / `perplexity_research` first; on **401, quota, or rate limit** → **`tavily`** / **`tavily-mcp`** MCP → **`exa`** MCP → then `duckduckgo`, `fetch`, `context7`, and `multi-search-engine` skill / built-in WebSearch before ad-hoc browsing.\n")
 	b.WriteString("- If the task is docs/word: use `word-document-server`.\n")
 	b.WriteString("- If the task is PDF ops: use `pdf-handler` (form fill/clear, comments, text, signatures, encrypt).\n")
+	b.WriteString("- If the task is scholarly / peer-reviewed papers (titles, authors, abstracts, citations, year filters): use `google-scholar` (`search_google_scholar_key_words`, `search_google_scholar_advanced`, `get_author_info`) before falling back to `multi-search-engine` or web search.\n")
 	b.WriteString("- If the task is shared memory, learnings, or recall across machines/agents: use `mem0` first (`search_memories`, `add_memory`, `update_memory`).\n")
 	b.WriteString("- If the task is memory/rules: Mem0 is canonical for hot shared memory; Git-backed Pepper files remain the durable index/archive.\n\n")
 
@@ -147,6 +148,8 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- `context7` -> `context-hub`\n")
 	b.WriteString("- `duckduckgo`, `perplexity`, `fetch`, `tavily`, `tavily-mcp`, `exa` -> `web-search-plus`\n")
 	b.WriteString("- `wolfram-alpha` -> `skill-routing` math/calculation route\n")
+	b.WriteString("- `google-scholar` -> `persona-researcher`, `research-pipeline`, and `academic-essay-writer` for citation-driven flows\n")
+	b.WriteString("- `word-document-server` -> `pptx-mastery` / `academic-essay-writer` for long-form writing deliverables\n")
 	b.WriteString("- `ironclaw` -> `ironclaw-mcp` bridge repo, `daily-startup-prompt.md`, `ironclaw/docs/LLM_PROVIDERS.md`, and the `llm-cluster-router` / `openclaw-vllm` skills\n\n")
 
 	b.WriteString("## Quality gates (non-breaking)\n")
