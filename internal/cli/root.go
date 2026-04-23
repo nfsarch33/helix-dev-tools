@@ -42,6 +42,7 @@ func init() {
 	rootCmd.AddCommand(sessionHandoffCmd)
 	rootCmd.AddCommand(handoffReviewCmd)
 	rootCmd.AddCommand(signalCmd)
+	rootCmd.AddCommand(evoloopCmd)
 	rootCmd.AddCommand(autoUpdateCmd)
 	rootCmd.AddCommand(claudeUsageCmd)
 	rootCmd.AddCommand(claudeRunCmd)
