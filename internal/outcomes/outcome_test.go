@@ -238,6 +238,7 @@ func TestKnownActors(t *testing.T) {
 		ActorCursorTools,
 		ActorFleetCLI,
 		ActorMCBridge,
+		ActorFallbackBridge,
 		ActorIronclawDaemon,
 		ActorEvoloopDaemon,
 	}

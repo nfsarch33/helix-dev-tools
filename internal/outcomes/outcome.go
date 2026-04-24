@@ -26,6 +26,7 @@ const (
 	ActorCursorTools    = "cursor-tools"
 	ActorFleetCLI       = "fleet-cli"
 	ActorMCBridge       = "mc-bridge"
+	ActorFallbackBridge = "fallback-bridge"
 	ActorIronclawDaemon = "ironclaw-daemon"
 	ActorEvoloopDaemon  = "evoloop-daemon"
 )
@@ -73,6 +74,7 @@ func KnownActors() []string {
 		ActorCursorTools,
 		ActorFleetCLI,
 		ActorMCBridge,
+		ActorFallbackBridge,
 		ActorIronclawDaemon,
 		ActorEvoloopDaemon,
 	}
