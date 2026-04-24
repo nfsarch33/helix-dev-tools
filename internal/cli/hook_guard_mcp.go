@@ -12,6 +12,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/cursor-tools/internal/outcomes"
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
@@ -26,8 +27,9 @@ var guardMcpCmd = &cobra.Command{
 }
 
 type guardMcpHandler struct {
-	log         *logger.Logger
-	metricsPath string
+	log            *logger.Logger
+	metricsPath    string
+	outcomeEmitter outcomes.Emitter
 }
 
 func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
@@ -81,15 +83,34 @@ func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 	}
 	memoryLayer, memoryOp := metrics.InferMemoryContextFromMCPDetail(detail)
 
+	latencyMs := time.Since(start).Milliseconds()
+	bytesIn := int64(len(input.ToolName) + len(input.ToolInput))
 	_ = metrics.Record(h.metricsPath, metrics.Event{
 		Hook:        "guard-mcp",
 		Action:      actionStr,
 		Category:    "mcp",
-		LatencyMs:   time.Since(start).Milliseconds(),
+		LatencyMs:   latencyMs,
 		Detail:      detail,
-		BytesIn:     int64(len(input.ToolName) + len(input.ToolInput)),
+		BytesIn:     bytesIn,
 		MemoryLayer: memoryLayer,
 		MemoryOp:    memoryOp,
+	})
+
+	extraMeta := map[string]string{}
+	if serverName != "" {
+		extraMeta["mcp_server"] = serverName
+	}
+	recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+		hookName:    "guard-mcp",
+		action:      actionStr,
+		category:    "mcp",
+		latencyMs:   latencyMs,
+		detail:      detail,
+		bytesIn:     bytesIn,
+		mcpTool:     input.ToolName,
+		memoryLayer: memoryLayer,
+		memoryOp:    memoryOp,
+		extraMeta:   extraMeta,
 	})
 
 	return resp, nil
@@ -98,8 +119,9 @@ func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 func runGuardMcp(stdin *os.File, stdout *os.File) error {
 	paths := config.DefaultPaths()
 	handler := &guardMcpHandler{
-		log:         logger.New(paths.LogFile("mcp-audit")),
-		metricsPath: paths.MetricsFile(),
+		log:            logger.New(paths.LogFile("mcp-audit")),
+		metricsPath:    paths.MetricsFile(),
+		outcomeEmitter: hookOutcomeEmitter(paths),
 	}
 
 	input, err := hookio.ReadInput(stdin)

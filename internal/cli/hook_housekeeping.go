@@ -19,6 +19,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/lockfile"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/cursor-tools/internal/outcomes"
 )
 
 var housekeepingCmd = &cobra.Command{
@@ -30,23 +31,35 @@ var housekeepingCmd = &cobra.Command{
 }
 
 type housekeepingHandler struct {
-	log         *logger.Logger
-	paths       config.Paths
-	metricsPath string
+	log            *logger.Logger
+	paths          config.Paths
+	metricsPath    string
+	outcomeEmitter outcomes.Emitter
 }
 
 func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
 	started := time.Now()
 	defer func() {
-		if h.metricsPath == "" || input == nil {
+		if input == nil {
 			return
 		}
-		_ = metrics.Record(h.metricsPath, metrics.Event{
-			Hook:      "housekeeping",
-			Action:    strings.TrimSpace(input.Status),
-			Category:  "housekeeping",
-			Detail:    strings.TrimSpace(input.Status),
-			LatencyMs: time.Since(started).Milliseconds(),
+		status := strings.TrimSpace(input.Status)
+		latencyMs := time.Since(started).Milliseconds()
+		if h.metricsPath != "" {
+			_ = metrics.Record(h.metricsPath, metrics.Event{
+				Hook:      "housekeeping",
+				Action:    status,
+				Category:  "housekeeping",
+				Detail:    status,
+				LatencyMs: latencyMs,
+			})
+		}
+		recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+			hookName:  "housekeeping",
+			action:    status,
+			category:  "housekeeping",
+			latencyMs: latencyMs,
+			detail:    status,
 		})
 	}()
 
@@ -462,9 +475,10 @@ func writePushState(hooksDir string, r pushResult) {
 func runHousekeeping(stdin *os.File, stdout *os.File) error {
 	paths := config.DefaultPaths()
 	handler := &housekeepingHandler{
-		log:         logger.New(paths.LogFile("housekeeping")),
-		paths:       paths,
-		metricsPath: paths.MetricsFile(),
+		log:            logger.New(paths.LogFile("housekeeping")),
+		paths:          paths,
+		metricsPath:    paths.MetricsFile(),
+		outcomeEmitter: hookOutcomeEmitter(paths),
 	}
 
 	input, err := hookio.ReadInput(stdin)

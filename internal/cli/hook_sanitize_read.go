@@ -14,6 +14,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/cursor-tools/internal/outcomes"
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
@@ -28,8 +29,9 @@ var sanitizeReadCmd = &cobra.Command{
 }
 
 type sanitizeReadHandler struct {
-	log         *logger.Logger
-	metricsPath string
+	log            *logger.Logger
+	metricsPath    string
+	outcomeEmitter outcomes.Emitter
 }
 
 func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
@@ -41,19 +43,30 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	basename := filepath.Base(input.FilePath)
 
 	record := func(action, detail string) {
+		latencyMs := time.Since(start).Milliseconds()
+		memoryLayer, memoryOp, memoryResult := metrics.InferMemoryContextFromReadPath(detail)
 		if h.metricsPath != "" {
-			memoryLayer, memoryOp, memoryResult := metrics.InferMemoryContextFromReadPath(detail)
 			_ = metrics.Record(h.metricsPath, metrics.Event{
 				Hook:         "sanitize-read",
 				Action:       action,
 				Category:     "tool",
-				LatencyMs:    time.Since(start).Milliseconds(),
+				LatencyMs:    latencyMs,
 				Detail:       detail,
 				MemoryLayer:  memoryLayer,
 				MemoryOp:     memoryOp,
 				MemoryResult: memoryResult,
 			})
 		}
+		recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+			hookName:     "sanitize-read",
+			action:       action,
+			category:     "tool",
+			latencyMs:    latencyMs,
+			detail:       detail,
+			memoryLayer:  memoryLayer,
+			memoryOp:     memoryOp,
+			memoryResult: memoryResult,
+		})
 	}
 
 	for _, blocked := range patterns.BlockedFilenames {
@@ -116,17 +129,27 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 
 	record("allow", input.FilePath)
 
-	// Record skill file reads separately so they don't inflate material skill usage.
-	// Match /skills/, /skills-cursor/, /agents/skills/, /agents-skills/, and plugin cache paths.
 	if basename == "SKILL.md" && isSkillPath(input.FilePath) {
 		skillName := extractSkillName(input.FilePath)
-		if skillName != "" && h.metricsPath != "" {
-			_ = metrics.Record(h.metricsPath, metrics.Event{
-				Hook:      "skill-activate",
-				Action:    "read",
-				Category:  "skill",
-				LatencyMs: 0,
-				Detail:    skillName,
+		if skillName != "" {
+			if h.metricsPath != "" {
+				_ = metrics.Record(h.metricsPath, metrics.Event{
+					Hook:      "skill-activate",
+					Action:    "read",
+					Category:  "skill",
+					LatencyMs: 0,
+					Detail:    skillName,
+				})
+			}
+			skillHit := true
+			recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+				hookName:  "skill-activate",
+				action:    "read",
+				category:  "skill",
+				latencyMs: 0,
+				detail:    skillName,
+				skillHit:  &skillHit,
+				extraMeta: map[string]string{"skill": skillName},
 			})
 		}
 	}
@@ -153,8 +176,9 @@ func extractSkillName(filePath string) string {
 func runSanitizeRead(stdin *os.File, stdout *os.File) error {
 	paths := config.DefaultPaths()
 	handler := &sanitizeReadHandler{
-		log:         logger.New(paths.LogFile("sanitize-read")),
-		metricsPath: paths.MetricsFile(),
+		log:            logger.New(paths.LogFile("sanitize-read")),
+		metricsPath:    paths.MetricsFile(),
+		outcomeEmitter: hookOutcomeEmitter(paths),
 	}
 
 	input, err := hookio.ReadInput(stdin)

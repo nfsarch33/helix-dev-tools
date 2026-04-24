@@ -12,6 +12,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/cursor-tools/internal/outcomes"
 	"github.com/nfsarch33/cursor-tools/internal/patterns"
 )
 
@@ -26,9 +27,10 @@ var guardShellCmd = &cobra.Command{
 }
 
 type guardShellHandler struct {
-	matcher     *patterns.Matcher
-	log         *logger.Logger
-	metricsPath string
+	matcher        *patterns.Matcher
+	log            *logger.Logger
+	metricsPath    string
+	outcomeEmitter outcomes.Emitter
 }
 
 func newGuardShellHandler() (*guardShellHandler, error) {
@@ -38,9 +40,10 @@ func newGuardShellHandler() (*guardShellHandler, error) {
 	}
 	paths := config.DefaultPaths()
 	return &guardShellHandler{
-		matcher:     m,
-		log:         logger.New(paths.LogFile("guard-shell")),
-		metricsPath: paths.MetricsFile(),
+		matcher:        m,
+		log:            logger.New(paths.LogFile("guard-shell")),
+		metricsPath:    paths.MetricsFile(),
+		outcomeEmitter: hookOutcomeEmitter(paths),
 	}, nil
 }
 
@@ -55,13 +58,23 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 		if len(cmdShort) > 120 {
 			cmdShort = cmdShort[:120]
 		}
+		latencyMs := time.Since(start).Milliseconds()
 		_ = metrics.Record(h.metricsPath, metrics.Event{
 			Hook:      "guard-shell",
 			Action:    "deny",
 			Category:  "shell",
-			LatencyMs: time.Since(start).Milliseconds(),
+			LatencyMs: latencyMs,
 			Detail:    "fleet-preflight-strict: " + cmdShort,
 			BytesIn:   int64(len(input.Command)),
+		})
+		recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+			hookName:  "guard-shell",
+			action:    "deny",
+			category:  "shell",
+			latencyMs: latencyMs,
+			detail:    "fleet-preflight-strict: " + cmdShort,
+			bytesIn:   int64(len(input.Command)),
+			extraMeta: map[string]string{"reason": "fleet-preflight-strict"},
 		})
 		return d, nil
 	}
@@ -122,13 +135,28 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 		resp = hookio.Allow()
 	}
 
+	latencyMs := time.Since(start).Milliseconds()
 	_ = metrics.Record(h.metricsPath, metrics.Event{
 		Hook:      "guard-shell",
 		Action:    actionStr,
 		Category:  "shell",
-		LatencyMs: time.Since(start).Milliseconds(),
+		LatencyMs: latencyMs,
 		Detail:    cmdShort,
 		BytesIn:   int64(len(input.Command)),
+	})
+
+	outcomeMeta := map[string]string{}
+	if patternShort != "" {
+		outcomeMeta["pattern"] = patternShort
+	}
+	recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+		hookName:  "guard-shell",
+		action:    actionStr,
+		category:  "shell",
+		latencyMs: latencyMs,
+		detail:    cmdShort,
+		bytesIn:   int64(len(input.Command)),
+		extraMeta: outcomeMeta,
 	})
 
 	return resp, nil

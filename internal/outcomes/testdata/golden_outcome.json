@@ -1,0 +1,19 @@
+{
+  "ts": "2026-04-24T22:30:00Z",
+  "kind": "agent_outcome",
+  "actor": "cursor-hook",
+  "machine": "macbook",
+  "event": "guard-shell:allow",
+  "latency_ms": 12,
+  "skill_hit": true,
+  "kpi_delta": 0.05,
+  "session_id": "turn-abc-001",
+  "detail": "ls -la",
+  "meta": {
+    "category": "shell",
+    "hook": "guard-shell"
+  },
+  "sprint": "v253",
+  "bytes_in": 8,
+  "bytes_out": 1024
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/hookio"
 	"github.com/nfsarch33/cursor-tools/internal/logger"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/cursor-tools/internal/outcomes"
 )
 
 var postEditCmd = &cobra.Command{
@@ -28,8 +29,9 @@ var postEditCmd = &cobra.Command{
 }
 
 type postEditHandler struct {
-	log   *logger.Logger
-	paths config.Paths
+	log            *logger.Logger
+	paths          config.Paths
+	outcomeEmitter outcomes.Emitter
 }
 
 func (h *postEditHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
@@ -43,12 +45,24 @@ func (h *postEditHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 	h.promoteLearningsIfNeeded(input.FilePath)
 	h.checkCoordinationSignalsIfNeeded(input.FilePath)
 
+	base := filepath.Base(input.FilePath)
+	latencyMs := time.Since(start).Milliseconds()
 	_ = metrics.Record(h.paths.MetricsFile(), metrics.Event{
 		Hook:      "post-edit",
 		Action:    "format",
 		Category:  "tool",
-		LatencyMs: time.Since(start).Milliseconds(),
-		Detail:    filepath.Base(input.FilePath),
+		LatencyMs: latencyMs,
+		Detail:    base,
+	})
+	recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+		hookName:  "post-edit",
+		action:    "format",
+		category:  "tool",
+		latencyMs: latencyMs,
+		detail:    base,
+		extraMeta: map[string]string{
+			"ext": strings.TrimPrefix(filepath.Ext(input.FilePath), "."),
+		},
 	})
 
 	return hookio.Empty(), nil
@@ -287,8 +301,9 @@ func jsonReformat(buf *strings.Builder, data []byte) error {
 func runPostEdit(stdin *os.File, stdout *os.File) error {
 	paths := config.DefaultPaths()
 	handler := &postEditHandler{
-		log:   logger.New(paths.LogFile("post-edit")),
-		paths: paths,
+		log:            logger.New(paths.LogFile("post-edit")),
+		paths:          paths,
+		outcomeEmitter: hookOutcomeEmitter(paths),
 	}
 
 	input, err := hookio.ReadInput(stdin)
