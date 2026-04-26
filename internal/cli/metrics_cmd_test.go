@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"io"
 	"os"
 	"path/filepath"
 	"time"
@@ -8,6 +9,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/evoloop"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
 
@@ -27,6 +30,7 @@ var _ = Describe("metrics command", func() {
 		metricsFlags.export = ""
 		metricsFlags.compact = false
 		metricsFlags.analyse = false
+		metricsFlags.fleet = false
 	})
 
 	It("returns nil when no metrics exist", func() {
@@ -61,6 +65,24 @@ var _ = Describe("metrics command", func() {
 
 		metricsFlags.compact = true
 		Expect(runMetrics(nil, nil)).To(Succeed())
+	})
+
+	It("renders fleet EvoLoop parity mode", func() {
+		fake := &fakeEvoloopClient{capsules: []evoloop.Capsule{
+			{Kind: evoloop.KindRollup, Machine: "wsl1", Day: "2026-04-26", Cycles: 10, Improved: 8, LastKPI: 1.2},
+			{Kind: evoloop.KindRollup, Machine: "wsl2", Day: "2026-04-26", Cycles: 4, Improved: 4, LastKPI: 0.6},
+		}}
+		orig := evoloopFactory
+		evoloopFactory = func(_ config.Paths, debug io.Writer) (evoloopClient, error) {
+			fake.lastDebug = debug
+			return fake, nil
+		}
+		DeferCleanup(func() { evoloopFactory = orig })
+
+		metricsFlags.fleet = true
+		Expect(runMetrics(nil, nil)).To(Succeed())
+		Expect(fake.calls).To(Equal(1))
+		Expect(fake.lastOpts.Kinds).To(Equal([]evoloop.CapsuleKind{evoloop.KindRollup}))
 	})
 })
 

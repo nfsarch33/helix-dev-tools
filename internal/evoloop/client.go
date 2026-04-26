@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -283,6 +284,9 @@ func rowToCapsule(r mem0Row, fallbackKind CapsuleKind) Capsule {
 	if kind == "" {
 		kind = fallbackKind
 	}
+	if fallbackKind != "" {
+		kind = fallbackKind
+	}
 	c := Capsule{
 		ID:       r.ID,
 		Kind:     kind,
@@ -312,7 +316,33 @@ func rowToCapsule(r mem0Row, fallbackKind CapsuleKind) Capsule {
 	c.KPIAfter = atof(meta["kpi_after"])
 	c.KPIDelta = atof(meta["kpi_delta"])
 	c.DurationMS = atoi64(meta["duration_ms"])
+	applyLegacyCycleFallbacks(&c)
 	return c
+}
+
+var (
+	legacyKPIPattern      = regexp.MustCompile(`KPI from ([0-9]+(?:\.[0-9]+)?) to ([0-9]+(?:\.[0-9]+)?)`)
+	legacyDurationPattern = regexp.MustCompile(`duration of ([0-9]+(?:\.[0-9]+)?) ms`)
+)
+
+func applyLegacyCycleFallbacks(c *Capsule) {
+	if c == nil || c.Kind != KindCycle || c.Source != "evoloop-daemon" {
+		return
+	}
+	if c.CycleID == "" {
+		c.CycleID = c.Metadata["capsule_id"]
+	}
+	if c.KPIBefore == 0 && c.KPIAfter == 0 {
+		if matches := legacyKPIPattern.FindStringSubmatch(c.Text); len(matches) == 3 {
+			c.KPIBefore = atof(matches[1])
+			c.KPIAfter = atof(matches[2])
+		}
+	}
+	if c.DurationMS == 0 {
+		if matches := legacyDurationPattern.FindStringSubmatch(c.Text); len(matches) == 2 {
+			c.DurationMS = int64(atof(matches[1]))
+		}
+	}
 }
 
 // cycleLikeRow reports whether a flattened metadata bag describes a row

@@ -480,6 +480,32 @@ func TestCycleLikeRow(t *testing.T) {
 	}
 }
 
+func TestRowToCapsule_LegacyEvoLoopCapsuleFallbacks(t *testing.T) {
+	t.Parallel()
+
+	got := rowToCapsule(mem0Row{
+		ID:        "legacy-desktop",
+		Memory:    "EvoLoop capsule sentinel-1777125097-19088 was added to machine DESKTOP-078M990 on 2026-04-25, with a duration of 1.780603 ms, improving KPI from 12.977925 to 12.98115, no rollback, five stages.",
+		CreatedAt: "2026-04-25T13:51:45.000000",
+		Metadata: map[string]any{
+			"kind":       "capsule",
+			"source":     "evoloop-daemon",
+			"machine":    "DESKTOP-078M990",
+			"capsule_id": "sentinel-1777125097-19088",
+		},
+	}, KindCycle)
+
+	if got.CycleID != "sentinel-1777125097-19088" {
+		t.Fatalf("CycleID = %q, want legacy capsule_id fallback", got.CycleID)
+	}
+	if got.KPIBefore != 12.977925 || got.KPIAfter != 12.98115 {
+		t.Fatalf("legacy KPI values not parsed: before=%v after=%v", got.KPIBefore, got.KPIAfter)
+	}
+	if got.DurationMS != 1 {
+		t.Fatalf("DurationMS = %d, want truncated millisecond value from legacy text", got.DurationMS)
+	}
+}
+
 func TestParseMem0Time(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

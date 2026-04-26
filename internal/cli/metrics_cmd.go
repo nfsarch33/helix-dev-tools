@@ -14,6 +14,7 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/claude"
 	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/cursor-tools/internal/evoloop"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
 
@@ -23,6 +24,7 @@ var metricsFlags struct {
 	compact bool
 	analyse bool
 	doctor  bool
+	fleet   bool
 }
 
 var metricsCmd = &cobra.Command{
@@ -38,9 +40,13 @@ func init() {
 	metricsCmd.Flags().BoolVar(&metricsFlags.compact, "compact", false, "Single-line output for embedding in prompts")
 	metricsCmd.Flags().BoolVar(&metricsFlags.analyse, "analyse", false, "Show actionable recommendations from data patterns")
 	metricsCmd.Flags().BoolVar(&metricsFlags.doctor, "doctor", false, "Include agent-doctor subsystem health summary")
+	metricsCmd.Flags().BoolVar(&metricsFlags.fleet, "fleet", false, "Show fleet EvoLoop parity from shared Mem0")
 }
 
 func runMetrics(_ *cobra.Command, _ []string) error {
+	if metricsFlags.fleet {
+		return runFleetMetrics()
+	}
 	p := config.DefaultPaths()
 	metricsPath := p.MetricsFile()
 
@@ -271,6 +277,34 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 		clilog.Success("exported to %s", metricsFlags.export)
 	}
 
+	return nil
+}
+
+func runFleetMetrics() error {
+	client, err := evoloopFactory(config.DefaultPaths(), nil)
+	if err != nil {
+		return fmt.Errorf("fleet metrics: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	rollups, err := client.Recent(ctx, evoloop.RecentOptions{
+		Kinds: []evoloop.CapsuleKind{evoloop.KindRollup},
+		Limit: 20,
+	})
+	if err != nil {
+		return fmt.Errorf("fleet metrics rollups: %w", err)
+	}
+	clilog.Header("cursor-tools metrics --fleet")
+	if len(rollups) == 0 {
+		clilog.Info("No EvoLoop rollups found.")
+		return nil
+	}
+	fmt.Printf("\n  %-18s %-10s %8s %8s %10s\n", "Machine", "Day", "Cycles", "Improved", "LastKPI")
+	clilog.Divider()
+	for _, r := range rollups {
+		fmt.Printf("  %-18s %-10s %8d %8d %10.3f\n", r.Machine, r.Day, r.Cycles, r.Improved, r.LastKPI)
+	}
+	fmt.Println()
 	return nil
 }
 
