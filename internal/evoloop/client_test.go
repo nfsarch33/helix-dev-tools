@@ -132,6 +132,74 @@ func TestClient_Recent(t *testing.T) {
 			"kind": "capsule",
 		},
 	}
+	// agent_outcome capsule from ironclaw-daemon's per-cycle hook. The
+	// daemon writes these alongside the canonical kind=evoloop_cycle rows
+	// for every loop iteration (including gated cycles that never reach
+	// the cycle writer). The reader must surface these as synthetic
+	// cycles when --kind=cycle is requested.
+	cycleOutcomeWSL1 := map[string]any{
+		"id":         "out-cyc-wsl1-1",
+		"memory":     "[ironclaw-daemon] cycle:ok on wsl1: kpi=+0.04",
+		"user_id":    "global",
+		"app_id":     "cursor-global-kb",
+		"created_at": "2026-04-23T11:30:00.000000",
+		"metadata": map[string]any{
+			"kind":        "agent_outcome",
+			"actor":       "ironclaw-daemon",
+			"machine":     "wsl1",
+			"event":       "ironclaw-daemon:cycle:ok",
+			"cycle_id":    "cyc-wsl1-99",
+			"kpi_delta":   0.04,
+			"duration_ms": 8200,
+		},
+	}
+	// Legacy capsule shape: kind=capsule + source=evoloop-daemon. Older
+	// daemon binaries (and any that downgrade temporarily) wrote cycles
+	// with this shape; the reader must accept them when --kind=cycle is
+	// requested so a fleet upgrade doesn't blind the reader.
+	legacyCapsuleWSL1 := map[string]any{
+		"id":         "cap-legacy-wsl1-1",
+		"memory":     "EvoLoop legacy cycle wsl1",
+		"user_id":    "global",
+		"app_id":     "cursor-global-kb",
+		"created_at": "2026-04-23T11:25:00.000000",
+		"metadata": map[string]any{
+			"kind":        "capsule",
+			"source":      "evoloop-daemon",
+			"machine":     "wsl1",
+			"cycle_id":    "cyc-wsl1-98",
+			"kpi_before":  0.50,
+			"kpi_after":   0.55,
+			"duration_ms": 7100,
+		},
+	}
+	// agent_outcome from a non-cycle event must NOT be promoted to cycle.
+	nonCycleOutcomeWSL1 := map[string]any{
+		"id":         "out-fi-wsl1-1",
+		"memory":     "[ironclaw-daemon] feature_import:ok on wsl1",
+		"user_id":    "global",
+		"app_id":     "cursor-global-kb",
+		"created_at": "2026-04-23T11:35:00.000000",
+		"metadata": map[string]any{
+			"kind":    "agent_outcome",
+			"actor":   "ironclaw-daemon",
+			"machine": "wsl1",
+			"event":   "ironclaw-daemon:feature_import:ok",
+		},
+	}
+	// Generic capsule (no source) must NOT be promoted to cycle even
+	// when --kind=cycle is requested.
+	plainCapsuleNote := map[string]any{
+		"id":         "cap-misc-1",
+		"memory":     "operator note",
+		"user_id":    "global",
+		"app_id":     "cursor-global-kb",
+		"created_at": "2026-04-23T11:40:00.000000",
+		"metadata": map[string]any{
+			"kind":    "capsule",
+			"machine": "wsl1",
+		},
+	}
 
 	allFleetRows := []map[string]any{
 		rollupMacbook,
@@ -139,6 +207,10 @@ func TestClient_Recent(t *testing.T) {
 		rollupWSL1Old,
 		cycleMacbook,
 		nonEvoloopRow,
+		cycleOutcomeWSL1,
+		legacyCapsuleWSL1,
+		nonCycleOutcomeWSL1,
+		plainCapsuleNote,
 	}
 
 	tests := []struct {
@@ -202,31 +274,82 @@ func TestClient_Recent(t *testing.T) {
 			},
 		},
 		{
-			name: "kind=cycle returns only cycle capsules",
-			opts: RecentOptions{Limit: 2, Kinds: []CapsuleKind{KindCycle}},
+			name: "kind=cycle returns canonical and synthetic cycle capsules",
+			opts: RecentOptions{Limit: 10, Kinds: []CapsuleKind{KindCycle}},
 			respond: func(call capturedCall) (int, []byte) {
 				raw, _ := json.Marshal(map[string]any{"results": allFleetRows})
 				return http.StatusOK, raw
 			},
-			wantIDs: []string{"c-mac-1"},
+			// newest first: outcome (11:30), legacy (11:25), canonical (10:05).
+			// nonCycleOutcomeWSL1 (feature_import) and plainCapsuleNote
+			// must not be promoted to cycle.
+			wantIDs: []string{"out-cyc-wsl1-1", "cap-legacy-wsl1-1", "c-mac-1"},
 			validate: func(t *testing.T, cap *captured, got []Capsule) {
 				if len(cap.calls) != 1 {
 					t.Fatalf("expected 1 call, got %d", len(cap.calls))
 				}
-				c := got[0]
-				if c.KPIBefore != 0.7 || c.KPIAfter != 0.82 || c.DurationMS != 1234 {
-					t.Fatalf("cycle numeric fields not parsed: %+v", c)
+				if len(got) < 3 {
+					t.Fatalf("expected ≥3 cycle capsules (canonical + outcome + legacy), got %d: %+v", len(got), got)
+				}
+				for _, c := range got {
+					if c.Kind != KindCycle {
+						t.Fatalf("synthesised capsule must have Kind=cycle, got %q on %s", c.Kind, c.ID)
+					}
+				}
+				// canonical row keeps kpi_before/kpi_after.
+				var canonical, outcome, legacy *Capsule
+				for i := range got {
+					switch got[i].ID {
+					case "c-mac-1":
+						canonical = &got[i]
+					case "out-cyc-wsl1-1":
+						outcome = &got[i]
+					case "cap-legacy-wsl1-1":
+						legacy = &got[i]
+					}
+				}
+				if canonical == nil || canonical.KPIBefore != 0.7 || canonical.KPIAfter != 0.82 || canonical.DurationMS != 1234 {
+					t.Fatalf("canonical cycle numeric fields not parsed: %+v", canonical)
+				}
+				if outcome == nil {
+					t.Fatalf("expected agent_outcome cycle to be surfaced as KindCycle")
+				}
+				if outcome.CycleID != "cyc-wsl1-99" {
+					t.Fatalf("outcome cycle_id not propagated: got %q", outcome.CycleID)
+				}
+				if outcome.KPIDelta == 0 {
+					t.Fatalf("outcome kpi_delta not parsed: %+v", outcome)
+				}
+				if outcome.Event != "ironclaw-daemon:cycle:ok" {
+					t.Fatalf("outcome event tag not preserved: %q", outcome.Event)
+				}
+				if outcome.DurationMS != 8200 {
+					t.Fatalf("outcome duration not parsed: %d", outcome.DurationMS)
+				}
+				if legacy == nil || legacy.KPIBefore != 0.50 || legacy.KPIAfter != 0.55 {
+					t.Fatalf("legacy capsule fields not parsed: %+v", legacy)
+				}
+				// non-cycle outcome and plain capsule must be excluded.
+				for _, c := range got {
+					if c.ID == "out-fi-wsl1-1" || c.ID == "cap-misc-1" {
+						t.Fatalf("non-cycle row leaked into kind=cycle results: %s", c.ID)
+					}
 				}
 			},
 		},
 		{
-			name: "kind=all merges rollups and cycles",
+			name: "kind=all merges rollups, canonical cycles, and synthetic cycles",
 			opts: RecentOptions{Limit: 4, Kinds: []CapsuleKind{KindRollup, KindCycle}},
 			respond: func(call capturedCall) (int, []byte) {
 				raw, _ := json.Marshal(map[string]any{"results": allFleetRows})
 				return http.StatusOK, raw
 			},
-			wantIDs: []string{"r-wsl1-1", "c-mac-1", "r-mac-1", "r-wsl1-0"},
+			// newest-first order:
+			//   out-cyc-wsl1-1 (synthetic cycle, 11:30)
+			//   cap-legacy-wsl1-1 (legacy cycle, 11:25)
+			//   r-wsl1-1 (rollup, 11:00)
+			//   c-mac-1 (canonical cycle, 10:05)
+			wantIDs: []string{"out-cyc-wsl1-1", "cap-legacy-wsl1-1", "r-wsl1-1", "c-mac-1"},
 			validate: func(t *testing.T, cap *captured, _ []Capsule) {
 				if len(cap.calls) != 1 {
 					t.Fatalf("expected 1 call regardless of kinds, got %d", len(cap.calls))
@@ -240,7 +363,7 @@ func TestClient_Recent(t *testing.T) {
 				raw, _ := json.Marshal(map[string]any{"results": allFleetRows})
 				return http.StatusOK, raw
 			},
-			wantIDs: []string{"r-wsl1-1"},
+			wantIDs: []string{"out-cyc-wsl1-1"},
 		},
 		{
 			name: "mem0 400 surfaces as error",
@@ -296,6 +419,62 @@ func TestClient_Recent(t *testing.T) {
 			}
 			if tc.validate != nil {
 				tc.validate(t, cap, got)
+			}
+		})
+	}
+}
+
+func TestClient_DebugWriter(t *testing.T) {
+	t.Parallel()
+	srv, cap := newFakeMem0(t, func(call capturedCall) (int, []byte) {
+		return http.StatusOK, []byte(`{"results":[]}`)
+	})
+	client := NewClient("fake-key", "global", srv.URL, "")
+	client.HTTP = srv.Client()
+	var buf strings.Builder
+	client.Debug = &buf
+
+	if _, err := client.Recent(context.Background(), RecentOptions{Limit: 5, Machine: "wsl1", Kinds: []CapsuleKind{KindCycle}}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	got := buf.String()
+	for _, want := range []string{
+		"POST /v2/memories/",
+		`"app_id":"cursor-global-kb"`,
+		`"user_id":"global"`,
+		"machine=wsl1",
+		"kind=evoloop_cycle",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("debug output missing %q in %q", want, got)
+		}
+	}
+	if len(cap.calls) != 1 {
+		t.Fatalf("expected 1 Mem0 call, got %d", len(cap.calls))
+	}
+}
+
+func TestCycleLikeRow(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		meta map[string]string
+		want bool
+	}{
+		{name: "canonical evoloop_cycle", meta: map[string]string{"kind": "evoloop_cycle"}, want: false}, // already kind=cycle
+		{name: "agent_outcome cycle event", meta: map[string]string{"kind": "agent_outcome", "actor": "ironclaw-daemon", "event": "ironclaw-daemon:cycle:ok"}, want: true},
+		{name: "agent_outcome non-cycle event", meta: map[string]string{"kind": "agent_outcome", "actor": "ironclaw-daemon", "event": "ironclaw-daemon:feature_import:ok"}, want: false},
+		{name: "agent_outcome wrong actor", meta: map[string]string{"kind": "agent_outcome", "actor": "fleet-cli", "event": "ironclaw-daemon:cycle:ok"}, want: false},
+		{name: "legacy capsule with evoloop-daemon source", meta: map[string]string{"kind": "capsule", "source": "evoloop-daemon"}, want: true},
+		{name: "plain capsule no source", meta: map[string]string{"kind": "capsule"}, want: false},
+		{name: "plain capsule wrong source", meta: map[string]string{"kind": "capsule", "source": "fleet-cli"}, want: false},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			if got := cycleLikeRow(tc.meta); got != tc.want {
+				t.Fatalf("cycleLikeRow(%v) = %v; want %v", tc.meta, got, tc.want)
 			}
 		})
 	}

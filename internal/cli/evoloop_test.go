@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -14,10 +15,11 @@ import (
 )
 
 type fakeEvoloopClient struct {
-	capsules []evoloop.Capsule
-	err      error
-	lastOpts evoloop.RecentOptions
-	calls    int
+	capsules  []evoloop.Capsule
+	err       error
+	lastOpts  evoloop.RecentOptions
+	calls     int
+	lastDebug io.Writer
 }
 
 func (f *fakeEvoloopClient) Recent(_ context.Context, opts evoloop.RecentOptions) ([]evoloop.Capsule, error) {
@@ -26,15 +28,21 @@ func (f *fakeEvoloopClient) Recent(_ context.Context, opts evoloop.RecentOptions
 	if f.err != nil {
 		return nil, f.err
 	}
+	if f.lastDebug != nil {
+		_, _ = io.WriteString(f.lastDebug, "fake-evoloop: Recent called\n")
+	}
 	return f.capsules, nil
 }
 
-func withEvoloopFactory(t *testing.T, client evoloopClient, factoryErr error) {
+func withEvoloopFactory(t *testing.T, client *fakeEvoloopClient, factoryErr error) {
 	t.Helper()
 	orig := evoloopFactory
-	evoloopFactory = func(_ config.Paths) (evoloopClient, error) {
+	evoloopFactory = func(_ config.Paths, debug io.Writer) (evoloopClient, error) {
 		if factoryErr != nil {
 			return nil, factoryErr
+		}
+		if client != nil {
+			client.lastDebug = debug
 		}
 		return client, nil
 	}
@@ -46,6 +54,7 @@ func resetEvoloopFlags() {
 	evoloopRecentFlags.machine = ""
 	evoloopRecentFlags.limit = 10
 	evoloopRecentFlags.json = false
+	evoloopRecentFlags.debug = false
 }
 
 func runRecentForTest(t *testing.T, args []string) (string, error) {
@@ -296,6 +305,30 @@ func TestEvoloopRecent_FactoryErrorPropagates(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "no credentials") {
 		t.Errorf("error %q missing factory error", err)
+	}
+}
+
+func TestEvoloopRecent_DebugFlagWiresStderr(t *testing.T) {
+	// Serial: mutates cobra command state + evoloopFactory.
+	fake := &fakeEvoloopClient{}
+	withEvoloopFactory(t, fake, nil)
+	if _, err := runRecentForTest(t, []string{"--debug"}); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fake.lastDebug == nil {
+		t.Fatalf("--debug should wire a non-nil writer to the client")
+	}
+}
+
+func TestEvoloopRecent_NoDebugDefaultsToNil(t *testing.T) {
+	// Serial: mutates cobra command state + evoloopFactory.
+	fake := &fakeEvoloopClient{}
+	withEvoloopFactory(t, fake, nil)
+	if _, err := runRecentForTest(t, nil); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if fake.lastDebug != nil {
+		t.Fatalf("default invocation must not wire a debug writer")
 	}
 }
 

@@ -10,4 +10,5 @@ var githookCmd = &cobra.Command{
 func init() {
 	githookCmd.AddCommand(commitMsgCmd)
 	githookCmd.AddCommand(prePushCmd)
+	githookCmd.AddCommand(preCommitCmd)
 }

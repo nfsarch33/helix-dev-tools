@@ -51,6 +51,7 @@ type Capsule struct {
 	CycleID   string            `json:"cycle_id,omitempty"`
 	CreatedAt time.Time         `json:"created_at,omitempty"`
 	Source    string            `json:"source,omitempty"`
+	Event     string            `json:"event,omitempty"`
 	Metadata  map[string]string `json:"metadata,omitempty"`
 
 	// Rollup-only fields (zero for cycles).
@@ -64,9 +65,13 @@ type Capsule struct {
 	P95Delta   float64 `json:"p95_delta,omitempty"`
 	LastKPI    float64 `json:"last_kpi,omitempty"`
 
-	// Cycle-only fields (zero for rollups).
+	// Cycle-only fields (zero for rollups). KPIBefore/KPIAfter come from
+	// the canonical kind=evoloop_cycle writer; KPIDelta is preserved when
+	// only an outcome capsule (kind=agent_outcome) is available because
+	// the daemon emits gated cycles that never reach the canonical writer.
 	KPIBefore  float64 `json:"kpi_before,omitempty"`
 	KPIAfter   float64 `json:"kpi_after,omitempty"`
+	KPIDelta   float64 `json:"kpi_delta,omitempty"`
 	DurationMS int64   `json:"duration_ms,omitempty"`
 }
 
@@ -77,6 +82,12 @@ type Client struct {
 	AppID   string
 	BaseURL string
 	HTTP    *http.Client
+	// Debug, when non-nil, receives a one-line summary of every Mem0
+	// request emitted by Recent (POST /v2/memories/ + the resolved
+	// filter payload + the requested machine/kinds). The CLI wires this
+	// to stderr when --debug is passed so operators can sanity-check
+	// what is actually queried before debugging "no capsules found".
+	Debug io.Writer
 }
 
 // NewClient constructs a read-only EvoLoop client. Empty baseURL defaults to
@@ -118,6 +129,19 @@ type RecentOptions struct {
 // by app_id+user_id and filter by kind/machine client-side. For the current
 // capsule volume (≈1 rollup/machine/day plus cycles) the last 100 memories
 // comfortably cover today's rollups plus recent cycles.
+//
+// Schema reconciliation (v254 d1): when KindCycle is requested, Recent also
+// surfaces "cycle-like" rows that were not written under the canonical
+// metadata.kind="evoloop_cycle" shape:
+//
+//   - kind=agent_outcome + actor=ironclaw-daemon + event has prefix
+//     "ironclaw-daemon:cycle:" (current daemon's per-cycle hook, includes
+//     gated cycles that never reach the canonical writer).
+//   - kind=capsule + source=evoloop-daemon (legacy daemon binaries; kept
+//     so a partially-upgraded fleet doesn't blind the reader).
+//
+// These rows are returned with Kind=KindCycle so downstream rendering and
+// JSON consumers don't have to know about the producer-side variants.
 func (c *Client) Recent(ctx context.Context, opts RecentOptions) ([]Capsule, error) {
 	kinds := opts.Kinds
 	if len(kinds) == 0 {
@@ -128,20 +152,29 @@ func (c *Client) Recent(ctx context.Context, opts RecentOptions) ([]Capsule, err
 		limit = 10
 	}
 
+	wantKind := make(map[CapsuleKind]struct{}, len(kinds))
+	for _, k := range kinds {
+		wantKind[k] = struct{}{}
+	}
+	_, wantCycle := wantKind[KindCycle]
+
+	c.logDebug(opts, kinds, limit)
+
 	rows, err := c.listAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("evoloop: listing memories: %w", err)
 	}
 
-	wantKind := make(map[CapsuleKind]struct{}, len(kinds))
-	for _, k := range kinds {
-		wantKind[k] = struct{}{}
-	}
-
 	all := make([]Capsule, 0, len(rows))
 	for _, r := range rows {
-		capsule := rowToCapsule(r, "")
-		if _, ok := wantKind[capsule.Kind]; !ok {
+		meta := flattenMetadata(r.Metadata)
+		var capsule Capsule
+		if _, direct := wantKind[CapsuleKind(meta["kind"])]; direct {
+			capsule = rowToCapsule(r, "")
+		} else if wantCycle && cycleLikeRow(meta) {
+			capsule = rowToCapsule(r, KindCycle)
+			capsule.Kind = KindCycle
+		} else {
 			continue
 		}
 		if opts.Machine != "" && capsule.Machine != opts.Machine {
@@ -258,6 +291,7 @@ func rowToCapsule(r mem0Row, fallbackKind CapsuleKind) Capsule {
 		Day:      meta["day"],
 		CycleID:  meta["cycle_id"],
 		Source:   meta["source"],
+		Event:    meta["event"],
 		Metadata: meta,
 	}
 	if ts := strings.TrimSpace(r.CreatedAt); ts != "" {
@@ -276,8 +310,72 @@ func rowToCapsule(r mem0Row, fallbackKind CapsuleKind) Capsule {
 	c.LastKPI = atof(meta["last_kpi"])
 	c.KPIBefore = atof(meta["kpi_before"])
 	c.KPIAfter = atof(meta["kpi_after"])
+	c.KPIDelta = atof(meta["kpi_delta"])
 	c.DurationMS = atoi64(meta["duration_ms"])
 	return c
+}
+
+// cycleLikeRow reports whether a flattened metadata bag describes a row
+// that is semantically a feedbackloop cycle even though its raw
+// metadata.kind is not "evoloop_cycle".
+//
+// Two shapes are recognised:
+//
+//  1. agent_outcome capsule emitted by the IronClaw/EvoLoop daemon's
+//     per-cycle hook (event has prefix "ironclaw-daemon:cycle:"). This is
+//     the canonical shape after v253 d5 because it captures gated cycles
+//     too -- the canonical evoloop_cycle writer is gated and only fires
+//     when KPI delta exceeds the threshold.
+//  2. Legacy "kind=capsule + source=evoloop-daemon" shape produced by
+//     pre-v253 daemon binaries; kept so a partial fleet upgrade does
+//     not blind the reader.
+//
+// Rows whose metadata.kind is already a canonical evoloop kind are
+// excluded -- they do not need promotion.
+func cycleLikeRow(meta map[string]string) bool {
+	switch CapsuleKind(meta["kind"]) {
+	case KindCycle, KindRollup:
+		return false
+	}
+	if meta["kind"] == "agent_outcome" &&
+		meta["actor"] == "ironclaw-daemon" &&
+		strings.HasPrefix(meta["event"], "ironclaw-daemon:cycle:") {
+		return true
+	}
+	if meta["kind"] == "capsule" && meta["source"] == "evoloop-daemon" {
+		return true
+	}
+	return false
+}
+
+// logDebug writes a one-line summary of the resolved Mem0 query to
+// c.Debug. It is a no-op when c.Debug is nil. Errors writing to the
+// debug sink are swallowed: debug must never affect the primary path.
+func (c *Client) logDebug(opts RecentOptions, kinds []CapsuleKind, limit int) {
+	if c.Debug == nil {
+		return
+	}
+	payload := map[string]any{
+		"filters": map[string]any{
+			"AND": []map[string]string{
+				{"app_id": c.AppID},
+				{"user_id": c.UserID},
+			},
+		},
+	}
+	body, _ := json.Marshal(payload)
+	parts := []string{
+		fmt.Sprintf("POST /v2/memories/ %s", c.BaseURL),
+		"body=" + string(body),
+		fmt.Sprintf("limit=%d", limit),
+	}
+	if opts.Machine != "" {
+		parts = append(parts, "machine="+opts.Machine)
+	}
+	for _, k := range kinds {
+		parts = append(parts, "kind="+string(k))
+	}
+	_, _ = fmt.Fprintln(c.Debug, strings.Join(parts, " "))
 }
 
 func flattenMetadata(m map[string]any) map[string]string {

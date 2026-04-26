@@ -24,17 +24,20 @@ type evoloopClient interface {
 }
 
 // evoloopFactory builds a client for a given resolved config. Tests replace
-// this to avoid requiring real MCP config / API key.
+// this to avoid requiring real MCP config / API key. When debug is non-nil
+// the client logs the resolved Mem0 query payload to it before each fetch.
 var evoloopFactory = defaultEvoloopFactory
 
-func defaultEvoloopFactory(p config.Paths) (evoloopClient, error) {
+func defaultEvoloopFactory(p config.Paths, debug io.Writer) (evoloopClient, error) {
 	apiKey, userID, err := coordination.ResolveCredentials(p.CursorMCPConfig())
 	if err != nil {
 		return nil, fmt.Errorf("resolving Mem0 credentials: %w", err)
 	}
 	baseURL := strings.TrimSpace(os.Getenv("MEM0_BASE_URL"))
 	appID := strings.TrimSpace(os.Getenv("EVOLOOP_APP_ID"))
-	return evoloop.NewClient(apiKey, userID, baseURL, appID), nil
+	c := evoloop.NewClient(apiKey, userID, baseURL, appID)
+	c.Debug = debug
+	return c, nil
 }
 
 var evoloopRecentFlags struct {
@@ -42,6 +45,7 @@ var evoloopRecentFlags struct {
 	machine string
 	limit   int
 	json    bool
+	debug   bool
 }
 
 var evoloopCmd = &cobra.Command{
@@ -74,6 +78,7 @@ func init() {
 	evoloopRecentCmd.Flags().StringVar(&evoloopRecentFlags.machine, "machine", "", "Filter by producing machine (e.g. wsl1, macbook). Empty = all machines.")
 	evoloopRecentCmd.Flags().IntVar(&evoloopRecentFlags.limit, "limit", 10, "Maximum number of capsules to return")
 	evoloopRecentCmd.Flags().BoolVar(&evoloopRecentFlags.json, "json", false, "Output JSON instead of a human-readable table")
+	evoloopRecentCmd.Flags().BoolVar(&evoloopRecentFlags.debug, "debug", false, "Print the resolved Mem0 query to stderr before fetching capsules")
 
 	evoloopCmd.AddCommand(evoloopRecentCmd)
 }
@@ -100,7 +105,11 @@ func runEvoloopRecent(cmd *cobra.Command, _ []string) error {
 		return errors.New("--limit must be >= 1")
 	}
 
-	client, err := evoloopFactory(config.DefaultPaths())
+	var debug io.Writer
+	if evoloopRecentFlags.debug {
+		debug = cmd.ErrOrStderr()
+	}
+	client, err := evoloopFactory(config.DefaultPaths(), debug)
 	if err != nil {
 		return err
 	}
@@ -181,6 +190,18 @@ func summariseCapsule(c evoloop.Capsule) string {
 		return fmt.Sprintf("day=%s cycles=%d improved=%d rolled_back=%d mean_delta=%+.3f last_kpi=%.3f",
 			c.Day, c.Cycles, c.Improved, c.RolledBack, c.MeanDelta, c.LastKPI)
 	case evoloop.KindCycle:
+		// Canonical evoloop_cycle capsules record kpi_before/kpi_after.
+		// agent_outcome / legacy capsules promoted to KindCycle only carry
+		// a single kpi_delta (Day 1 schema reconciliation), so fall back
+		// to that when before/after are missing.
+		if c.KPIBefore == 0 && c.KPIAfter == 0 && c.KPIDelta != 0 {
+			summary := fmt.Sprintf("cycle=%s kpi_delta=%+.3f duration_ms=%d",
+				c.CycleID, c.KPIDelta, c.DurationMS)
+			if c.Event != "" {
+				summary += " event=" + c.Event
+			}
+			return summary
+		}
 		delta := c.KPIAfter - c.KPIBefore
 		return fmt.Sprintf("cycle=%s kpi=%.3f→%.3f (%+.3f) duration_ms=%d",
 			c.CycleID, c.KPIBefore, c.KPIAfter, delta, c.DurationMS)
