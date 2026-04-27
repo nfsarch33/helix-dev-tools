@@ -13,7 +13,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const qwen36ExpectedBytes int64 = 20456798742
+const qwen36ExpectedBytes int64 = 20467235944
 
 type qwen36CellSpec struct {
 	CellID        string
@@ -26,7 +26,7 @@ type qwen36CellSpec struct {
 }
 
 var qwen36Cells = map[string]qwen36CellSpec{
-	"C1": {CellID: "C1", Status: "ready", ModelDir: "/mnt/f/models/Qwen3.6-27B-AWQ-INT4", ExpectedBytes: 20456798742, GPUEnv: "QWEN36_C1_VISIBLE_DEVICES", Port: 8004, MinFreeMIB: 4096},
+	"C1": {CellID: "C1", Status: "ready", ModelDir: "/mnt/f/models/Qwen3.6-27B-AWQ-INT4", ExpectedBytes: 20467235944, GPUEnv: "QWEN36_C1_VISIBLE_DEVICES", Port: 8004, MinFreeMIB: 4096},
 	"C2": {CellID: "C2", Status: "ready", ModelDir: "/mnt/f/models/qwen36-gguf/Qwen3.6-27B-Q4_K_M.gguf", ExpectedBytes: 16817244384, GPUEnv: "QWEN36_C2_VISIBLE_DEVICES", Port: 8005, MinFreeMIB: 4096},
 	"C3": {CellID: "C3", Status: "metadata_blocked", ModelDir: "/mnt/f/models/qwen36-gguf/Qwen3.6-14B-Q4_K_M.gguf", GPUEnv: "QWEN36_C3_VISIBLE_DEVICES", Port: 8006, MinFreeMIB: 3072},
 	"C4": {CellID: "C4", Status: "metadata_blocked", ModelDir: "/mnt/f/models/qwen36-gguf/Qwen3.6-9B-Q4_K_M.gguf", GPUEnv: "QWEN36_C4_VISIBLE_DEVICES", Port: 8007, MinFreeMIB: 3072},
@@ -168,7 +168,25 @@ func pathSize(root string) int64 {
 	}
 	var total int64
 	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
+			return nil
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr == nil {
+			for _, part := range strings.Split(rel, string(filepath.Separator)) {
+				if part == ".cache" {
+					if d.IsDir() {
+						return filepath.SkipDir
+					}
+					return nil
+				}
+			}
+		}
+		if d.IsDir() {
+			return nil
+		}
+		name := d.Name()
+		if strings.HasSuffix(name, ".aria2") || strings.HasSuffix(name, ".lock") || strings.HasSuffix(name, ".incomplete") {
 			return nil
 		}
 		info, statErr := d.Info()
