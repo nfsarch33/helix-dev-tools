@@ -58,8 +58,11 @@ func TestConfig_Validate_MetricsBindLoopback(t *testing.T) {
 		OpOpenAIItem:   "zd api gateway openai models",
 	}
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "metrics bind must be loopback") {
-		t.Fatalf("expected loopback-only metrics error, got %v", err)
+	if err == nil {
+		t.Fatalf("expected loopback-only metrics error, got nil")
+	}
+	if !strings.Contains(err.Error(), "metrics bind") || !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("expected metrics-bind loopback error, got %v", err)
 	}
 }
 

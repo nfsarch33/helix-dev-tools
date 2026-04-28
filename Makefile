@@ -18,10 +18,18 @@ else
   HOST_GOARCH := $(HOST_ARCH)
 endif
 
-.PHONY: build test test-cover lint vuln security fuzz install dist-install docker docker-native test-docker release clean
+.PHONY: build build-zd-claude-proxy install-zd-claude-proxy test test-cover lint vuln security fuzz install dist-install docker docker-native test-docker release clean
 
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) ./cmd/cursor-tools/
+
+build-zd-claude-proxy:
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/zd-claude-proxy ./cmd/zd-claude-proxy/
+
+install-zd-claude-proxy: build-zd-claude-proxy
+	@tmp=~/bin/.zd-claude-proxy.$$$$.new; \
+	cp bin/zd-claude-proxy "$$tmp" && mv -f "$$tmp" ~/bin/zd-claude-proxy
+	@echo "Installed to ~/bin/zd-claude-proxy"
 
 test:
 	go test $(GOFLAGS) -count=1 ./internal/...
