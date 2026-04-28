@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // bedrockAnthropicVersion is the value AWS Bedrock requires in the
@@ -39,6 +41,9 @@ type BedrockTransport struct {
 	UpstreamBaseURL string
 	UpstreamBearer  string
 	HTTPClient      *http.Client
+
+	// Metrics, when non-nil, is updated on each forwarded request.
+	Metrics *Metrics
 }
 
 // NewBedrockTransport returns a BedrockTransport with sane defaults. The
@@ -89,11 +94,13 @@ func (b *BedrockTransport) HandleAnthropicMessages(w http.ResponseWriter, r *htt
 	}
 
 	endpoint := "invoke"
+	route := "bedrock_invoke"
 	if probe.Stream {
 		endpoint = "invoke-with-response-stream"
+		route = "bedrock_invoke_stream"
 	}
 	upstreamURL := fmt.Sprintf("%s/model/%s/%s", b.UpstreamBaseURL, probe.Model, endpoint)
-	b.forward(w, r, upstreamURL, bytes.NewReader(body))
+	b.forward(w, r, upstreamURL, bytes.NewReader(body), route, probe.Model)
 }
 
 // HandleBedrockPassthrough serves POST /bedrock/model/{id}/invoke or
@@ -111,7 +118,11 @@ func (b *BedrockTransport) HandleBedrockPassthrough(w http.ResponseWriter, r *ht
 		return
 	}
 	upstreamURL := fmt.Sprintf("%s/model/%s/%s", b.UpstreamBaseURL, modelID, endpoint)
-	b.forward(w, r, upstreamURL, r.Body)
+	route := "bedrock_passthrough"
+	if endpoint == "invoke-with-response-stream" {
+		route = "bedrock_passthrough_stream"
+	}
+	b.forward(w, r, upstreamURL, r.Body, route, modelID)
 }
 
 // forward executes the upstream request and streams the response body back
@@ -119,10 +130,23 @@ func (b *BedrockTransport) HandleBedrockPassthrough(w http.ResponseWriter, r *ht
 // frames pass through unchanged. Upstream errors (connection failure) are
 // surfaced as 502 with a generic message; the upstream bearer is never
 // included in any response body.
-func (b *BedrockTransport) forward(w http.ResponseWriter, r *http.Request, upstreamURL string, body io.Reader) {
+//
+// route and model label the metrics emission so a single Grafana panel can
+// split timings between non-streaming /invoke and streaming
+// /invoke-with-response-stream and between Claude Opus and Haiku families.
+func (b *BedrockTransport) forward(w http.ResponseWriter, r *http.Request, upstreamURL string, body io.Reader, route, model string) {
+	if b.Metrics != nil {
+		b.Metrics.BeginInflight(route)
+		defer b.Metrics.EndInflight(route)
+	}
+	start := time.Now()
+
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, body)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "build_request", "failed to build upstream request")
+		if b.Metrics != nil {
+			b.Metrics.RecordRequest(route, model, http.StatusInternalServerError, time.Since(start))
+		}
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+b.UpstreamBearer)
@@ -134,6 +158,9 @@ func (b *BedrockTransport) forward(w http.ResponseWriter, r *http.Request, upstr
 	resp, err := b.HTTPClient.Do(req)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
+		if b.Metrics != nil {
+			b.Metrics.RecordRequest(route, model, http.StatusBadGateway, time.Since(start))
+		}
 		return
 	}
 	defer resp.Body.Close()
@@ -148,9 +175,20 @@ func (b *BedrockTransport) forward(w http.ResponseWriter, r *http.Request, upstr
 			w.Header().Set(h, v)
 		}
 	}
+	if b.Metrics != nil {
+		if n, err := strconv.Atoi(resp.Header.Get("X-Amzn-Bedrock-Input-Token-Count")); err == nil {
+			b.Metrics.RecordTokens(model, "input", n)
+		}
+		if n, err := strconv.Atoi(resp.Header.Get("X-Amzn-Bedrock-Output-Token-Count")); err == nil {
+			b.Metrics.RecordTokens(model, "output", n)
+		}
+	}
 	w.WriteHeader(resp.StatusCode)
 
 	streamCopy(w, resp.Body)
+	if b.Metrics != nil {
+		b.Metrics.RecordRequest(route, model, resp.StatusCode, time.Since(start))
+	}
 }
 
 // streamCopy forwards bytes from src to dst, flushing dst after every chunk

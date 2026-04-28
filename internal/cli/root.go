@@ -33,6 +33,7 @@ func init() {
 	rootCmd.AddCommand(metricsCmd)
 	rootCmd.AddCommand(trackCmd)
 	rootCmd.AddCommand(mem0ParityCmd)
+	rootCmd.AddCommand(mem0OutboxCmd)
 	rootCmd.AddCommand(memoryRoutineCmd)
 	rootCmd.AddCommand(safeCmd)
 	rootCmd.AddCommand(skillvetAuditCmd)

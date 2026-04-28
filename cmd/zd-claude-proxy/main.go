@@ -107,7 +107,8 @@ func main() {
 	log.Printf("  POST /bedrock/model/{id}/invoke-with-response-stream       (auth) Bedrock streaming passthrough")
 	log.Printf("  GET  /healthz                                              (no auth) readiness check")
 	log.Printf("  GET  /version                                              (no auth) build metadata")
-	log.Printf("zd-claude-proxy: client header: `X-Local-Auth: Bearer $(cat %s)`", tokenPath)
+	log.Printf("zd-claude-proxy: auth (canonical): `X-Local-Auth: Bearer $(cat %s)`", tokenPath)
+	log.Printf("zd-claude-proxy: auth (fallback for OpenAI clients): `Authorization: Bearer $(cat %s)`", tokenPath)
 	log.Printf("zd-claude-proxy: bedrock=%s openai=%s (tokens redacted)", cfg.BedrockBaseURL, cfg.OpenAIBaseURL)
 
 	<-ctx.Done()

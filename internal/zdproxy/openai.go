@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"time"
 )
 
 // OpenAITransport routes OpenAI Chat Completions and Responses requests to
@@ -27,6 +28,9 @@ type OpenAITransport struct {
 	UpstreamBaseURL string
 	UpstreamBearer  string
 	HTTPClient      *http.Client
+
+	// Metrics, when non-nil, is updated on each forwarded request.
+	Metrics *Metrics
 }
 
 // NewOpenAITransport returns an OpenAITransport with a sane default client.
@@ -51,7 +55,13 @@ func (o *OpenAITransport) HandleChatCompletions(w http.ResponseWriter, r *http.R
 		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST required")
 		return
 	}
-	o.forward(w, r, o.UpstreamBaseURL+"/chat/completions", r.Body)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "read_body", "failed to read request body")
+		return
+	}
+	model := peekModel(body)
+	o.forward(w, r, o.UpstreamBaseURL+"/chat/completions", bytes.NewReader(body), "openai_chat", model)
 }
 
 // HandleResponses serves POST /v1/responses as a transparent passthrough to
@@ -61,7 +71,13 @@ func (o *OpenAITransport) HandleResponses(w http.ResponseWriter, r *http.Request
 		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST required")
 		return
 	}
-	o.forward(w, r, o.UpstreamBaseURL+"/responses", r.Body)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "read_body", "failed to read request body")
+		return
+	}
+	model := peekModel(body)
+	o.forward(w, r, o.UpstreamBaseURL+"/responses", bytes.NewReader(body), "openai_responses", model)
 }
 
 // ForwardChatTranslated translates an Anthropic-Messages-shape body to OpenAI
@@ -73,7 +89,8 @@ func (o *OpenAITransport) ForwardChatTranslated(w http.ResponseWriter, r *http.R
 		writeJSONError(w, http.StatusBadRequest, "translate_chat", "failed to translate Anthropic body to OpenAI Chat Completions")
 		return
 	}
-	o.forward(w, r, o.UpstreamBaseURL+"/chat/completions", bytes.NewReader(translated))
+	model := peekModel(anthropicBody)
+	o.forward(w, r, o.UpstreamBaseURL+"/chat/completions", bytes.NewReader(translated), "openai_chat", model)
 }
 
 // ForwardResponsesTranslated translates an Anthropic-Messages-shape body to
@@ -84,16 +101,42 @@ func (o *OpenAITransport) ForwardResponsesTranslated(w http.ResponseWriter, r *h
 		writeJSONError(w, http.StatusBadRequest, "translate_responses", "failed to translate Anthropic body to OpenAI Responses")
 		return
 	}
-	o.forward(w, r, o.UpstreamBaseURL+"/responses", bytes.NewReader(translated))
+	model := peekModel(anthropicBody)
+	o.forward(w, r, o.UpstreamBaseURL+"/responses", bytes.NewReader(translated), "openai_responses", model)
+}
+
+// peekModel returns the top-level `model` field from a JSON body without
+// failing on parse errors. Returns "" when the field is absent or the
+// body is not valid JSON; the metrics layer treats "" as a known label.
+func peekModel(body []byte) string {
+	var probe struct {
+		Model string `json:"model"`
+	}
+	_ = json.Unmarshal(body, &probe)
+	return probe.Model
 }
 
 // forward executes the upstream request and streams the response body back
 // to the client, mirroring BedrockTransport.forward. The upstream bearer is
 // never included in any response body.
-func (o *OpenAITransport) forward(w http.ResponseWriter, r *http.Request, upstreamURL string, body io.Reader) {
+//
+// route and model label the metrics emission. For non-streaming responses
+// the body is buffered so we can extract the OpenAI `usage` block; SSE
+// responses are streamed unbuffered (token counts in the streaming usage
+// chunk are an explicit follow-up).
+func (o *OpenAITransport) forward(w http.ResponseWriter, r *http.Request, upstreamURL string, body io.Reader, route, model string) {
+	if o.Metrics != nil {
+		o.Metrics.BeginInflight(route)
+		defer o.Metrics.EndInflight(route)
+	}
+	start := time.Now()
+
 	req, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, body)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "build_request", "failed to build upstream request")
+		if o.Metrics != nil {
+			o.Metrics.RecordRequest(route, model, http.StatusInternalServerError, time.Since(start))
+		}
 		return
 	}
 	req.Header.Set("Authorization", "Bearer "+o.UpstreamBearer)
@@ -105,6 +148,9 @@ func (o *OpenAITransport) forward(w http.ResponseWriter, r *http.Request, upstre
 	resp, err := o.HTTPClient.Do(req)
 	if err != nil {
 		writeJSONError(w, http.StatusBadGateway, "upstream_error", "upstream request failed")
+		if o.Metrics != nil {
+			o.Metrics.RecordRequest(route, model, http.StatusBadGateway, time.Since(start))
+		}
 		return
 	}
 	defer resp.Body.Close()
@@ -119,8 +165,57 @@ func (o *OpenAITransport) forward(w http.ResponseWriter, r *http.Request, upstre
 			w.Header().Set(h, v)
 		}
 	}
+
+	isStream := strings.HasPrefix(strings.ToLower(resp.Header.Get("Content-Type")), "text/event-stream")
+	if !isStream && o.Metrics != nil {
+		// Buffer the JSON body so we can parse `usage` for token totals,
+		// then write through to the client. Bound the buffer to 4 MiB to
+		// avoid running away on a misbehaving gateway response.
+		const maxBuffer = 4 << 20
+		buf, _ := io.ReadAll(io.LimitReader(resp.Body, maxBuffer))
+		w.WriteHeader(resp.StatusCode)
+		_, _ = w.Write(buf)
+		recordOpenAIUsage(o.Metrics, model, buf)
+		o.Metrics.RecordRequest(route, model, resp.StatusCode, time.Since(start))
+		return
+	}
+
 	w.WriteHeader(resp.StatusCode)
 	streamCopy(w, resp.Body)
+	if o.Metrics != nil {
+		o.Metrics.RecordRequest(route, model, resp.StatusCode, time.Since(start))
+	}
+}
+
+// recordOpenAIUsage parses an OpenAI Chat Completions / Responses response
+// body and records the token counts it advertises in the `usage` block.
+// Both surfaces share `prompt_tokens` / `completion_tokens` (Chat) or the
+// equivalent `input_tokens` / `output_tokens` (Responses); we accept both.
+func recordOpenAIUsage(m *Metrics, model string, body []byte) {
+	if m == nil || len(body) == 0 {
+		return
+	}
+	var probe struct {
+		Usage struct {
+			Prompt     int `json:"prompt_tokens"`
+			Completion int `json:"completion_tokens"`
+			Input      int `json:"input_tokens"`
+			Output     int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return
+	}
+	in := probe.Usage.Prompt
+	if in == 0 {
+		in = probe.Usage.Input
+	}
+	out := probe.Usage.Completion
+	if out == 0 {
+		out = probe.Usage.Output
+	}
+	m.RecordTokens(model, "input", in)
+	m.RecordTokens(model, "output", out)
 }
 
 // --------------------------------------------------------------------------
