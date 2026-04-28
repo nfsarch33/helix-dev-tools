@@ -16,10 +16,14 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -52,7 +56,22 @@ func main() {
 
 	if opts.probe {
 		log.Printf("zd-claude-proxy probe: secrets resolved (bedrock len=%d openai len=%d)", len(secrets.BedrockBearer), len(secrets.OpenAIBearer))
-		log.Printf("zd-claude-proxy probe: secret resolution OK; gateway HTTP probe is the v257 spike scope")
+		log.Printf("zd-claude-proxy probe: secret resolution OK")
+		return
+	}
+	if opts.probeLive {
+		switch opts.probeTarget {
+		case "bedrock", "":
+			if err := probeLiveBedrock(ctx, cfg, secrets, opts.probeModel); err != nil {
+				fatal("probe-live (bedrock): %v", err)
+			}
+		case "openai":
+			if err := probeLiveOpenAIChat(ctx, cfg, secrets, opts.probeModel); err != nil {
+				fatal("probe-live (openai): %v", err)
+			}
+		default:
+			fatal("probe-live: unknown target %q (expected bedrock or openai)", opts.probeTarget)
+		}
 		return
 	}
 
@@ -79,7 +98,16 @@ func main() {
 	if err := srv.Start(ctx); err != nil {
 		fatal("start server: %v", err)
 	}
-	log.Printf("zd-claude-proxy: listening on http://%s/messages (loopback only); use header `X-Local-Auth: Bearer $(cat %s)`", srv.Addr(), tokenPath)
+	log.Printf("zd-claude-proxy: listening on http://%s (loopback only)", srv.Addr())
+	log.Printf("zd-claude-proxy: routes:")
+	log.Printf("  POST /v1/messages                                          (auth) Anthropic Messages, model-aware dispatch (Claude->Bedrock; GPT/o3/o4/codex->OpenAI)")
+	log.Printf("  POST /v1/chat/completions                                  (auth) OpenAI Chat Completions passthrough (Cursor)")
+	log.Printf("  POST /v1/responses                                         (auth) OpenAI Responses passthrough (codex/o3/o4/pro)")
+	log.Printf("  POST /bedrock/model/{id}/invoke                            (auth) Bedrock-shape passthrough")
+	log.Printf("  POST /bedrock/model/{id}/invoke-with-response-stream       (auth) Bedrock streaming passthrough")
+	log.Printf("  GET  /healthz                                              (no auth) readiness check")
+	log.Printf("  GET  /version                                              (no auth) build metadata")
+	log.Printf("zd-claude-proxy: client header: `X-Local-Auth: Bearer $(cat %s)`", tokenPath)
 	log.Printf("zd-claude-proxy: bedrock=%s openai=%s (tokens redacted)", cfg.BedrockBaseURL, cfg.OpenAIBaseURL)
 
 	<-ctx.Done()
@@ -93,6 +121,9 @@ func main() {
 
 type runtimeOptions struct {
 	probe       bool
+	probeLive   bool
+	probeModel  string
+	probeTarget string
 	showVersion bool
 	opVault     string
 }
@@ -107,10 +138,14 @@ func parseFlags() (zdproxy.Config, runtimeOptions) {
 	fs.StringVar(&cfg.BedrockBaseURL, "bedrock-base-url", "https://ai-gateway.zende.sk/bedrock", "ZD Bedrock gateway base URL (https://)")
 	fs.StringVar(&cfg.OpenAIBaseURL, "openai-base-url", "https://ai-gateway.zende.sk/v1", "ZD OpenAI gateway base URL (https://)")
 	fs.StringVar(&cfg.OpBedrockItem, "op-bedrock-item", "zd api gateway bedrock claude models", "1Password item title carrying the Bedrock bearer in notesPlain")
+	fs.StringVar(&cfg.OpBedrockField, "op-bedrock-field", "AWS_BEARER_TOKEN_BEDROCK", "shell env-var name in the bedrock notesPlain snippet (empty = treat whole notesPlain as bearer)")
 	fs.StringVar(&cfg.OpOpenAIItem, "op-openai-item", "zd api gateway openai models", "1Password item title carrying the OpenAI bearer in notesPlain")
+	fs.StringVar(&cfg.OpOpenAIField, "op-openai-field", "OPENAI_API_KEY", "shell env-var name in the openai notesPlain snippet (empty = treat whole notesPlain as bearer)")
 	fs.StringVar(&cfg.LocalTokenPath, "local-token-path", "", "override path for the per-process local auth token (default: $XDG_CONFIG_HOME/zd-claude-proxy/local-token)")
 	fs.StringVar(&opts.opVault, "op-vault", "Cursor_IronClaw", "1Password vault name to scope item lookups to")
-	fs.BoolVar(&opts.probe, "probe", false, "resolve secrets via op, log redacted lengths, and exit (smoke gate; no listener bound)")
+	fs.BoolVar(&opts.probe, "probe", false, "resolve secrets via op, log redacted lengths, and exit (cheap smoke gate; no gateway request)")
+	fs.BoolVar(&opts.probeLive, "probe-live", false, "live end-to-end probe: send a tiny Anthropic Messages request through the configured Bedrock gateway and exit (no listener bound)")
+	fs.StringVar(&opts.probeModel, "probe-model", "us.anthropic.claude-3-5-haiku-20241022-v1:0", "model id to use for --probe-live (default: cheapest Haiku)")
 	fs.BoolVar(&opts.showVersion, "version", false, "print version and exit")
 
 	_ = fs.Parse(os.Args[1:])
@@ -120,4 +155,56 @@ func parseFlags() (zdproxy.Config, runtimeOptions) {
 func fatal(format string, args ...any) {
 	log.Printf("zd-claude-proxy: fatal: "+format, args...)
 	os.Exit(1)
+}
+
+// probeLive sends a single tiny Anthropic Messages request directly to the
+// configured ZD Bedrock gateway (bypassing the proxy listener) to prove that
+// VPN + 1Password-resolved bearer + gateway routing all work end-to-end.
+// Output is redacted (no bearer ever logged); only HTTP status + a one-line
+// usage summary is printed.
+func probeLive(ctx context.Context, cfg zdproxy.Config, secrets zdproxy.Secrets, model string) error {
+	// Bedrock invoke takes the model in the URL path, NOT the body.
+	body := map[string]any{
+		"anthropic_version": "bedrock-2023-05-31",
+		"max_tokens":        8,
+		"messages": []map[string]any{
+			{"role": "user", "content": "ping"},
+		},
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal body: %w", err)
+	}
+	url := fmt.Sprintf("%s/model/%s/invoke", cfg.BedrockBaseURL, model)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+secrets.BedrockBearer)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("upstream POST: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("upstream HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+	var parsed struct {
+		ID    string `json:"id"`
+		Type  string `json:"type"`
+		Model string `json:"model"`
+		Usage struct {
+			Input  int `json:"input_tokens"`
+			Output int `json:"output_tokens"`
+		} `json:"usage"`
+	}
+	_ = json.Unmarshal(respBody, &parsed)
+	log.Printf("zd-claude-proxy probe-live: HTTP %d model=%s id=%s usage.input=%d usage.output=%d",
+		resp.StatusCode, parsed.Model, parsed.ID, parsed.Usage.Input, parsed.Usage.Output)
+	return nil
 }

@@ -144,6 +144,35 @@ func TestBedrockTransport_AnthropicMessages_InjectsAnthropicVersion(t *testing.T
 	}
 }
 
+func TestBedrockTransport_AnthropicMessages_StripsModelAndStreamFromBody(t *testing.T) {
+	// Bedrock invoke rejects bodies that include `model` (it lives in the
+	// URL path). It also rejects `stream` on the non-streaming endpoint.
+	// The prepare step strips both so callers can use the Anthropic-Messages
+	// shape transparently.
+	up := newFakeBedrockUpstream()
+	defer up.close()
+
+	bt := newBedrockTransportForTest(up.server.URL, "X")
+	body := `{"model":"us.anthropic.claude-opus-4-7","stream":false,"messages":[{"role":"user","content":"hi"}],"max_tokens":4}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/messages", strings.NewReader(body))
+	bt.HandleAnthropicMessages(httptest.NewRecorder(), req)
+
+	_, _, _, upBody := up.snapshot()
+	var got map[string]any
+	if err := json.Unmarshal(upBody, &got); err != nil {
+		t.Fatalf("upstream body not JSON: %v", err)
+	}
+	if _, ok := got["model"]; ok {
+		t.Fatalf("expected `model` stripped from upstream body, got %v", got)
+	}
+	if _, ok := got["stream"]; ok {
+		t.Fatalf("expected `stream` stripped from upstream body, got %v", got)
+	}
+	if got["anthropic_version"] != "bedrock-2023-05-31" {
+		t.Fatalf("expected anthropic_version injected, got %v", got["anthropic_version"])
+	}
+}
+
 func TestBedrockTransport_AnthropicMessages_PreservesAnthropicVersion(t *testing.T) {
 	up := newFakeBedrockUpstream()
 	defer up.close()

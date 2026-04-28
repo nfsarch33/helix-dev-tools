@@ -12,17 +12,25 @@ import (
 
 // Server is the loopback HTTP server. It exposes:
 //
-//   - GET  /healthz  (no auth) — readiness check, returns {status: ok}.
-//   - POST /messages (auth)    — Anthropic Messages translator. MVP returns
-//     501 Not Implemented; v257 R&D spike fills in Bedrock + OpenAI shapes.
-//   - GET  /version  (no auth) — build/version metadata.
+//   - GET  /healthz                                          (no auth) — readiness check.
+//   - GET  /version                                          (no auth) — build metadata.
+//   - POST /v1/messages                                      (auth)   — Anthropic Messages, model-aware dispatch
+//     to Bedrock /invoke (Claude family) or OpenAI /v1/chat/completions /
+//     /v1/responses (GPT / o3 / o4 / codex / pro families).
+//   - POST /v1/chat/completions                              (auth)   — OpenAI Chat Completions passthrough.
+//   - POST /v1/responses                                     (auth)   — OpenAI Responses passthrough.
+//   - POST /bedrock/model/{id}/invoke                        (auth)   — Bedrock-shape passthrough.
+//   - POST /bedrock/model/{id}/invoke-with-response-stream   (auth)   — Bedrock streaming passthrough.
 //
-// All handlers are wrapped with the AuthMiddleware where appropriate. The
-// listener binds only to a loopback address; NewServer refuses any other.
+// All authenticated handlers are wrapped with AuthMiddleware. The listener
+// binds only to a loopback address; NewServer refuses any other.
 type Server struct {
 	cfg        Config
 	secrets    Secrets
 	localToken string
+	bedrock    *BedrockTransport
+	openai     *OpenAITransport
+	dispatcher *MessagesDispatcher
 
 	httpServer *http.Server
 	listener   net.Listener
@@ -39,7 +47,16 @@ func NewServer(cfg Config, secrets Secrets, localToken string) (*Server, error) 
 	if localToken == "" {
 		return nil, fmt.Errorf("local token must be non-empty")
 	}
-	return &Server{cfg: cfg, secrets: secrets, localToken: localToken}, nil
+	bedrock := NewBedrockTransport(cfg.BedrockBaseURL, secrets.BedrockBearer, nil)
+	openai := NewOpenAITransport(cfg.OpenAIBaseURL, secrets.OpenAIBearer, nil)
+	return &Server{
+		cfg:        cfg,
+		secrets:    secrets,
+		localToken: localToken,
+		bedrock:    bedrock,
+		openai:     openai,
+		dispatcher: &MessagesDispatcher{Bedrock: bedrock, OpenAI: openai},
+	}, nil
 }
 
 // Start binds the listener on the configured loopback address and begins
@@ -61,7 +78,11 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/version", s.handleVersion)
-	mux.Handle("/messages", AuthMiddleware(s.localToken)(http.HandlerFunc(s.handleMessages)))
+	auth := AuthMiddleware(s.localToken)
+	mux.Handle("/v1/messages", auth(http.HandlerFunc(s.dispatcher.HandleAnthropicMessages)))
+	mux.Handle("/v1/chat/completions", auth(http.HandlerFunc(s.openai.HandleChatCompletions)))
+	mux.Handle("/v1/responses", auth(http.HandlerFunc(s.openai.HandleResponses)))
+	mux.Handle("/bedrock/", auth(http.HandlerFunc(s.bedrock.HandleBedrockPassthrough)))
 
 	s.httpServer = &http.Server{
 		Handler:           mux,
@@ -110,12 +131,26 @@ func (s *Server) handleVersion(w http.ResponseWriter, _ *http.Request) {
 	})
 }
 
-// handleMessages is the inbound Anthropic Messages handler. The MVP returns
-// 501 Not Implemented to ship the security envelope (loopback bind, local
-// auth token, no upstream credential leakage) before v257 plumbs in the
-// Bedrock and OpenAI translators.
-func (s *Server) handleMessages(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusNotImplemented)
-	_, _ = w.Write([]byte(`{"error":{"type":"not_implemented","message":"zd-claude-proxy MVP: translator scheduled for v257 R&D spike. See reports/research/claude-desktop-custom-base-url-2026-04-28.md."}}`))
+// SetBedrockTransport overrides the default BedrockTransport. Tests use it to
+// point the proxy at an httptest.Server upstream without leaving the loopback
+// invariants enforced on cfg.BedrockBaseURL.
+func (s *Server) SetBedrockTransport(bt *BedrockTransport) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.bedrock = bt
+	if s.dispatcher != nil {
+		s.dispatcher.Bedrock = bt
+	}
+}
+
+// SetOpenAITransport overrides the default OpenAITransport. Tests use it to
+// point the proxy at an httptest.Server upstream without leaving the loopback
+// invariants enforced on cfg.OpenAIBaseURL.
+func (s *Server) SetOpenAITransport(ot *OpenAITransport) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.openai = ot
+	if s.dispatcher != nil {
+		s.dispatcher.OpenAI = ot
+	}
 }

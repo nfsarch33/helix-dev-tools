@@ -43,9 +43,19 @@ type Config struct {
 	// in `notesPlain` (resolved by package secrets at startup).
 	OpBedrockItem string
 
+	// OpBedrockField is the shell env-var name embedded in the bedrock item's
+	// notesPlain snippet (e.g. AWS_BEARER_TOKEN_BEDROCK). When empty the
+	// secrets loader treats the entire notesPlain as the bearer (legacy
+	// shape); when set it parses `export FIELD=VALUE` and returns VALUE.
+	OpBedrockField string
+
 	// OpOpenAIItem is the 1Password item title carrying the ZD OpenAI bearer
 	// in `notesPlain` (resolved by package secrets at startup).
 	OpOpenAIItem string
+
+	// OpOpenAIField behaves the same as OpBedrockField for the OpenAI item
+	// (e.g. OPENAI_API_KEY).
+	OpOpenAIField string
 
 	// LocalTokenPath, if non-empty, overrides the default
 	// `${XDG_CONFIG_HOME:-$HOME/.config}/zd-claude-proxy/local-token` file
