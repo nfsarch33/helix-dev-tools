@@ -44,23 +44,24 @@ func NewOpenAITransport(upstreamBaseURL, bearer string, client *http.Client) *Op
 }
 
 // HandleChatCompletions serves POST /v1/chat/completions as a transparent
-// passthrough to ${UpstreamBaseURL}/v1/chat/completions.
+// passthrough to ${UpstreamBaseURL}/chat/completions. UpstreamBaseURL follows
+// OpenAI-client convention (e.g. "https://ai-gateway.zende.sk/v1").
 func (o *OpenAITransport) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST required")
 		return
 	}
-	o.forward(w, r, o.UpstreamBaseURL+"/v1/chat/completions", r.Body)
+	o.forward(w, r, o.UpstreamBaseURL+"/chat/completions", r.Body)
 }
 
 // HandleResponses serves POST /v1/responses as a transparent passthrough to
-// ${UpstreamBaseURL}/v1/responses (used for o3/o4/codex/pro models).
+// ${UpstreamBaseURL}/responses (used for o3/o4/codex/pro models).
 func (o *OpenAITransport) HandleResponses(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		writeJSONError(w, http.StatusMethodNotAllowed, "method_not_allowed", "POST required")
 		return
 	}
-	o.forward(w, r, o.UpstreamBaseURL+"/v1/responses", r.Body)
+	o.forward(w, r, o.UpstreamBaseURL+"/responses", r.Body)
 }
 
 // ForwardChatTranslated translates an Anthropic-Messages-shape body to OpenAI
@@ -72,7 +73,7 @@ func (o *OpenAITransport) ForwardChatTranslated(w http.ResponseWriter, r *http.R
 		writeJSONError(w, http.StatusBadRequest, "translate_chat", "failed to translate Anthropic body to OpenAI Chat Completions")
 		return
 	}
-	o.forward(w, r, o.UpstreamBaseURL+"/v1/chat/completions", bytes.NewReader(translated))
+	o.forward(w, r, o.UpstreamBaseURL+"/chat/completions", bytes.NewReader(translated))
 }
 
 // ForwardResponsesTranslated translates an Anthropic-Messages-shape body to
@@ -83,7 +84,7 @@ func (o *OpenAITransport) ForwardResponsesTranslated(w http.ResponseWriter, r *h
 		writeJSONError(w, http.StatusBadRequest, "translate_responses", "failed to translate Anthropic body to OpenAI Responses")
 		return
 	}
-	o.forward(w, r, o.UpstreamBaseURL+"/v1/responses", bytes.NewReader(translated))
+	o.forward(w, r, o.UpstreamBaseURL+"/responses", bytes.NewReader(translated))
 }
 
 // forward executes the upstream request and streams the response body back

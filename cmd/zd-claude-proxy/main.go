@@ -144,8 +144,9 @@ func parseFlags() (zdproxy.Config, runtimeOptions) {
 	fs.StringVar(&cfg.LocalTokenPath, "local-token-path", "", "override path for the per-process local auth token (default: $XDG_CONFIG_HOME/zd-claude-proxy/local-token)")
 	fs.StringVar(&opts.opVault, "op-vault", "Cursor_IronClaw", "1Password vault name to scope item lookups to")
 	fs.BoolVar(&opts.probe, "probe", false, "resolve secrets via op, log redacted lengths, and exit (cheap smoke gate; no gateway request)")
-	fs.BoolVar(&opts.probeLive, "probe-live", false, "live end-to-end probe: send a tiny Anthropic Messages request through the configured Bedrock gateway and exit (no listener bound)")
+	fs.BoolVar(&opts.probeLive, "probe-live", false, "live end-to-end probe: send a tiny request through the configured gateway and exit (no listener bound)")
 	fs.StringVar(&opts.probeModel, "probe-model", "us.anthropic.claude-3-5-haiku-20241022-v1:0", "model id to use for --probe-live (default: cheapest Haiku)")
+	fs.StringVar(&opts.probeTarget, "probe-target", "bedrock", "--probe-live target: `bedrock` (default) or `openai`")
 	fs.BoolVar(&opts.showVersion, "version", false, "print version and exit")
 
 	_ = fs.Parse(os.Args[1:])
@@ -157,12 +158,12 @@ func fatal(format string, args ...any) {
 	os.Exit(1)
 }
 
-// probeLive sends a single tiny Anthropic Messages request directly to the
-// configured ZD Bedrock gateway (bypassing the proxy listener) to prove that
-// VPN + 1Password-resolved bearer + gateway routing all work end-to-end.
-// Output is redacted (no bearer ever logged); only HTTP status + a one-line
-// usage summary is printed.
-func probeLive(ctx context.Context, cfg zdproxy.Config, secrets zdproxy.Secrets, model string) error {
+// probeLiveBedrock sends a single tiny Anthropic Messages request directly to
+// the configured ZD Bedrock gateway (bypassing the proxy listener) to prove
+// that VPN + 1Password-resolved bearer + gateway routing all work
+// end-to-end. Output is redacted (no bearer ever logged); only HTTP status +
+// a one-line usage summary is printed.
+func probeLiveBedrock(ctx context.Context, cfg zdproxy.Config, secrets zdproxy.Secrets, model string) error {
 	// Bedrock invoke takes the model in the URL path, NOT the body.
 	body := map[string]any{
 		"anthropic_version": "bedrock-2023-05-31",
@@ -204,7 +205,66 @@ func probeLive(ctx context.Context, cfg zdproxy.Config, secrets zdproxy.Secrets,
 		} `json:"usage"`
 	}
 	_ = json.Unmarshal(respBody, &parsed)
-	log.Printf("zd-claude-proxy probe-live: HTTP %d model=%s id=%s usage.input=%d usage.output=%d",
+	log.Printf("zd-claude-proxy probe-live (bedrock): HTTP %d model=%s id=%s usage.input=%d usage.output=%d",
 		resp.StatusCode, parsed.Model, parsed.ID, parsed.Usage.Input, parsed.Usage.Output)
+	return nil
+}
+
+// probeLiveOpenAIChat sends a single tiny OpenAI Chat Completions request
+// directly to the configured ZD OpenAI gateway. Defaults the model to
+// gpt-5.5 when the caller did not pass --probe-model (or passed the Bedrock
+// default). Output is redacted; only HTTP status + usage summary is logged.
+func probeLiveOpenAIChat(ctx context.Context, cfg zdproxy.Config, secrets zdproxy.Secrets, model string) error {
+	if model == "" || model == "us.anthropic.claude-3-5-haiku-20241022-v1:0" {
+		model = "gpt-5.5"
+	}
+	body := map[string]any{
+		"model":                 model,
+		"max_completion_tokens": 8,
+		"messages": []map[string]any{
+			{"role": "user", "content": "ping"},
+		},
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("marshal body: %w", err)
+	}
+	url := cfg.OpenAIBaseURL + "/chat/completions"
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+secrets.OpenAIBearer)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("upstream POST: %w", err)
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode/100 != 2 {
+		return fmt.Errorf("upstream HTTP %d: %s", resp.StatusCode, string(respBody))
+	}
+	var parsed struct {
+		ID    string `json:"id"`
+		Model string `json:"model"`
+		Usage struct {
+			Prompt     int `json:"prompt_tokens"`
+			Completion int `json:"completion_tokens"`
+		} `json:"usage"`
+		Choices []struct {
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+	}
+	_ = json.Unmarshal(respBody, &parsed)
+	finish := ""
+	if len(parsed.Choices) > 0 {
+		finish = parsed.Choices[0].FinishReason
+	}
+	log.Printf("zd-claude-proxy probe-live (openai): HTTP %d model=%s id=%s usage.prompt=%d usage.completion=%d finish=%s",
+		resp.StatusCode, parsed.Model, parsed.ID, parsed.Usage.Prompt, parsed.Usage.Completion, finish)
 	return nil
 }

@@ -111,8 +111,8 @@ func TestOpenAITransport_ChatCompletions_Passthrough_NonStreaming(t *testing.T) 
 	ot.HandleChatCompletions(rec, req)
 
 	path, method, headers, upBody := up.snapshot()
-	if path != "/v1/chat/completions" {
-		t.Fatalf("expected upstream path /v1/chat/completions, got %q", path)
+	if path != "/chat/completions" {
+		t.Fatalf("expected upstream path /chat/completions, got %q", path)
 	}
 	if method != http.MethodPost {
 		t.Fatalf("expected upstream POST, got %q", method)
@@ -148,8 +148,8 @@ func TestOpenAITransport_ChatCompletions_Passthrough_Streaming(t *testing.T) {
 	ot.HandleChatCompletions(rec, req)
 
 	path, _, _, _ := up.snapshot()
-	if path != "/v1/chat/completions" {
-		t.Fatalf("expected /v1/chat/completions, got %q", path)
+	if path != "/chat/completions" {
+		t.Fatalf("expected /chat/completions, got %q", path)
 	}
 	if rec.Header().Get("Content-Type") != "text/event-stream" {
 		t.Fatalf("expected text/event-stream, got %q", rec.Header().Get("Content-Type"))
@@ -225,8 +225,8 @@ func TestOpenAITransport_Responses_Passthrough_NonStreaming(t *testing.T) {
 	ot.HandleResponses(rec, req)
 
 	path, _, headers, upBody := up.snapshot()
-	if path != "/v1/responses" {
-		t.Fatalf("expected /v1/responses, got %q", path)
+	if path != "/responses" {
+		t.Fatalf("expected /responses, got %q", path)
 	}
 	if got := headers.Get("Authorization"); got != "Bearer X" {
 		t.Fatalf("expected Authorization=Bearer X, got %q", got)
@@ -630,7 +630,7 @@ func TestMessagesDispatcher_RoutesGPTToOpenAIChat(t *testing.T) {
 		t.Fatalf("expected Bedrock NOT called, got path %q", bedrockPath)
 	}
 	openaiPath, _, headers, upBody := openaiUp.snapshot()
-	if openaiPath != "/v1/chat/completions" {
+	if openaiPath != "/chat/completions" {
 		t.Fatalf("expected OpenAI Chat Completions, got %q", openaiPath)
 	}
 	if got := headers.Get("Authorization"); got != "Bearer OPENAI" {
@@ -670,7 +670,7 @@ func TestMessagesDispatcher_RoutesCodexToOpenAIResponses(t *testing.T) {
 	d.HandleAnthropicMessages(rec, req)
 
 	openaiPath, _, _, _ := openaiUp.snapshot()
-	if openaiPath != "/v1/responses" {
+	if openaiPath != "/responses" {
 		t.Fatalf("expected OpenAI Responses dispatch for codex, got %q", openaiPath)
 	}
 	if rec.Code != http.StatusOK {

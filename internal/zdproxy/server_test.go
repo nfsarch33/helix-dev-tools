@@ -228,8 +228,8 @@ func TestServer_ChatCompletionsEndToEnd(t *testing.T) {
 		t.Fatalf("expected 200, got %d (%q)", resp.StatusCode, got)
 	}
 	path, _, headers, _ := up.snapshot()
-	if path != "/v1/chat/completions" {
-		t.Fatalf("expected /v1/chat/completions, got %q", path)
+	if path != "/chat/completions" {
+		t.Fatalf("expected /chat/completions, got %q", path)
 	}
 	if got := headers.Get("Authorization"); got != "Bearer OPENAI" {
 		t.Fatalf("expected Authorization=Bearer OPENAI, got %q", got)
@@ -273,8 +273,8 @@ func TestServer_ResponsesEndToEnd(t *testing.T) {
 		t.Fatalf("expected 200, got %d (%q)", resp.StatusCode, got)
 	}
 	path, _, _, _ := up.snapshot()
-	if path != "/v1/responses" {
-		t.Fatalf("expected /v1/responses, got %q", path)
+	if path != "/responses" {
+		t.Fatalf("expected /responses, got %q", path)
 	}
 }
 
@@ -323,8 +323,8 @@ func TestServer_MessagesDispatchesToOpenAIChatRoute(t *testing.T) {
 		t.Fatalf("expected Bedrock NOT called, got path %q", p)
 	}
 	openaiPath, _, _, _ := openaiUp.snapshot()
-	if openaiPath != "/v1/chat/completions" {
-		t.Fatalf("expected /v1/chat/completions dispatch, got %q", openaiPath)
+	if openaiPath != "/chat/completions" {
+		t.Fatalf("expected /chat/completions dispatch, got %q", openaiPath)
 	}
 }
 
