@@ -212,22 +212,65 @@ type Mem0Pusher interface {
 }
 
 // Flusher drains the outbox into Mem0. One Flusher per outbox file.
+//
+// Optional Budget + Ledger gate the flush against a PAYG USD cap. When
+// either is nil the flusher behaves identically to the pre-budget
+// release (only ErrRateLimited and corruption produce non-nil err).
 type Flusher struct {
 	PendingPath string
 	CursorPath  string
 	Client      Mem0Pusher
 	BatchSize   int
+
+	// Budget describes the PAYG-cap policy. Nil disables the gate.
+	Budget *Budget
+	// Ledger persists cumulative USD spend. Nil disables the gate.
+	Ledger SpendLedger
 }
 
 // Flush reads pending capsules starting at the cursor offset, posts
 // each to Mem0 (one POST per capsule), and advances the cursor after
 // every success. On HTTP 429 the cursor is left at the failure point
 // and ErrRateLimited is returned with a populated RetryAfter.
+//
+// When Flusher.Budget and Flusher.Ledger are both non-nil, Flush also
+// gates the batch against the PAYG-cap policy:
+//
+//   - Pre-batch: project the cost of pushing BatchSize capsules. If
+//     that projected total >= FreezeRatio * USDMax, return
+//     ErrBudgetFrozen WITHOUT opening pending.jsonl. The cursor is
+//     not advanced.
+//   - Mid-batch: after each successful push, increment the ledger by
+//     CostPerCapsuleUSD and re-check. If the new total >= ceiling,
+//     stop pushing further capsules in this batch and return
+//     ErrBudgetFrozen with FlushReport.Flushed reflecting the partial
+//     drain.
 func (f *Flusher) Flush(ctx context.Context) (FlushReport, error) {
 	report := FlushReport{}
 	if f.Client == nil {
 		return report, errors.New("flusher: nil Mem0 client")
 	}
+
+	limit := f.BatchSize
+	if limit <= 0 {
+		limit = 100
+	}
+
+	// Pre-batch budget gate. The flusher refuses to even open
+	// pending.jsonl when the operator has already burned the entire
+	// FreezeRatio share of USDMax. Pre-batch fires only on "already
+	// at the ceiling" -- the per-push gate below handles the case
+	// where a partial drain is still safe.
+	if f.budgetGateActive() {
+		spent, err := f.Ledger.Read()
+		if err != nil {
+			return report, fmt.Errorf("read spend ledger: %w", err)
+		}
+		if frozen, projected := f.Budget.ShouldFreeze(spent, 0); frozen {
+			return report, fmt.Errorf("pre-batch spend $%.4f >= ceiling $%.4f: %w", projected, f.Budget.Ceiling(), ErrBudgetFrozen)
+		}
+	}
+
 	in, err := os.Open(f.PendingPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -250,10 +293,6 @@ func (f *Flusher) Flush(ctx context.Context) (FlushReport, error) {
 	br := bufio.NewReader(in)
 	offset := cursor
 	processed := 0
-	limit := f.BatchSize
-	if limit <= 0 {
-		limit = 100
-	}
 	for processed < limit {
 		line, err := br.ReadBytes('\n')
 		if len(line) == 0 && errors.Is(err, io.EOF) {
@@ -297,11 +336,33 @@ func (f *Flusher) Flush(ctx context.Context) (FlushReport, error) {
 		if writeErr := writeCursor(f.CursorPath, offset); writeErr != nil {
 			return report, fmt.Errorf("write cursor: %w", writeErr)
 		}
+
+		// Mid-batch budget gate. The cursor has already advanced past
+		// this push; we only stop the *next* push, never roll back a
+		// successful one. This guarantees the ledger's running total
+		// is always a lower bound on actual spend.
+		if f.budgetGateActive() {
+			newSpend, addErr := f.Ledger.Add(f.Budget.CostPerCapsuleUSD)
+			if addErr != nil {
+				return report, fmt.Errorf("add to spend ledger: %w", addErr)
+			}
+			if newSpend >= f.Budget.Ceiling() {
+				return report, fmt.Errorf("post-push spend $%.4f >= ceiling $%.4f: %w", newSpend, f.Budget.Ceiling(), ErrBudgetFrozen)
+			}
+		}
+
 		if errors.Is(err, io.EOF) {
 			break
 		}
 	}
 	return report, nil
+}
+
+// budgetGateActive reports whether the flusher is configured for
+// PAYG-cap enforcement. Both Budget and Ledger must be non-nil for
+// the gate to fire.
+func (f *Flusher) budgetGateActive() bool {
+	return f != nil && f.Budget != nil && f.Ledger != nil && f.Budget.USDMax > 0
 }
 
 func readCursor(path string) (int64, error) {

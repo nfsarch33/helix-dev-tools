@@ -49,6 +49,8 @@ func resetMem0OutboxFlags(t *testing.T, root string) {
 	mem0OutboxFlags.tail = 0
 	mem0OutboxFlags.once = false
 	mem0OutboxFlags.dryRun = false
+	mem0OutboxFlags.costPerCapsuleUSD = 0.005
+	mem0OutboxFlags.noBudget = false
 }
 
 func TestRunMem0Outbox_TailEmptyDirReturnsNoCapsules(t *testing.T) {

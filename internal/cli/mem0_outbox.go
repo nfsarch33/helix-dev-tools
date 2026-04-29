@@ -17,16 +17,18 @@ import (
 )
 
 var mem0OutboxFlags struct {
-	root           string
-	apiKey         string
-	baseURL        string
-	mcpJSON        string
-	batchSize      int
-	maxIterations  int
-	flushIntervalS int
-	tail           int
-	once           bool
-	dryRun         bool
+	root              string
+	apiKey            string
+	baseURL           string
+	mcpJSON           string
+	batchSize         int
+	maxIterations     int
+	flushIntervalS    int
+	tail              int
+	once              bool
+	dryRun            bool
+	costPerCapsuleUSD float64
+	noBudget          bool
 }
 
 var mem0OutboxCmd = &cobra.Command{
@@ -52,6 +54,8 @@ func init() {
 	mem0OutboxCmd.Flags().IntVar(&mem0OutboxFlags.tail, "tail", 0, "Print the last N capsules and exit (read-only; no flushing)")
 	mem0OutboxCmd.Flags().BoolVar(&mem0OutboxFlags.once, "once", false, "Run a single flush iteration and exit")
 	mem0OutboxCmd.Flags().BoolVar(&mem0OutboxFlags.dryRun, "dry-run", false, "Read pending capsules and report counts without calling Mem0")
+	mem0OutboxCmd.Flags().Float64Var(&mem0OutboxFlags.costPerCapsuleUSD, "cost-per-capsule-usd", 0.005, "USD estimate per capsule for the PAYG-cap projection")
+	mem0OutboxCmd.Flags().BoolVar(&mem0OutboxFlags.noBudget, "no-budget", false, "Disable the MEM0_PAYG_USD_MAX freeze gate (operator override)")
 }
 
 func runMem0Outbox(_ *cobra.Command, _ []string) error {
@@ -116,6 +120,15 @@ func runMem0Outbox(_ *cobra.Command, _ []string) error {
 		BatchSize:   mem0OutboxFlags.batchSize,
 	}
 
+	if !mem0OutboxFlags.noBudget {
+		flusher.Budget = mem0outbox.BudgetFromEnv(mem0OutboxFlags.costPerCapsuleUSD)
+		flusher.Ledger = mem0outbox.NewFileLedger(filepath.Join(mem0OutboxFlags.root, "spent_usd"))
+		fmt.Printf("  budget: USDMax=$%.2f freeze>=%.0f%% cost/capsule=$%.4f\n",
+			flusher.Budget.USDMax, flusher.Budget.FreezeRatio*100, flusher.Budget.CostPerCapsuleUSD)
+	} else {
+		fmt.Println("  budget: DISABLED (--no-budget)")
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -130,6 +143,10 @@ func runMem0Outbox(_ *cobra.Command, _ []string) error {
 				return err
 			}
 			sleep(ctx, report.RetryAfter)
+		case errors.Is(err, mem0outbox.ErrBudgetFrozen):
+			fmt.Printf("  iteration=%d flushed=%d FROZEN: %s\n", iterations, report.Flushed, err)
+			fmt.Println("  next action: raise MEM0_PAYG_USD_MAX OR reset <root>/spent_usd OR run with --no-budget")
+			return err
 		case err != nil:
 			return err
 		default:
