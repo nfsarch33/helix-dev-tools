@@ -82,14 +82,15 @@ func main() {
 			fatal("resolve default token path: %v", err)
 		}
 	}
-	localToken, err := zdproxy.NewLocalToken()
+	localToken, written, err := zdproxy.ResolveLocalToken(tokenPath, opts.reuseLocalToken)
 	if err != nil {
-		fatal("mint local token: %v", err)
+		fatal("resolve local token: %v", err)
 	}
-	if err := zdproxy.WriteLocalTokenFile(tokenPath, localToken); err != nil {
-		fatal("write local token file: %v", err)
+	if written {
+		log.Printf("zd-claude-proxy: local-token file written to %s (mode 0600)", tokenPath)
+	} else {
+		log.Printf("zd-claude-proxy: reusing existing local-token at %s (rotate with --reuse-local-token=false)", tokenPath)
 	}
-	log.Printf("zd-claude-proxy: local-token file written to %s (mode 0600)", tokenPath)
 
 	srv, err := zdproxy.NewServer(cfg, secrets, localToken)
 	if err != nil {
@@ -116,17 +117,27 @@ func main() {
 	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelShutdown()
 	_ = srv.Stop(shutdownCtx)
-	_ = os.Remove(tokenPath)
+	if !opts.reuseLocalToken {
+		// Strict rotation mode: clean up the token file so the next
+		// boot is guaranteed to mint a fresh one. In reuse mode the
+		// file is intentionally left in place so long-running clients
+		// (Claude Desktop, Claude CLI, Codex CLI) survive the restart.
+		_ = os.Remove(tokenPath)
+		log.Printf("zd-claude-proxy: removed local-token file (rotate mode)")
+	} else {
+		log.Printf("zd-claude-proxy: kept local-token file at %s for next boot (reuse mode)", tokenPath)
+	}
 	log.Printf("zd-claude-proxy: stopped")
 }
 
 type runtimeOptions struct {
-	probe       bool
-	probeLive   bool
-	probeModel  string
-	probeTarget string
-	showVersion bool
-	opVault     string
+	probe           bool
+	probeLive       bool
+	probeModel      string
+	probeTarget     string
+	showVersion     bool
+	opVault         string
+	reuseLocalToken bool
 }
 
 func parseFlags() (zdproxy.Config, runtimeOptions) {
@@ -149,6 +160,7 @@ func parseFlags() (zdproxy.Config, runtimeOptions) {
 	fs.StringVar(&opts.probeModel, "probe-model", "us.anthropic.claude-3-5-haiku-20241022-v1:0", "model id to use for --probe-live (default: cheapest Haiku)")
 	fs.StringVar(&opts.probeTarget, "probe-target", "bedrock", "--probe-live target: `bedrock` (default) or `openai`")
 	fs.BoolVar(&opts.showVersion, "version", false, "print version and exit")
+	fs.BoolVar(&opts.reuseLocalToken, "reuse-local-token", true, "if true, reuse the existing local-token file when its content is a valid 32-byte base64url token; otherwise mint+rotate on every boot")
 
 	_ = fs.Parse(os.Args[1:])
 	return cfg, opts
