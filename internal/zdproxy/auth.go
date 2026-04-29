@@ -32,20 +32,28 @@ func NewLocalToken() (string, error) {
 }
 
 // AuthMiddleware returns an http middleware that validates the local-auth
-// header against the expected token using a constant-time comparison. The
-// expected token MUST NOT appear in any error response.
+// header against one or more accepted tokens using constant-time comparison.
+// No accepted token ever appears in any error response.
 //
 // Two header names are accepted (in priority order):
-//   - X-Local-Auth: Bearer <local-token>   (canonical)
-//   - Authorization: Bearer <local-token>  (fallback for OpenAI-shape
-//     clients such as Cursor; the listener is loopback-only so this is
-//     no weaker than X-Local-Auth)
+//   - X-Local-Auth: Bearer <token>   (canonical for non-SDK callers)
+//   - Authorization: Bearer <token>  (fallback for Claude Code CLI / Cursor
+//     / OpenAI-shape clients; the listener is loopback-only)
 //
-// When Authorization is consumed for local-auth, the middleware strips
-// it from the request before passing it on so the upstream request the
-// transport sends is not contaminated by the inbound bearer.
-func AuthMiddleware(expected string) func(http.Handler) http.Handler {
-	expectedBytes := []byte(expected)
+// The acceptedTokens list typically contains the process-scoped local token
+// AND the upstream gateway bearer. This dual-accept is necessary because
+// Claude Code CLI in Bedrock mode sends ANTHROPIC_AUTH_TOKEN as its
+// Authorization header, and that value is the ZD gateway bearer, not the
+// proxy's local token.
+//
+// When Authorization is consumed for auth, the middleware strips it from the
+// request before passing it on so the upstream transport can inject the
+// correct gateway bearer cleanly.
+func AuthMiddleware(acceptedTokens ...string) func(http.Handler) http.Handler {
+	accepted := make([][]byte, len(acceptedTokens))
+	for i, t := range acceptedTokens {
+		accepted[i] = []byte(t)
+	}
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			source, raw := readBearer(r)
@@ -53,13 +61,19 @@ func AuthMiddleware(expected string) func(http.Handler) http.Handler {
 				http.Error(w, `{"error":{"type":"unauthorized","message":"missing X-Local-Auth or Authorization bearer"}}`, http.StatusUnauthorized)
 				return
 			}
-			if subtle.ConstantTimeCompare([]byte(raw), expectedBytes) != 1 {
+			rawBytes := []byte(raw)
+			matched := false
+			for _, exp := range accepted {
+				if subtle.ConstantTimeCompare(rawBytes, exp) == 1 {
+					matched = true
+					break
+				}
+			}
+			if !matched {
 				http.Error(w, `{"error":{"type":"unauthorized","message":"invalid local auth bearer"}}`, http.StatusUnauthorized)
 				return
 			}
 			if source == fallbackAuthHeader {
-				// Strip the inbound Authorization so the transport
-				// can inject the upstream gateway bearer cleanly.
 				r.Header.Del(fallbackAuthHeader)
 			}
 			next.ServeHTTP(w, r)

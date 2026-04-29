@@ -263,8 +263,44 @@ func TestBedrockTransport_BedrockPassthrough_NonStreaming(t *testing.T) {
 	if path != "/model/us.anthropic.claude-sonnet-4-6/invoke" {
 		t.Fatalf("expected /model/.../invoke, got %q", path)
 	}
-	if !bytes.Equal(upBody, []byte(body)) {
-		t.Fatalf("expected body forwarded byte-for-byte\nwant: %q\ngot:  %q", body, upBody)
+	var got map[string]any
+	if err := json.Unmarshal(upBody, &got); err != nil {
+		t.Fatalf("upstream body is not JSON: %v", err)
+	}
+	if _, has := got["model"]; has {
+		t.Fatal("upstream body must not contain 'model' key (Bedrock rejects it)")
+	}
+	if got["anthropic_version"] != "bedrock-2023-05-31" {
+		t.Fatalf("expected anthropic_version preserved, got %v", got["anthropic_version"])
+	}
+}
+
+func TestBedrockTransport_BedrockPassthrough_StripsModelKey(t *testing.T) {
+	up := newFakeBedrockUpstream()
+	defer up.close()
+
+	bt := newBedrockTransportForTest(up.server.URL, "X")
+	body := `{"model":"us.anthropic.claude-opus-4-7","anthropic_version":"bedrock-2023-05-31","messages":[{"role":"user","content":"ping"}],"max_tokens":8}`
+	req := httptest.NewRequest(http.MethodPost, "/bedrock/model/us.anthropic.claude-opus-4-7/invoke", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	bt.HandleBedrockPassthrough(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	_, _, _, upBody := up.snapshot()
+	var got map[string]any
+	if err := json.Unmarshal(upBody, &got); err != nil {
+		t.Fatalf("upstream body is not JSON: %v", err)
+	}
+	if _, has := got["model"]; has {
+		t.Fatal("upstream body must not contain 'model' key after passthrough strip")
+	}
+	if _, has := got["stream"]; has {
+		t.Fatal("upstream body must not contain 'stream' key after passthrough strip")
+	}
+	if got["anthropic_version"] != "bedrock-2023-05-31" {
+		t.Fatalf("expected anthropic_version, got %v", got["anthropic_version"])
 	}
 }
 

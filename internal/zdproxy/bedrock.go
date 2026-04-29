@@ -117,12 +117,23 @@ func (b *BedrockTransport) HandleBedrockPassthrough(w http.ResponseWriter, r *ht
 		writeJSONError(w, http.StatusBadRequest, "invalid_path", "expected /bedrock/model/{id}/invoke[-with-response-stream]")
 		return
 	}
+
+	raw, err := io.ReadAll(r.Body)
+	if err != nil {
+		writeJSONError(w, http.StatusBadRequest, "read_body", "failed to read request body")
+		return
+	}
+	prepared, err := prepareBedrockBody(raw)
+	if err != nil {
+		prepared = raw
+	}
+
 	upstreamURL := fmt.Sprintf("%s/model/%s/%s", b.UpstreamBaseURL, modelID, endpoint)
 	route := "bedrock_passthrough"
 	if endpoint == "invoke-with-response-stream" {
 		route = "bedrock_passthrough_stream"
 	}
-	b.forward(w, r, upstreamURL, r.Body, route, modelID)
+	b.forward(w, r, upstreamURL, bytes.NewReader(prepared), route, modelID)
 }
 
 // forward executes the upstream request and streams the response body back

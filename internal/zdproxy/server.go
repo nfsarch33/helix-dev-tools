@@ -89,7 +89,7 @@ func (s *Server) Start(ctx context.Context) error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", s.handleHealthz)
 	mux.HandleFunc("/version", s.handleVersion)
-	auth := AuthMiddleware(s.localToken)
+	auth := AuthMiddleware(s.localToken, s.secrets.BedrockBearer, s.secrets.OpenAIBearer)
 	mux.Handle("/v1/messages", auth(http.HandlerFunc(s.dispatcher.HandleAnthropicMessages)))
 	mux.Handle("/v1/chat/completions", auth(http.HandlerFunc(s.openai.HandleChatCompletions)))
 	mux.Handle("/v1/responses", auth(http.HandlerFunc(s.openai.HandleResponses)))

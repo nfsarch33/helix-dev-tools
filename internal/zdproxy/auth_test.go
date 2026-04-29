@@ -156,6 +156,38 @@ func TestAuthMiddleware_PrefersXLocalAuth(t *testing.T) {
 	}
 }
 
+func TestAuthMiddleware_AcceptsMultipleTokens(t *testing.T) {
+	mw := AuthMiddleware("local-token", "gateway-bearer", "openai-bearer")
+	for _, tok := range []string{"local-token", "gateway-bearer", "openai-bearer"} {
+		called := false
+		handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			called = true
+			w.WriteHeader(http.StatusOK)
+		}))
+		req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader("{}"))
+		req.Header.Set("Authorization", "Bearer "+tok)
+		rr := httptest.NewRecorder()
+		handler.ServeHTTP(rr, req)
+		if rr.Code != http.StatusOK {
+			t.Fatalf("expected 200 for token %q, got %d", tok, rr.Code)
+		}
+		if !called {
+			t.Fatalf("handler not called for token %q", tok)
+		}
+	}
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest("POST", "/v1/messages", strings.NewReader("{}"))
+	req.Header.Set("Authorization", "Bearer wrong-token")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	if rr.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for wrong token, got %d", rr.Code)
+	}
+}
+
 func TestNewLocalToken_HasMinimumEntropy(t *testing.T) {
 	tok, err := NewLocalToken()
 	if err != nil {
