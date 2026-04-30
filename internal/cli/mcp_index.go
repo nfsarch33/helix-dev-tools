@@ -19,6 +19,8 @@ import (
 var mcpIndexFlags struct {
 	mcpJSON string
 	out     string
+	check   bool
+	write   bool
 }
 
 var mcpIndexCmd = &cobra.Command{
@@ -41,6 +43,18 @@ func init() {
 		"out",
 		filepath.Join(p.GlobalMemoriesDir(), "mcp-index-and-selection-sop.md"),
 		"Output Markdown file in Pepper",
+	)
+	mcpIndexCmd.Flags().BoolVar(
+		&mcpIndexFlags.check,
+		"check",
+		false,
+		"Check whether the generated MCP index matches the output file without writing",
+	)
+	mcpIndexCmd.Flags().BoolVar(
+		&mcpIndexFlags.write,
+		"write",
+		false,
+		"Write the generated MCP index (default behaviour when --check is not set)",
 	)
 }
 
@@ -251,6 +265,26 @@ func stripTimestamp(s string) string {
 }
 
 func runMCPIndex(_ *cobra.Command, _ []string) error {
+	if mcpIndexFlags.check && mcpIndexFlags.write {
+		return fmt.Errorf("--check and --write are mutually exclusive")
+	}
+	if mcpIndexFlags.check {
+		current, err := os.ReadFile(mcpIndexFlags.out)
+		if err != nil {
+			return fmt.Errorf("reading existing MCP index: %w", err)
+		}
+		servers, err := loadMCPServers(mcpIndexFlags.mcpJSON)
+		if err != nil {
+			return err
+		}
+		rendered := renderMCPIndex(servers)
+		if stripTimestamp(string(current)) != stripTimestamp(rendered) {
+			return fmt.Errorf("MCP index is stale: run cursor-tools mcp-index --write")
+		}
+		clilog.Success("MCP index is current: %s", mcpIndexFlags.out)
+		return nil
+	}
+
 	updated, err := refreshMCPIndex(mcpIndexFlags.mcpJSON, mcpIndexFlags.out)
 	if err != nil {
 		return err

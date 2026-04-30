@@ -92,5 +92,58 @@ var _ = Describe("mcp index helpers", func() {
 			Expect(runMCPIndex(nil, nil)).To(Succeed())
 			Expect(out).To(BeAnExistingFile())
 		})
+
+		It("fails check mode when the index is stale", func() {
+			dir := GinkgoT().TempDir()
+			cfg := filepath.Join(dir, "mcp.json")
+			out := filepath.Join(dir, "pepper", "mcp-index-and-selection-sop.md")
+			Expect(os.MkdirAll(filepath.Dir(out), 0o755)).To(Succeed())
+			Expect(os.WriteFile(cfg, []byte(`{"mcpServers":{"sentrux":{"command":"sentrux","args":["--mcp"]}}}`), 0o644)).To(Succeed())
+			Expect(os.WriteFile(out, []byte("# stale\n"), 0o644)).To(Succeed())
+
+			oldJSON := mcpIndexFlags.mcpJSON
+			oldOut := mcpIndexFlags.out
+			oldCheck := mcpIndexFlags.check
+			oldWrite := mcpIndexFlags.write
+			defer func() {
+				mcpIndexFlags.mcpJSON = oldJSON
+				mcpIndexFlags.out = oldOut
+				mcpIndexFlags.check = oldCheck
+				mcpIndexFlags.write = oldWrite
+			}()
+			mcpIndexFlags.mcpJSON = cfg
+			mcpIndexFlags.out = out
+			mcpIndexFlags.check = true
+			mcpIndexFlags.write = false
+
+			Expect(runMCPIndex(nil, nil)).To(MatchError(ContainSubstring("MCP index is stale")))
+		})
+
+		It("passes check mode when the index is current", func() {
+			dir := GinkgoT().TempDir()
+			cfg := filepath.Join(dir, "mcp.json")
+			out := filepath.Join(dir, "pepper", "mcp-index-and-selection-sop.md")
+			Expect(os.WriteFile(cfg, []byte(`{"mcpServers":{"sentrux":{"command":"sentrux","args":["--mcp"]}}}`), 0o644)).To(Succeed())
+			updated, err := refreshMCPIndex(cfg, out)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(updated).To(BeTrue())
+
+			oldJSON := mcpIndexFlags.mcpJSON
+			oldOut := mcpIndexFlags.out
+			oldCheck := mcpIndexFlags.check
+			oldWrite := mcpIndexFlags.write
+			defer func() {
+				mcpIndexFlags.mcpJSON = oldJSON
+				mcpIndexFlags.out = oldOut
+				mcpIndexFlags.check = oldCheck
+				mcpIndexFlags.write = oldWrite
+			}()
+			mcpIndexFlags.mcpJSON = cfg
+			mcpIndexFlags.out = out
+			mcpIndexFlags.check = true
+			mcpIndexFlags.write = false
+
+			Expect(runMCPIndex(nil, nil)).To(Succeed())
+		})
 	})
 })

@@ -19,11 +19,17 @@ import (
 // decision, route, latency_ms, and an optional sender token. No payload
 // or prompt content is recorded.
 type tierARecordArgs struct {
-	Tier      string
-	Decision  string
-	Route     string
-	LatencyMS int64
-	Sender    string
+	Tier               string
+	Decision           string
+	Route              string
+	Model              string
+	LatencyMS          int64
+	TokensPerSecond    float64
+	TimeToFirstTokenMS int64
+	CostUSD            float64
+	StatusCode         int
+	ParentTaskID       string
+	Sender             string
 }
 
 var validTierATiers = map[string]struct{}{
@@ -83,14 +89,19 @@ func runTierARecord(path string, args tierARecordArgs) error {
 	}
 
 	rec := map[string]interface{}{
-		"recorded_at": time.Now().UTC().Format(time.RFC3339Nano),
-		"tier":        args.Tier,
-		"decision":    args.Decision,
-		"route":       args.Route,
-		"latency_ms":  args.LatencyMS,
-	}
-	if args.Sender != "" {
-		rec["sender"] = args.Sender
+		"recorded_at":            time.Now().UTC().Format(time.RFC3339Nano),
+		"schema_version":         "offload.telemetry.v1",
+		"tier":                   args.Tier,
+		"decision":               args.Decision,
+		"route":                  args.Route,
+		"model":                  args.Model,
+		"latency_ms":             args.LatencyMS,
+		"tokens_per_second":      args.TokensPerSecond,
+		"time_to_first_token_ms": args.TimeToFirstTokenMS,
+		"cost_usd":               args.CostUSD,
+		"status_code":            args.StatusCode,
+		"parent_task_id":         args.ParentTaskID,
+		"sender":                 args.Sender,
 	}
 
 	body, err := json.Marshal(rec)
@@ -212,12 +223,18 @@ func asInt64(v interface{}) int64 {
 }
 
 var tierAFlags struct {
-	tier      string
-	decision  string
-	route     string
-	latencyMS int64
-	sender    string
-	path      string
+	tier               string
+	decision           string
+	route              string
+	model              string
+	latencyMS          int64
+	tokensPerSecond    float64
+	timeToFirstTokenMS int64
+	costUSD            float64
+	statusCode         int
+	parentTaskID       string
+	sender             string
+	path               string
 }
 
 var tierACmd = &cobra.Command{
@@ -242,6 +259,7 @@ The recorded fields are intentionally minimal:
   - decision:  enum (offloaded|kept_local|declined)
   - route:     stable identifier (alphanumeric, dot, hyphen, underscore)
   - latency_ms: non-negative integer
+  - operational metrics: model, tokens/s, time-to-first-token, status, cost, parent-task-id
   - sender:    optional caller token
 
 No prompt or payload content is recorded.`,
@@ -258,7 +276,13 @@ func init() {
 	tierAMetricRecordCmd.Flags().StringVar(&tierAFlags.tier, "tier", "a", "tier label (a|b|c)")
 	tierAMetricRecordCmd.Flags().StringVar(&tierAFlags.decision, "decision", "", "decision label (offloaded|kept_local|declined)")
 	tierAMetricRecordCmd.Flags().StringVar(&tierAFlags.route, "route", "", "route label (e.g. claude_code_subagent)")
+	tierAMetricRecordCmd.Flags().StringVar(&tierAFlags.model, "model", "", "redacted model id")
 	tierAMetricRecordCmd.Flags().Int64Var(&tierAFlags.latencyMS, "latency-ms", 0, "wall-clock latency in milliseconds")
+	tierAMetricRecordCmd.Flags().Float64Var(&tierAFlags.tokensPerSecond, "tokens-per-second", 0, "observed output tokens per second")
+	tierAMetricRecordCmd.Flags().Int64Var(&tierAFlags.timeToFirstTokenMS, "time-to-first-token-ms", 0, "time to first token in milliseconds")
+	tierAMetricRecordCmd.Flags().Float64Var(&tierAFlags.costUSD, "cost-usd", 0, "estimated cost in USD")
+	tierAMetricRecordCmd.Flags().IntVar(&tierAFlags.statusCode, "status-code", 0, "upstream status code")
+	tierAMetricRecordCmd.Flags().StringVar(&tierAFlags.parentTaskID, "parent-task-id", "", "redacted parent task id")
 	tierAMetricRecordCmd.Flags().StringVar(&tierAFlags.sender, "sender", "", "optional caller token (e.g. cursor-ide, router)")
 	tierAMetricRecordCmd.Flags().StringVar(&tierAFlags.path, "path", defaultTierAPath(), "JSONL path")
 
@@ -283,11 +307,17 @@ func defaultTierAPath() string {
 
 func runTierAMetricRecordCmd(_ *cobra.Command, _ []string) error {
 	args := tierARecordArgs{
-		Tier:      tierAFlags.tier,
-		Decision:  tierAFlags.decision,
-		Route:     tierAFlags.route,
-		LatencyMS: tierAFlags.latencyMS,
-		Sender:    tierAFlags.sender,
+		Tier:               tierAFlags.tier,
+		Decision:           tierAFlags.decision,
+		Route:              tierAFlags.route,
+		Model:              tierAFlags.model,
+		LatencyMS:          tierAFlags.latencyMS,
+		TokensPerSecond:    tierAFlags.tokensPerSecond,
+		TimeToFirstTokenMS: tierAFlags.timeToFirstTokenMS,
+		CostUSD:            tierAFlags.costUSD,
+		StatusCode:         tierAFlags.statusCode,
+		ParentTaskID:       tierAFlags.parentTaskID,
+		Sender:             tierAFlags.sender,
 	}
 	if err := runTierARecord(tierAFlags.path, args); err != nil {
 		return err

@@ -21,11 +21,17 @@ func TestTierARecord_AppendsRedactedJSONL(t *testing.T) {
 	path := filepath.Join(tmp, "tier-a-metrics.jsonl")
 
 	args := tierARecordArgs{
-		Tier:      "a",
-		Decision:  "offloaded",
-		Route:     "claude_code_subagent",
-		LatencyMS: 1234,
-		Sender:    "cursor-ide",
+		Tier:               "a",
+		Decision:           "offloaded",
+		Route:              "claude_code_subagent",
+		Model:              "us.anthropic.claude-opus-4-7",
+		LatencyMS:          1234,
+		TokensPerSecond:    44.5,
+		TimeToFirstTokenMS: 250,
+		CostUSD:            0.0123,
+		StatusCode:         200,
+		ParentTaskID:       "task-123",
+		Sender:             "cursor-ide",
 	}
 	if err := runTierARecord(path, args); err != nil {
 		t.Fatalf("runTierARecord: %v", err)
@@ -44,32 +50,38 @@ func TestTierARecord_AppendsRedactedJSONL(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 records, got %d", len(got))
 	}
-	checkAllowed := map[string]bool{
-		"recorded_at": true,
-		"tier":        true,
-		"decision":    true,
-		"route":       true,
-		"latency_ms":  true,
-		"sender":      true,
-	}
-	for i, rec := range got {
-		for k := range rec {
-			if !checkAllowed[k] {
-				t.Fatalf("record %d has forbidden field %q (redaction violation): %#v", i, k, rec)
-			}
-		}
-		if rec["tier"] == "" || rec["decision"] == "" || rec["route"] == "" {
-			t.Fatalf("record %d missing required field: %#v", i, rec)
-		}
-		if _, err := time.Parse(time.RFC3339Nano, rec["recorded_at"].(string)); err != nil {
-			t.Fatalf("record %d: invalid recorded_at: %v", i, err)
-		}
-	}
+	assertRedactedTierARecord(t, got[0])
+	assertRedactedTierARecord(t, got[1])
 	if got[0]["tier"] != "a" || got[0]["decision"] != "offloaded" || got[0]["route"] != "claude_code_subagent" {
 		t.Fatalf("record 0 mismatched: %#v", got[0])
 	}
 	if v := got[0]["latency_ms"].(float64); v != 1234 {
 		t.Fatalf("record 0 latency: got %v want 1234", v)
+	}
+	if got[0]["schema_version"] != "offload.telemetry.v1" {
+		t.Fatalf("schema_version = %v", got[0]["schema_version"])
+	}
+	if got[0]["parent_task_id"] != "task-123" {
+		t.Fatalf("parent_task_id = %v", got[0]["parent_task_id"])
+	}
+}
+
+func assertRedactedTierARecord(t *testing.T, rec map[string]interface{}) {
+	t.Helper()
+	if rec["tier"] == "" || rec["decision"] == "" || rec["route"] == "" {
+		t.Fatalf("missing required field: %#v", rec)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, rec["recorded_at"].(string)); err != nil {
+		t.Fatalf("invalid recorded_at: %v", err)
+	}
+	body, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal record: %v", err)
+	}
+	for _, term := range []string{"prompt", "body", "secret", "provider_token", "authorization"} {
+		if strings.Contains(string(body), term) {
+			t.Fatalf("record leaks forbidden term %q: %s", term, string(body))
+		}
 	}
 }
 
