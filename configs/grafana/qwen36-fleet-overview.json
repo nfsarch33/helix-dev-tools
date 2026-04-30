@@ -1,0 +1,478 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "description": "Qwen 3.x fleet overview for the v258 W2 OOM-zero 2-hour soak. Aggregates per-lane metrics from llm-cluster-router (:9090/metrics), nvidia-dcgm-exporter (:9400/metrics), and the qwenbench Soak runner (qwen-fleet-soak outcome capsules). Lanes: vllm-qwen36-27b-awq (3090 primary), llama-cpp-qwen36-27b-q4km (3090 fallback), vllm-qwen35-9b (4070TiS), llama-cpp-qwen35-4b (2070).",
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "title": "Hard gates (OOM-zero, restart-zero)",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 10,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "expr": "sum(qwen_fleet_oom_total)",
+          "legendFormat": "OOM count (window)",
+          "refId": "A"
+        }
+      ],
+      "title": "OOM count (gate: must be 0)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 5
+              }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "background",
+        "graphMode": "area"
+      },
+      "targets": [
+        {
+          "expr": "sum(qwen_fleet_restart_total)",
+          "legendFormat": "Restart count",
+          "refId": "A"
+        }
+      ],
+      "title": "Lane restart count (window)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.005
+              },
+              {
+                "color": "red",
+                "value": 0.01
+              }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 12,
+      "options": {
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(qwen_fleet_lane_errors_total[5m])) / sum(rate(qwen_fleet_lane_samples_total[5m]))",
+          "legendFormat": "5m error rate",
+          "refId": "A"
+        }
+      ],
+      "title": "Lane error rate (gate: \u003c 1%)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 0.95
+              },
+              {
+                "color": "green",
+                "value": 0.99
+              }
+            ]
+          },
+          "unit": "percentunit"
+        }
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 13,
+      "options": {
+        "colorMode": "background"
+      },
+      "targets": [
+        {
+          "expr": "avg(qwen_fleet_lane_healthy)",
+          "legendFormat": "Healthy lanes",
+          "refId": "A"
+        }
+      ],
+      "title": "Lane health (avg)",
+      "type": "stat"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
+      "id": 2,
+      "title": "Throughput",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "tps"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 20,
+      "targets": [
+        {
+          "expr": "avg by (cell_id) (rate(qwen_fleet_tokens_total[1m]))",
+          "legendFormat": "{{cell_id}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Tokens / second per lane (1m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "id": 21,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum by (le, cell_id) (rate(qwen_fleet_first_token_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "p50 {{cell_id}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, cell_id) (rate(qwen_fleet_first_token_seconds_bucket[5m]))) * 1000",
+          "legendFormat": "p95 {{cell_id}}",
+          "refId": "B"
+        }
+      ],
+      "title": "First-token latency p50/p95 per lane",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 3,
+      "title": "Queue and concurrency",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 17
+      },
+      "id": 30,
+      "targets": [
+        {
+          "expr": "max by (user) (llm_router_queue_depth)",
+          "legendFormat": "{{user}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Per-user queue depth (router)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 17
+      },
+      "id": 31,
+      "targets": [
+        {
+          "expr": "sum by (cell_id) (rate(llm_router_requests_total{status_code=\"200\"}[5m]))",
+          "legendFormat": "{{cell_id}} 2xx",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (cell_id) (rate(llm_router_requests_total{status_code!=\"200\"}[5m]))",
+          "legendFormat": "{{cell_id}} non-2xx",
+          "refId": "B"
+        }
+      ],
+      "title": "Router throughput per lane (5m)",
+      "type": "timeseries"
+    },
+    {
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 25
+      },
+      "id": 4,
+      "title": "GPU memory and utilization",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "decmbytes"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 26
+      },
+      "id": 40,
+      "targets": [
+        {
+          "expr": "max by (gpu, host) (DCGM_FI_DEV_FB_USED)",
+          "legendFormat": "host={{host}} gpu={{gpu}}",
+          "refId": "A"
+        }
+      ],
+      "title": "VRAM used per GPU (MiB)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prom"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "max": 100,
+          "min": 0,
+          "unit": "percent"
+        }
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 26
+      },
+      "id": 41,
+      "targets": [
+        {
+          "expr": "avg by (gpu, host) (DCGM_FI_DEV_GPU_UTIL)",
+          "legendFormat": "host={{host}} gpu={{gpu}}",
+          "refId": "A"
+        }
+      ],
+      "title": "GPU utilization per GPU",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "tags": [
+    "fleet",
+    "qwen36",
+    "soak",
+    "v258"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "selected": false,
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prom"
+        },
+        "definition": "label_values(qwen_fleet_lane_samples_total, cell_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Lane",
+        "multi": true,
+        "name": "cell_id",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(qwen_fleet_lane_samples_total, cell_id)"
+        },
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-2h",
+    "to": "now"
+  },
+  "timezone": "",
+  "title": "Qwen 3.x Fleet Overview (v258 W2 soak)",
+  "uid": "qwen36-fleet-overview",
+  "version": 1
+}
+
