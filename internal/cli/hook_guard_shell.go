@@ -53,6 +53,32 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 		return hookio.Allow(), nil
 	}
 
+	if d := identityStrictShellDeny(input.Command); d != nil {
+		cmdShort := input.Command
+		if len(cmdShort) > 120 {
+			cmdShort = cmdShort[:120]
+		}
+		latencyMs := time.Since(start).Milliseconds()
+		_ = metrics.Record(h.metricsPath, metrics.Event{
+			Hook:      "guard-shell",
+			Action:    "deny",
+			Category:  "shell",
+			LatencyMs: latencyMs,
+			Detail:    "identity-strict: " + cmdShort,
+			BytesIn:   int64(len(input.Command)),
+		})
+		recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+			hookName:  "guard-shell",
+			action:    "deny",
+			category:  "shell",
+			latencyMs: latencyMs,
+			detail:    "identity-strict: " + cmdShort,
+			bytesIn:   int64(len(input.Command)),
+			extraMeta: map[string]string{"reason": "identity-strict-gate"},
+		})
+		return d, nil
+	}
+
 	if d := strictFleetPreflightDeny(); d != nil {
 		cmdShort := input.Command
 		if len(cmdShort) > 120 {
