@@ -1,0 +1,25 @@
+[constraints]
+max_cycles = 0
+max_coupling = "B"
+max_cc = 60
+no_god_files = true
+
+[[layers]]
+name = "commands"
+paths = ["cmd/*"]
+order = 0
+
+[[layers]]
+name = "cli"
+paths = ["internal/cli/*"]
+order = 1
+
+[[layers]]
+name = "core"
+paths = ["internal/config/*", "internal/hookio/*", "internal/logger/*", "internal/patterns/*"]
+order = 2
+
+[[layers]]
+name = "integrations"
+paths = ["internal/claude/*", "internal/evoloop/*", "internal/coordination/*", "internal/zdproxy/*"]
+order = 2

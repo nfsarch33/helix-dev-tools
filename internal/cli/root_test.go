@@ -25,4 +25,25 @@ var _ = Describe("root helpers", func() {
 		}
 		Expect(names).To(ContainElement("auto-update"))
 	})
+
+	It("keeps the global-kb hook command surface registered", func() {
+		rootNames := []string{}
+		for _, cmd := range rootCmd.Commands() {
+			rootNames = append(rootNames, cmd.Name())
+		}
+
+		hookNames := []string{}
+		for _, cmd := range hookCmd.Commands() {
+			hookNames = append(hookNames, cmd.Name())
+		}
+
+		gitHookNames := []string{}
+		for _, cmd := range githookCmd.Commands() {
+			gitHookNames = append(gitHookNames, cmd.Name())
+		}
+
+		Expect(rootNames).To(ContainElements("hook", "githook", "mcp-index", "doctor", "mem0-outbox"))
+		Expect(hookNames).To(ContainElements("guard-shell", "sanitize-read", "guard-mcp", "post-edit", "housekeeping"))
+		Expect(gitHookNames).To(ContainElements("commit-msg", "pre-push"))
+	})
 })

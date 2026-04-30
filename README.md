@@ -5,7 +5,7 @@ Single Go binary for Cursor IDE hooks, git hooks, health checks, and memory syst
 ## Quick Start
 
 ```bash
-cd ~/Code/global-kb/cursor-config/cursor-tools
+cd ~/cursor-tools
 make build install
 cursor-tools version
 ```
@@ -47,6 +47,8 @@ make clean       # Remove build artefacts
 
 Single binary, zero runtime dependencies. All internal packages are in `/internal/`
 (Go compiler enforced: cannot be imported by external modules).
+
+Source lives in the private `nfsarch33/cursor-tools` repository. `global-kb` keeps bootstrap pointers and installs a pinned release into `~/bin/cursor-tools`.
 
 - `internal/hookio` -- Cursor hook JSON stdin/stdout protocol
 - `internal/patterns` -- Pre-compiled regex deny/warn/allow pattern engine
