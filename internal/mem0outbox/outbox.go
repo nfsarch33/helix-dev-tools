@@ -216,6 +216,12 @@ type Mem0Pusher interface {
 // Optional Budget + Ledger gate the flush against a PAYG USD cap. When
 // either is nil the flusher behaves identically to the pre-budget
 // release (only ErrRateLimited and corruption produce non-nil err).
+//
+// Optional Breaker enforces the v259 W2 D4 circuit-breaker contract:
+// after TripThreshold consecutive 429s the breaker holds Open for a
+// backoff window during which Flush returns ErrCircuitOpen without
+// touching pending.jsonl. The breaker is nil-safe; when nil the
+// flusher behaves as if no breaker were configured.
 type Flusher struct {
 	PendingPath string
 	CursorPath  string
@@ -226,6 +232,9 @@ type Flusher struct {
 	Budget *Budget
 	// Ledger persists cumulative USD spend. Nil disables the gate.
 	Ledger SpendLedger
+	// Breaker enforces the circuit-breaker contract. Nil disables
+	// the gate (back-compat for pre-v259 callers).
+	Breaker *CircuitBreaker
 }
 
 // Flush reads pending capsules starting at the cursor offset, posts
@@ -254,6 +263,14 @@ func (f *Flusher) Flush(ctx context.Context) (FlushReport, error) {
 	limit := f.BatchSize
 	if limit <= 0 {
 		limit = 100
+	}
+
+	// Pre-batch breaker gate. Open or HalfOpen-with-issued-probe
+	// short-circuits the flush so the daemon honours the backoff
+	// window. We only check Allow() here; per-push outcomes feed
+	// RecordSuccess / RecordFailure inside the loop.
+	if f.Breaker != nil && !f.Breaker.Allow() {
+		return report, ErrCircuitOpen
 	}
 
 	// Pre-batch budget gate. The flusher refuses to even open
@@ -322,6 +339,9 @@ func (f *Flusher) Flush(ctx context.Context) (FlushReport, error) {
 		if pushErr != nil {
 			var rl *RateLimitedError
 			if errors.As(pushErr, &rl) {
+				if f.Breaker != nil {
+					f.Breaker.RecordFailure()
+				}
 				if writeErr := writeCursor(f.CursorPath, offset); writeErr != nil {
 					return report, fmt.Errorf("write cursor on 429: %w", writeErr)
 				}
@@ -329,6 +349,9 @@ func (f *Flusher) Flush(ctx context.Context) (FlushReport, error) {
 				return report, fmt.Errorf("after %d flushed: %w", report.Flushed, ErrRateLimited)
 			}
 			return report, fmt.Errorf("push capsule (offset=%d): %w", offset, pushErr)
+		}
+		if f.Breaker != nil {
+			f.Breaker.RecordSuccess()
 		}
 		offset += lineLen
 		report.Flushed++
