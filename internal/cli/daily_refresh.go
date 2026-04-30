@@ -410,8 +410,13 @@ func runDailyRefreshVerification(d *dailyRefresher) error {
 	d.out.Info("step 3/8: verification")
 
 	if d.dryRun {
-		d.out.Info("[dry-run] would run: doctor resume, memory-routine, IronClaw smoke")
+		d.out.Info("[dry-run] would run: doctor identity --strict, doctor resume, memory-routine, IronClaw smoke")
 		return nil
+	}
+
+	if err := runIdentityStrictGateWithState(gatherIdentityGateState()); err != nil {
+		d.out.Error("identity strict gate failed: %s", err.Error())
+		return err
 	}
 
 	commands := [][]string{

@@ -22,6 +22,11 @@ var latencyBuckets = []float64{
 // internal/zdproxy free of external deps (the package is a security-first
 // loopback shim). All series are addressed by stable label tuples; updates
 // are race-safe.
+//
+// Tier-A subagent offload telemetry shares the same exposition target
+// (127.0.0.1:9787/metrics) under the prefix
+// `zd_claude_proxy_tier_a_offload_*`. The plan keeps a single scrape so
+// the gateway boundary remains MacBook-loopback only.
 type Metrics struct {
 	mu sync.RWMutex
 
@@ -29,6 +34,9 @@ type Metrics struct {
 	tokensTotal   map[tokKey]uint64    // {model, direction}              → count
 	inflight      map[string]int64     // route                           → in-flight count
 	latency       map[latencyKey]*hist // {route, model}                  → histogram
+
+	tierAOffloadTotal   map[tierAReqKey]uint64    // {tier, decision, route} → count
+	tierAOffloadLatency map[tierALatencyKey]*hist // {tier, route}           → histogram
 }
 
 type reqKey struct {
@@ -47,6 +55,17 @@ type latencyKey struct {
 	model string
 }
 
+type tierAReqKey struct {
+	tier     string
+	decision string
+	route    string
+}
+
+type tierALatencyKey struct {
+	tier  string
+	route string
+}
+
 type hist struct {
 	counts []uint64 // counts[i] is the cumulative count at latencyBuckets[i]
 	count  uint64
@@ -57,10 +76,12 @@ type hist struct {
 // safe for concurrent use.
 func NewMetrics() *Metrics {
 	return &Metrics{
-		requestsTotal: make(map[reqKey]uint64),
-		tokensTotal:   make(map[tokKey]uint64),
-		inflight:      make(map[string]int64),
-		latency:       make(map[latencyKey]*hist),
+		requestsTotal:       make(map[reqKey]uint64),
+		tokensTotal:         make(map[tokKey]uint64),
+		inflight:            make(map[string]int64),
+		latency:             make(map[latencyKey]*hist),
+		tierAOffloadTotal:   make(map[tierAReqKey]uint64),
+		tierAOffloadLatency: make(map[tierALatencyKey]*hist),
 	}
 }
 
@@ -130,6 +151,52 @@ func (m *Metrics) EndInflight(route string) {
 	defer m.mu.Unlock()
 	if m.inflight[route] > 0 {
 		m.inflight[route]--
+	}
+}
+
+// RecordTierAOffload tallies one tier-A subagent offload decision. The
+// label set is intentionally bounded:
+//
+//   - tier: stable enum string (e.g. "a", "b", "c"). Empty input is
+//     dropped to keep cardinality bounded.
+//   - decision: "offloaded" | "kept_local" | "declined". Empty input is
+//     dropped.
+//   - route: stable identifier for the consumer route (e.g.
+//     "claude_code_subagent", "codex_subagent", "router_qwen36_27b").
+//     Empty input is dropped.
+//
+// latency may be zero for "declined" decisions; the histogram still
+// records the sample so we can compute decline-rate from the count
+// series.
+func (m *Metrics) RecordTierAOffload(tier, decision, route string, latency time.Duration) {
+	if m == nil {
+		return
+	}
+	if tier == "" || decision == "" || route == "" {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	rk := tierAReqKey{tier: tier, decision: decision, route: route}
+	m.tierAOffloadTotal[rk]++
+
+	lk := tierALatencyKey{tier: tier, route: route}
+	h, ok := m.tierAOffloadLatency[lk]
+	if !ok {
+		h = &hist{counts: make([]uint64, len(latencyBuckets))}
+		m.tierAOffloadLatency[lk] = h
+	}
+	h.count++
+	secs := latency.Seconds()
+	if secs < 0 {
+		secs = 0
+	}
+	h.sum += secs
+	for i, b := range latencyBuckets {
+		if secs <= b {
+			h.counts[i]++
+		}
 	}
 }
 
@@ -250,6 +317,75 @@ func (m *Metrics) ServeHTTP(w http.ResponseWriter, _ *http.Request) {
 		sb.WriteString(escapeLabel(route))
 		sb.WriteString(`"} `)
 		sb.WriteString(strconv.FormatInt(m.inflight[route], 10))
+		sb.WriteByte('\n')
+	}
+
+	sb.WriteString("# HELP zd_claude_proxy_tier_a_offload_total Total tier-A subagent offload decisions grouped by tier, decision and route.\n")
+	sb.WriteString("# TYPE zd_claude_proxy_tier_a_offload_total counter\n")
+	taReqKeys := make([]tierAReqKey, 0, len(m.tierAOffloadTotal))
+	for k := range m.tierAOffloadTotal {
+		taReqKeys = append(taReqKeys, k)
+	}
+	sort.Slice(taReqKeys, func(i, j int) bool {
+		if taReqKeys[i].tier != taReqKeys[j].tier {
+			return taReqKeys[i].tier < taReqKeys[j].tier
+		}
+		if taReqKeys[i].decision != taReqKeys[j].decision {
+			return taReqKeys[i].decision < taReqKeys[j].decision
+		}
+		return taReqKeys[i].route < taReqKeys[j].route
+	})
+	for _, k := range taReqKeys {
+		sb.WriteString("zd_claude_proxy_tier_a_offload_total{")
+		sb.WriteString(`tier="`)
+		sb.WriteString(escapeLabel(k.tier))
+		sb.WriteString(`",decision="`)
+		sb.WriteString(escapeLabel(k.decision))
+		sb.WriteString(`",route="`)
+		sb.WriteString(escapeLabel(k.route))
+		sb.WriteString(`"} `)
+		sb.WriteString(strconv.FormatUint(m.tierAOffloadTotal[k], 10))
+		sb.WriteByte('\n')
+	}
+
+	sb.WriteString("# HELP zd_claude_proxy_tier_a_offload_latency_seconds Tier-A subagent offload wall-clock latency by tier and route.\n")
+	sb.WriteString("# TYPE zd_claude_proxy_tier_a_offload_latency_seconds histogram\n")
+	taLatKeys := make([]tierALatencyKey, 0, len(m.tierAOffloadLatency))
+	for k := range m.tierAOffloadLatency {
+		taLatKeys = append(taLatKeys, k)
+	}
+	sort.Slice(taLatKeys, func(i, j int) bool {
+		if taLatKeys[i].tier != taLatKeys[j].tier {
+			return taLatKeys[i].tier < taLatKeys[j].tier
+		}
+		return taLatKeys[i].route < taLatKeys[j].route
+	})
+	for _, k := range taLatKeys {
+		h := m.tierAOffloadLatency[k]
+		labelPrefix := `tier="` + escapeLabel(k.tier) + `",route="` + escapeLabel(k.route) + `"`
+		for i, b := range latencyBuckets {
+			sb.WriteString("zd_claude_proxy_tier_a_offload_latency_seconds_bucket{")
+			sb.WriteString(labelPrefix)
+			sb.WriteString(`,le="`)
+			sb.WriteString(strconv.FormatFloat(b, 'f', -1, 64))
+			sb.WriteString(`"} `)
+			sb.WriteString(strconv.FormatUint(h.counts[i], 10))
+			sb.WriteByte('\n')
+		}
+		sb.WriteString("zd_claude_proxy_tier_a_offload_latency_seconds_bucket{")
+		sb.WriteString(labelPrefix)
+		sb.WriteString(`,le="+Inf"} `)
+		sb.WriteString(strconv.FormatUint(h.count, 10))
+		sb.WriteByte('\n')
+		sb.WriteString("zd_claude_proxy_tier_a_offload_latency_seconds_sum{")
+		sb.WriteString(labelPrefix)
+		sb.WriteString(`} `)
+		sb.WriteString(strconv.FormatFloat(h.sum, 'f', -1, 64))
+		sb.WriteByte('\n')
+		sb.WriteString("zd_claude_proxy_tier_a_offload_latency_seconds_count{")
+		sb.WriteString(labelPrefix)
+		sb.WriteString(`} `)
+		sb.WriteString(strconv.FormatUint(h.count, 10))
 		sb.WriteByte('\n')
 	}
 
