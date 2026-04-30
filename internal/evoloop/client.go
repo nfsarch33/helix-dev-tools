@@ -38,6 +38,14 @@ const (
 	// KindCycle is a single feedback-loop cycle. Higher volume; useful for
 	// drill-down but usually gated behind --kind=cycle on the CLI.
 	KindCycle CapsuleKind = "evoloop_cycle"
+	// KindPromotion is the capsule emitted by the promote --auto pass when
+	// a candidate clears the TDD gate. Read back to dedupe against
+	// previously-promoted sources and to correlate rollbacks.
+	KindPromotion CapsuleKind = "evoloop_promotion"
+	// KindRollback is the capsule emitted when the promote --auto rolling-
+	// window check detects KPI regression against a previously-promoted
+	// source.
+	KindRollback CapsuleKind = "evoloop_rollback"
 )
 
 // Capsule is the parsed EvoLoop capsule returned by the client. Fields that
