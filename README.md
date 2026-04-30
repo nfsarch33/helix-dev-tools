@@ -59,6 +59,27 @@ Source lives in the private `nfsarch33/cursor-tools` repository. `global-kb` kee
 - `internal/health` -- multi-suite health check runner
 - `internal/cli` -- Cobra command definitions
 
+## Private Module Access
+
+Some follow-up work imports private modules such as
+`github.com/nfsarch33/offload-telemetry`. Use a process-local Git rewrite when
+testing private module fetches from this MacBook; do not write permanent global
+Git config for this.
+
+```bash
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=url.git@github-agtc:.insteadOf \
+GIT_CONFIG_VALUE_0=https://github.com/ \
+GOPRIVATE=github.com/nfsarch33/* \
+GONOSUMDB=github.com/nfsarch33/* \
+GOPROXY=direct \
+go test ./...
+```
+
+The current `tier-a` CLI emits the same redacted `offload.telemetry.v1` shape
+locally. Import the shared module only after the private fetch path is green in
+CI and local developer shells.
+
 ## Rollback
 
 Both bash/Go versions coexist. To rollback any hook:
