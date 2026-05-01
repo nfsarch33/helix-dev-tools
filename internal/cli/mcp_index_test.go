@@ -46,12 +46,25 @@ var _ = Describe("mcp index helpers", func() {
 			Expect(md).NotTo(ContainSubstring(tokenValue))
 			Expect(md).NotTo(ContainSubstring(envValue))
 		})
+
+		It("renders browser-session MCP safety guidance", func() {
+			md := renderMCPIndex(map[string]mcpServerSpec{
+				"linkedin-mcp": {Command: "uv"},
+				"upwork-mcp":   {Command: "uv"},
+			})
+
+			Expect(md).To(ContainSubstring("## Freelancing / job board MCP safety"))
+			Expect(md).To(ContainSubstring("Human approval is mandatory"))
+			Expect(md).To(ContainSubstring("## Browser-session MCP architecture variants"))
+			Expect(md).To(ContainSubstring("`linkedin-mcp` -> `linkedin-job-hunt`"))
+			Expect(md).To(ContainSubstring("`upwork-mcp` -> `upwork-job-hunt`"))
+		})
 	})
 
 	Describe("stripTimestamp", func() {
-		It("removes the Last generated line only", func() {
-			in := "# Title\nLast generated: 2026-03-10T00:00:00Z\nServer count: 1\n"
-			Expect(stripTimestamp(in)).To(Equal("# Title\nServer count: 1\n"))
+		It("removes volatile generated and reviewed lines only", func() {
+			in := "# Title\nLast generated: 2026-03-10T00:00:00Z\nLast reviewed: 2026-03-10T01:00:00Z\nServer count: 1\n"
+			Expect(stripTimestamp(in)).To(Equal("# Title\nServer count: 1"))
 		})
 	})
 

@@ -251,9 +251,10 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 			fmt.Println("  Recommendations:")
 			for _, r := range recs {
 				icon := "  INFO "
-				if r.Severity == "warn" {
+				switch r.Severity {
+				case "warn":
 					icon = "  WARN "
-				} else if r.Severity == "critical" {
+				case "critical":
 					icon = "  CRIT "
 				}
 				fmt.Printf("  %s [%s] %s\n", icon, r.Category, r.Message)

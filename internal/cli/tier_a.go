@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	telemetryjson "github.com/nfsarch33/offload-telemetry/emitters/ndjson"
+	telemetryenvelope "github.com/nfsarch33/offload-telemetry/envelope"
 	"github.com/spf13/cobra"
 )
 
@@ -88,23 +90,22 @@ func runTierARecord(path string, args tierARecordArgs) error {
 		return fmt.Errorf("latency_ms must be >= 0, got %d", args.LatencyMS)
 	}
 
-	rec := map[string]interface{}{
-		"recorded_at":            time.Now().UTC().Format(time.RFC3339Nano),
-		"schema_version":         "offload.telemetry.v1",
-		"tier":                   args.Tier,
-		"decision":               args.Decision,
-		"route":                  args.Route,
-		"model":                  args.Model,
-		"latency_ms":             args.LatencyMS,
-		"tokens_per_second":      args.TokensPerSecond,
-		"time_to_first_token_ms": args.TimeToFirstTokenMS,
-		"cost_usd":               args.CostUSD,
-		"status_code":            args.StatusCode,
-		"parent_task_id":         args.ParentTaskID,
-		"sender":                 args.Sender,
-	}
+	rec := telemetryenvelope.NewEvent(telemetryenvelope.Input{
+		RecordedAt:         time.Now().UTC().Format(time.RFC3339Nano),
+		Tier:               args.Tier,
+		Decision:           args.Decision,
+		Route:              args.Route,
+		Model:              args.Model,
+		LatencyMS:          args.LatencyMS,
+		TokensPerSecond:    args.TokensPerSecond,
+		TimeToFirstTokenMS: args.TimeToFirstTokenMS,
+		CostUSD:            args.CostUSD,
+		StatusCode:         args.StatusCode,
+		ParentTaskID:       args.ParentTaskID,
+		Sender:             args.Sender,
+	})
 
-	body, err := json.Marshal(rec)
+	body, err := telemetryjson.MarshalLine(rec)
 	if err != nil {
 		return fmt.Errorf("marshal: %w", err)
 	}
@@ -119,7 +120,7 @@ func runTierARecord(path string, args tierARecordArgs) error {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
-	if _, err := f.Write(append(body, '\n')); err != nil {
+	if _, err := f.Write([]byte(body)); err != nil {
 		return fmt.Errorf("write: %w", err)
 	}
 	return nil
@@ -332,7 +333,9 @@ func runTierAMetricSummaryCmd(_ *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Fprint(stdoutWriter(), out)
+	if _, err := fmt.Fprint(stdoutWriter(), out); err != nil {
+		return fmt.Errorf("write summary: %w", err)
+	}
 	return nil
 }
 

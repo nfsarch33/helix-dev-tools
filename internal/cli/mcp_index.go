@@ -144,6 +144,7 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- If the task is docs/word: use `word-document-server`.\n")
 	b.WriteString("- If the task is PDF ops: use `pdf-handler` (form fill/clear, comments, text, signatures, encrypt).\n")
 	b.WriteString("- If the task is scholarly / peer-reviewed papers (titles, authors, abstracts, citations, year filters): use `google-scholar` (`search_google_scholar_key_words`, `search_google_scholar_advanced`, `get_author_info`) before falling back to `multi-search-engine` or web search.\n")
+	b.WriteString("- If the task is job search / freelance cash flow: use `linkedin-mcp` for LinkedIn job, people, company, and light outreach research; use `upwork-mcp` for Upwork job, proposal, message, and contract workflows. Default to read-only discovery first. Never submit proposals, withdraw proposals, send messages, or connect with people without explicit human confirmation in the current turn.\n")
 	b.WriteString("- If the task is shared memory, learnings, or recall across machines/agents: use `mem0` first (`search_memories`, `add_memory`, `update_memory`).\n")
 	b.WriteString("- If the task is memory/rules: Mem0 is canonical for hot shared memory; Git-backed Pepper files remain the durable index/archive.\n\n")
 
@@ -153,6 +154,21 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- Before relying on the local path, verify `~/bin/cursor-tools doctor mcp`, `~/bin/cursor-tools health-check`, `~/bin/cursor-tools selftest`, and the `ironclaw-mcp` smoke harness.\n")
 	b.WriteString("- Keep the local router as the only OpenAI-compatible endpoint IronClaw talks to. Do not bypass it from IronClaw directly to ad hoc vLLM ports.\n")
 	b.WriteString("- Keep Gemini CLI as a secondary operator path, not the default local runtime path.\n\n")
+
+	b.WriteString("## Freelancing / job board MCP safety\n")
+	b.WriteString("- `linkedin-mcp` and `upwork-mcp` are personal, local-only browser-session MCPs. They are not fleet services and must not run on Tailscale, OCI, WSL member nodes, or shared hosts.\n")
+	b.WriteString("- Session directories are account secrets: `~/.linkedin-mcp/profile` and `~/.upwork-mcp/chrome-profile`. Treat them like credentials; do not back them up into Git, Mem0, logs, or evidence bundles.\n")
+	b.WriteString("- Use low-volume, read-mostly workflows to reduce platform ToS and account-risk exposure. Human approval is mandatory for write/social actions: LinkedIn `send_message` / `connect_with_person`, Upwork `upwork_submit_proposal` / `upwork_withdraw_proposal` / `upwork_send_message`.\n")
+	b.WriteString("- `upwork-mcp` uses dedicated CDP port `19222` via `UPWORK_MCP_CDP_PORT` to avoid collisions with other Chrome debuggers on `9222`.\n")
+	b.WriteString("- `upwork_get_my_profile` currently needs manual verification: the scraper can land on the settings page and return weak data. Use `personal/career/upwork-profile-refresh-2026-05-01.md` as the trusted profile-update draft until selectors are repaired.\n")
+	b.WriteString("- `upwork_search_jobs` previously hit `/nx/find-work/best-matches`, which ignores `q=` and returns the same personalised feed for every query. The fork branch `nfsarch33/upwork-mcp:fix/search-url-skill-filter-profile-fallback` (commit `137231f`) switches it to `/nx/search/jobs`, filters skill UI noise, and reads `__NEXT_DATA__` for the profile. Push it before relying on Upwork search results.\n")
+	b.WriteString("- Before first use after install or reboot, run the manual login/status flow outside Cursor, then restart Cursor so the MCP server descriptors load cleanly.\n\n")
+
+	b.WriteString("## Browser-session MCP architecture variants\n")
+	b.WriteString("- Prefer the LinkedIn-style production pattern for new platform MCPs: FastMCP lifespan, bootstrap readiness gate, persistent profile directory, sequential tool middleware, typed errors mapped to `ToolError`, masked diagnostics, POSIX file permissions, and broad unit tests.\n")
+	b.WriteString("- Use the Upwork-style Chrome CDP pattern when managed browsers trigger anti-bot or Cloudflare flows: real Chrome, dedicated `--remote-debugging-port`, dedicated `--user-data-dir`, explicit `--login` / `--check` / `--logout`, and collision-resistant port env vars.\n")
+	b.WriteString("- Any browser-session MCP backed by one profile must serialize tool execution or otherwise prevent concurrent page races.\n")
+	b.WriteString("- Tool metadata should mark write/social actions with destructive hints where supported and repeat human-confirmation requirements in tool descriptions and governing skills.\n\n")
 
 	b.WriteString("## Governing skill / rule paths\n")
 	b.WriteString("- `context-mode` -> `context-mode` skill + `daily-startup-prompt.md` Phase 0\n")
@@ -164,7 +180,9 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- `wolfram-alpha` -> `skill-routing` math/calculation route\n")
 	b.WriteString("- `google-scholar` -> `persona-researcher`, `research-pipeline`, and `academic-essay-writer` for citation-driven flows\n")
 	b.WriteString("- `word-document-server` -> `pptx-mastery` / `academic-essay-writer` for long-form writing deliverables\n")
-	b.WriteString("- `ironclaw` -> `ironclaw-mcp` bridge repo, `daily-startup-prompt.md`, `ironclaw/docs/LLM_PROVIDERS.md`, and the `llm-cluster-router` / `openclaw-vllm` skills\n\n")
+	b.WriteString("- `ironclaw` -> `ironclaw-mcp` bridge repo, `daily-startup-prompt.md`, `ironclaw/docs/LLM_PROVIDERS.md`, and the `llm-cluster-router` / `openclaw-vllm` skills\n")
+	b.WriteString("- `linkedin-mcp` -> `linkedin-job-hunt`; browser profile login required; write actions need human confirmation\n")
+	b.WriteString("- `upwork-mcp` -> `upwork-job-hunt`; Chrome CDP login required; proposal/message actions need human confirmation\n\n")
 
 	b.WriteString("## Quality gates (non-breaking)\n")
 	b.WriteString("- Default to non-breaking changes. Ask before breaking changes.\n")
@@ -172,7 +190,8 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 
 	b.WriteString("## Config hygiene\n")
 	b.WriteString("- Local dev may keep static creds in `~/.cursor/mcp.json` if needed.\n")
-	b.WriteString("- Never commit secrets into repos or rule files.\n\n")
+	b.WriteString("- Never commit secrets into repos or rule files.\n")
+	b.WriteString("- Keep MCP config entries redacted in docs. For browser-session MCPs, document only launch commands and session-directory risk, not cookies, profile contents, or account data.\n\n")
 
 	b.WriteString("## Available MCP servers (redacted)\n\n")
 
@@ -253,15 +272,15 @@ func refreshMCPIndex(mcpJSONPath, outPath string) (bool, error) {
 	return true, nil
 }
 
-// stripTimestamp removes the "Last generated: ..." line for comparison purposes.
+// stripTimestamp removes volatile timestamp lines for comparison purposes.
 func stripTimestamp(s string) string {
 	var lines []string
 	for _, line := range strings.Split(s, "\n") {
-		if !strings.HasPrefix(line, "Last generated:") {
+		if !strings.HasPrefix(line, "Last generated:") && !strings.HasPrefix(line, "Last reviewed:") {
 			lines = append(lines, line)
 		}
 	}
-	return strings.Join(lines, "\n")
+	return strings.TrimRight(strings.Join(lines, "\n"), "\n")
 }
 
 func runMCPIndex(_ *cobra.Command, _ []string) error {

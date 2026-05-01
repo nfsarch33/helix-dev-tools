@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nfsarch33/offload-telemetry/envelope"
 )
 
 // TestTierARecord_AppendsRedactedJSONL drives the
@@ -50,8 +52,34 @@ func TestTierARecord_AppendsRedactedJSONL(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("expected 2 records, got %d", len(got))
 	}
-	assertRedactedTierARecord(t, got[0])
-	assertRedactedTierARecord(t, got[1])
+	checkAllowed := map[string]bool{
+		"recorded_at":            true,
+		"schema_version":         true,
+		"tier":                   true,
+		"decision":               true,
+		"route":                  true,
+		"model":                  true,
+		"latency_ms":             true,
+		"tokens_per_second":      true,
+		"time_to_first_token_ms": true,
+		"cost_usd":               true,
+		"status_code":            true,
+		"parent_task_id":         true,
+		"sender":                 true,
+	}
+	for i, rec := range got {
+		for k := range rec {
+			if !checkAllowed[k] {
+				t.Fatalf("record %d has forbidden field %q (redaction violation): %#v", i, k, rec)
+			}
+		}
+		if rec["tier"] == "" || rec["decision"] == "" || rec["route"] == "" {
+			t.Fatalf("record %d missing required field: %#v", i, rec)
+		}
+		if _, err := time.Parse(time.RFC3339Nano, rec["recorded_at"].(string)); err != nil {
+			t.Fatalf("record %d: invalid recorded_at: %v", i, err)
+		}
+	}
 	if got[0]["tier"] != "a" || got[0]["decision"] != "offloaded" || got[0]["route"] != "claude_code_subagent" {
 		t.Fatalf("record 0 mismatched: %#v", got[0])
 	}
@@ -66,21 +94,61 @@ func TestTierARecord_AppendsRedactedJSONL(t *testing.T) {
 	}
 }
 
-func assertRedactedTierARecord(t *testing.T, rec map[string]interface{}) {
-	t.Helper()
-	if rec["tier"] == "" || rec["decision"] == "" || rec["route"] == "" {
-		t.Fatalf("missing required field: %#v", rec)
+func TestTierARecord_UsesSharedOffloadEnvelopeSchema(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "tier-a-metrics.jsonl")
+
+	args := tierARecordArgs{
+		Tier:               "a",
+		Decision:           "offloaded",
+		Route:              "claude_code_subagent",
+		Model:              "us.anthropic.claude-opus-4-7",
+		LatencyMS:          1234,
+		TokensPerSecond:    44.5,
+		TimeToFirstTokenMS: 250,
+		CostUSD:            0.0123,
+		StatusCode:         200,
+		ParentTaskID:       "task-123",
+		Sender:             "cursor-ide",
 	}
-	if _, err := time.Parse(time.RFC3339Nano, rec["recorded_at"].(string)); err != nil {
-		t.Fatalf("invalid recorded_at: %v", err)
+	if err := runTierARecord(path, args); err != nil {
+		t.Fatalf("runTierARecord: %v", err)
 	}
-	body, err := json.Marshal(rec)
+
+	got := readJSONL(t, path)[0]
+	expected := envelope.NewEvent(envelope.Input{
+		RecordedAt:          got["recorded_at"].(string),
+		Tier:                args.Tier,
+		Decision:            args.Decision,
+		Route:               args.Route,
+		Model:               args.Model,
+		LatencyMS:           args.LatencyMS,
+		TokensPerSecond:     args.TokensPerSecond,
+		TimeToFirstTokenMS:  args.TimeToFirstTokenMS,
+		CostUSD:             args.CostUSD,
+		StatusCode:          args.StatusCode,
+		ParentTaskID:        args.ParentTaskID,
+		Sender:              args.Sender,
+		Prompt:              "must-not-appear",
+		Body:                "must-not-appear",
+		Secret:              "must-not-appear",
+		ProviderToken:       "must-not-appear",
+		AuthorizationHeader: "must-not-appear",
+	})
+	encoded, err := json.Marshal(expected)
 	if err != nil {
-		t.Fatalf("marshal record: %v", err)
+		t.Fatalf("marshal expected envelope: %v", err)
 	}
-	for _, term := range []string{"prompt", "body", "secret", "provider_token", "authorization"} {
-		if strings.Contains(string(body), term) {
-			t.Fatalf("record leaks forbidden term %q: %s", term, string(body))
+	var want map[string]interface{}
+	if err := json.Unmarshal(encoded, &want); err != nil {
+		t.Fatalf("unmarshal expected envelope: %v", err)
+	}
+	if len(got) != len(want) {
+		t.Fatalf("field count mismatch got=%d want=%d got=%#v want=%#v", len(got), len(want), got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Fatalf("field %s mismatch got=%#v want=%#v full=%#v", k, got[k], v, got)
 		}
 	}
 }
