@@ -59,6 +59,19 @@ var _ = Describe("mcp index helpers", func() {
 			Expect(md).To(ContainSubstring("`linkedin-mcp` -> `linkedin-job-hunt`"))
 			Expect(md).To(ContainSubstring("`upwork-mcp` -> `upwork-job-hunt`"))
 		})
+
+		It("preserves Upwork session-inconsistency operational guidance across regens", func() {
+			md := renderMCPIndex(map[string]mcpServerSpec{"upwork-mcp": {Command: "uv"}})
+
+			// Past regression: a leaner mcp-index regen wiped the session
+			// inconsistency note plus locked-decisions paste-ready reminder.
+			// Lock those in here so future reductions trip the test.
+			Expect(md).To(ContainSubstring("upwork_check_session"))
+			Expect(md).To(ContainSubstring("Not logged in to Upwork"))
+			Expect(md).To(ContainSubstring("decisions now locked 2026-05-01T11:55+10:00"))
+			Expect(md).To(ContainSubstring("paste-ready copy includes Zendesk + ANZ named"))
+			Expect(md).To(ContainSubstring("fix branch is installed"))
+		})
 	})
 
 	Describe("stripTimestamp", func() {
