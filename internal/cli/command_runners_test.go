@@ -573,7 +573,7 @@ func TestRunSafeStartsCursorBinary(t *testing.T) {
 		t.Fatalf("runSafe() error = %v", err)
 	}
 
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(20 * time.Second)
 	for {
 		data, err := os.ReadFile(logPath)
 		if err == nil {

@@ -44,15 +44,23 @@ func shellIdentityCommandIsSensitive(cmd string) bool {
 
 // identityStrictShellDeny is the IDE-hook surface counterpart to
 // strictFleetPreflightDeny: it returns a deny response when the
-// command is identity-sensitive AND the strict gate fails. A nil
-// return means "this surface had nothing to add; let the rest of the
-// guard-shell pipeline run".
+// command is identity-sensitive AND the gate fails for the hook
+// surface. A nil return means "this surface had nothing to add; let
+// the rest of the guard-shell pipeline run".
+//
+// G12 hot-fix: this surface uses evaluateIdentityGateForHookSurface
+// (not evaluateIdentityGateStrict) because the hook process cwd often
+// does not match the actual command's target cwd, and the IDE login
+// env routinely carries GITHUB_TOKEN-family vars. The hook-surface
+// evaluator defers on indeterminate cwd while keeping the safety
+// property when the cwd does resolve to a personal remote. See
+// doctor_identity.go for the full rationale.
 func identityStrictShellDeny(cmd string) *hookio.Response {
 	if !shellIdentityCommandIsSensitive(cmd) {
 		return nil
 	}
 	state := gatherIdentityGateStateForGuardShell()
-	failures := evaluateIdentityGateStrict(state)
+	failures := evaluateIdentityGateForHookSurface(state)
 	if len(failures) == 0 {
 		return nil
 	}

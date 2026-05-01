@@ -102,7 +102,7 @@ func (h *sanitizeReadHandler) Handle(_ context.Context, input *hookio.Input) (*h
 		})
 		record("deny", input.FilePath)
 		return hookio.Deny(
-			fmt.Sprintf("BLOCKED: path contains secrets directory"),
+			"BLOCKED: path contains secrets directory",
 			fmt.Sprintf("Path '%s' is in a secrets directory and was blocked. Do not access secret directories.", input.FilePath),
 		), nil
 	}

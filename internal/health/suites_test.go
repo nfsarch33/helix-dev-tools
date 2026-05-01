@@ -170,6 +170,8 @@ var _ = Describe("Git Sync Resilience", func() {
 
 		run(tmpDir, "init", "--bare", remote)
 		run(tmpDir, "clone", remote, local)
+		run(local, "config", "--local", "user.name", "Jason Lian")
+		run(local, "config", "--local", "user.email", "jaslian@gmail.com")
 		Expect(os.WriteFile(filepath.Join(local, ".gitattributes"), []byte("*.lock merge=ours\n*.md merge=union\n*.bin binary\n"), 0o644)).To(Succeed())
 		Expect(os.WriteFile(filepath.Join(local, "README.md"), []byte("ok\n"), 0o644)).To(Succeed())
 		run(local, "checkout", "-b", "feat/test-sync-state")

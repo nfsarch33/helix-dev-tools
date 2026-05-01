@@ -103,6 +103,47 @@ func evaluateIdentityGateStrict(state identityGateState) []string {
 	return failures
 }
 
+// evaluateIdentityGateForHookSurface adapts the strict gate for the
+// IDE hook surface (beforeShellExecution -> guard-shell). The hook
+// process inherits its cwd from the IDE, which is often the workspace
+// root or a directory that does not contain `origin`. The hook also
+// inherits env from the IDE login session, so GITHUB_TOKEN-family vars
+// set system-wide cannot be unset for the hook subprocess from inside
+// a single Shell call.
+//
+// The G12 carry-forward (originally scheduled for v267) was hot-fixed
+// in the v262 close-out because the original strict-gate logic was
+// preemptively denying legitimate `git push` from personal repo
+// subdirectories whenever (a) the hook process saw an empty RemoteURL
+// AND (b) the inherited env carried a poisoned token. Both conditions
+// are normal for IDE-driven development on a developer machine that
+// also runs gh CLI, brew, vendir, etc.
+//
+// Adapted behavior:
+//
+//  1. If RemoteURL is empty, defer (return zero failures). The actual
+//     git/gh command runs from its own cwd, and the per-command gates
+//     (commit hooks, repo-local config, SSH key vs token discipline,
+//     server-side push protection) own the safety boundary from there.
+//     Importantly, `git push` over an SSH origin (which is what every
+//     personal repo here uses) does NOT consume GITHUB_TOKEN env vars
+//     at all -- they only matter for HTTPS git or the `gh` CLI, which
+//     also resolves its target from cwd, not from the token.
+//
+//  2. If RemoteURL is non-empty, fall through to evaluateIdentityGate
+//     so the existing personal-repo + token + email checks still apply
+//     with their normal failure messages.
+//
+// Direct CLI invocation (`cursor-tools doctor identity --strict`) and
+// the githook pre-push surface keep using evaluateIdentityGateStrict
+// because those surfaces always run from the target repo's own cwd.
+func evaluateIdentityGateForHookSurface(state identityGateState) []string {
+	if strings.TrimSpace(state.RemoteURL) == "" {
+		return nil
+	}
+	return evaluateIdentityGate(state)
+}
+
 func gatherIdentityGateState() identityGateState {
 	return identityGateState{
 		RemoteURL: gitOutput("remote", "get-url", "origin"),
