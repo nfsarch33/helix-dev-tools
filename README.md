@@ -19,6 +19,7 @@ cursor-tools version
 | `cursor-tools hook guard-mcp` | beforeMCPExecution: gate destructive MCP tools |
 | `cursor-tools hook post-edit` | afterFileEdit: format, sync counts, promote |
 | `cursor-tools hook housekeeping` | stop: log rotation, git sync, promote |
+| `cursor-tools hook guard-no-shell-leak-sync` | beforeReadAgent: SHA-verify and resync no-shell-leak rule across 14 mirror repos (v299 D6) |
 | `cursor-tools githook commit-msg` | Reject AI attribution, enforce conventional commits |
 | `cursor-tools githook pre-push` | Block direct pushes to main/master |
 | `cursor-tools sync-counts [--apply]` | Verify and fix skill/hook counts in index files |

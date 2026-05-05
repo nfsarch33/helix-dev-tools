@@ -13,4 +13,5 @@ func init() {
 	hookCmd.AddCommand(guardMcpCmd)
 	hookCmd.AddCommand(postEditCmd)
 	hookCmd.AddCommand(housekeepingCmd)
+	hookCmd.AddCommand(guardNoShellLeakSyncCmd)
 }
