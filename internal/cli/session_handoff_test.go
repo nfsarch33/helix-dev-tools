@@ -50,11 +50,14 @@ func TestRenderHandoff_WithSignals(t *testing.T) {
 func TestRenderHandoff_WithoutSignals(t *testing.T) {
 	result := renderHandoff("DESKTOP-078M990", "wsl", "2026-03-20", "### global-kb\n\n", nil)
 
-	if !strings.Contains(result, "<!-- TODO: fill in 1-2 sentences") {
-		t.Error("should fall back to TODO stubs when no signals")
+	if strings.Contains(result, "<!-- TODO") {
+		t.Error("handoff should not contain placeholder TODO markers")
 	}
-	if !strings.Contains(result, "<!-- TODO: numbered list of key decisions") {
-		t.Error("should have decisions TODO stub")
+	if !strings.Contains(result, "No cross-machine signals were available") {
+		t.Error("should explain missing cross-machine signals")
+	}
+	if !strings.Contains(result, "Review current branch status") {
+		t.Error("should include safe default open item")
 	}
 }
 
