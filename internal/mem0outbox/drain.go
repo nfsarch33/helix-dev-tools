@@ -36,6 +36,12 @@ type QuotaDrainer struct {
 	DryRun      bool
 }
 
+type pendingLine struct {
+	raw    []byte
+	length int64
+	eof    bool
+}
+
 // Drain reads pending capsules from the cursor offset and pushes each
 // to both Managed and OSS. In --dry-run mode it counts pending items
 // without calling either backend.
@@ -48,80 +54,49 @@ func (d *QuotaDrainer) Drain(ctx context.Context) (DrainReport, error) {
 		return d.dryRun()
 	}
 
-	if d.Managed == nil || d.OSS == nil {
-		return report, errors.New("drain: both managed and oss pushers required")
+	if err := d.validatePushers(); err != nil {
+		return report, err
 	}
 
-	limit := d.BatchSize
-	if limit <= 0 {
-		limit = 100
-	}
-
-	in, err := os.Open(d.PendingPath)
+	in, cursor, err := d.openPendingAtCursor()
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return report, nil
-		}
-		return report, fmt.Errorf("open pending: %w", err)
+		return report, err
+	}
+	if in == nil {
+		return report, nil
 	}
 	defer in.Close()
-
-	cursor, err := readCursor(d.CursorPath)
-	if err != nil {
-		return report, fmt.Errorf("read cursor: %w", err)
-	}
-	if cursor > 0 {
-		if _, err := in.Seek(cursor, io.SeekStart); err != nil {
-			return report, fmt.Errorf("seek to cursor: %w", err)
-		}
-	}
 
 	br := bufio.NewReader(in)
 	offset := cursor
 	processed := 0
 
-	for processed < limit {
-		line, readErr := br.ReadBytes('\n')
-		if len(line) == 0 && errors.Is(readErr, io.EOF) {
+	for processed < batchLimit(d.BatchSize) {
+		line, ok, err := readPendingLine(br)
+		if err != nil {
+			return report, err
+		}
+		if !ok {
 			break
 		}
 
-		lineLen := int64(len(line))
-		trimmed := bytes.TrimSpace(line)
-		if len(trimmed) == 0 {
-			offset += lineLen
-			if errors.Is(readErr, io.EOF) {
-				break
-			}
-			continue
-		}
-
 		var c Capsule
-		if jerr := json.Unmarshal(trimmed, &c); jerr != nil {
+		decoded, corrupt := line.decode(&c)
+		if corrupt {
 			report.Skipped++
-			offset += lineLen
-			if errors.Is(readErr, io.EOF) {
-				break
+		} else if decoded {
+			if err := d.pushBoth(ctx, c, offset); err != nil {
+				return report, err
 			}
-			continue
+			report.Drained++
+			processed++
+			if writeErr := writeCursor(d.CursorPath, offset+line.length); writeErr != nil {
+				return report, fmt.Errorf("write cursor: %w", writeErr)
+			}
 		}
 
-		if err := d.Managed.Push(ctx, c); err != nil {
-			return report, fmt.Errorf("managed push (offset=%d): %w", offset, err)
-		}
-		if err := d.OSS.Push(ctx, c); err != nil {
-			return report, fmt.Errorf("oss push (offset=%d): %w", offset, err)
-		}
-
-		offset += lineLen
-		report.Drained++
-		processed++
-
-		if writeErr := writeCursor(d.CursorPath, offset); writeErr != nil {
-			return report, fmt.Errorf("write cursor: %w", writeErr)
-		}
-
-		if errors.Is(readErr, io.EOF) {
+		offset += line.length
+		if line.eof {
 			break
 		}
 	}
@@ -129,27 +104,92 @@ func (d *QuotaDrainer) Drain(ctx context.Context) (DrainReport, error) {
 	return report, nil
 }
 
-func (d *QuotaDrainer) dryRun() (DrainReport, error) {
-	var report DrainReport
+func batchLimit(batchSize int) int {
+	if batchSize > 0 {
+		return batchSize
+	}
+	return 100
+}
 
+func (d *QuotaDrainer) validatePushers() error {
+	if d.Managed == nil || d.OSS == nil {
+		return errors.New("drain: both managed and oss pushers required")
+	}
+	return nil
+}
+
+func (d *QuotaDrainer) openPendingAtCursor() (*os.File, int64, error) {
 	in, err := os.Open(d.PendingPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return report, nil
+			return nil, 0, nil
 		}
-		return report, fmt.Errorf("open pending: %w", err)
+		return nil, 0, fmt.Errorf("open pending: %w", err)
 	}
-	defer in.Close()
 
 	cursor, err := readCursor(d.CursorPath)
 	if err != nil {
-		return report, fmt.Errorf("read cursor: %w", err)
+		_ = in.Close()
+		return nil, 0, fmt.Errorf("read cursor: %w", err)
 	}
 	if cursor > 0 {
 		if _, err := in.Seek(cursor, io.SeekStart); err != nil {
-			return report, fmt.Errorf("seek: %w", err)
+			_ = in.Close()
+			return nil, 0, fmt.Errorf("seek to cursor: %w", err)
 		}
 	}
+
+	return in, cursor, nil
+}
+
+func readPendingLine(br *bufio.Reader) (pendingLine, bool, error) {
+	line, readErr := br.ReadBytes('\n')
+	if len(line) == 0 && errors.Is(readErr, io.EOF) {
+		return pendingLine{}, false, nil
+	}
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		return pendingLine{}, false, fmt.Errorf("read pending line: %w", readErr)
+	}
+
+	return pendingLine{
+		raw:    line,
+		length: int64(len(line)),
+		eof:    errors.Is(readErr, io.EOF),
+	}, true, nil
+}
+
+func (l pendingLine) decode(c *Capsule) (decoded bool, corrupt bool) {
+	trimmed := bytes.TrimSpace(l.raw)
+	if len(trimmed) == 0 {
+		return false, false
+	}
+	if err := json.Unmarshal(trimmed, c); err != nil {
+		return false, true
+	}
+	return true, false
+}
+
+func (d *QuotaDrainer) pushBoth(ctx context.Context, c Capsule, offset int64) error {
+	if err := d.Managed.Push(ctx, c); err != nil {
+		return fmt.Errorf("managed push (offset=%d): %w", offset, err)
+	}
+	if err := d.OSS.Push(ctx, c); err != nil {
+		return fmt.Errorf("oss push (offset=%d): %w", offset, err)
+	}
+	return nil
+}
+
+func (d *QuotaDrainer) dryRun() (DrainReport, error) {
+	var report DrainReport
+
+	in, _, err := d.openPendingAtCursor()
+	if err != nil {
+		return report, err
+	}
+	if in == nil {
+		return report, nil
+	}
+	defer in.Close()
 
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
