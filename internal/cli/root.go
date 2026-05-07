@@ -35,6 +35,7 @@ func init() {
 	rootCmd.AddCommand(mem0ParityCmd)
 	rootCmd.AddCommand(mem0OutboxCmd)
 	rootCmd.AddCommand(mem0CanaryCmd)
+	rootCmd.AddCommand(mem0DrainCmd)
 	rootCmd.AddCommand(memoryRoutineCmd)
 	rootCmd.AddCommand(safeCmd)
 	rootCmd.AddCommand(skillvetAuditCmd)
