@@ -50,6 +50,22 @@ func ExportPrometheus(events []metrics.Event, since time.Time) string {
 	fmt.Fprintln(&b, "# HELP cursor_hook_hit_rate Ratio of hook fires to git mutation events.")
 	fmt.Fprintln(&b, "# TYPE cursor_hook_hit_rate gauge")
 	fmt.Fprintf(&b, "cursor_hook_hit_rate %.6g\n", hitRate)
+
+	summary := metrics.Summarise(events, since)
+	fmt.Fprintln(&b, "# HELP cursor_skill_task_coverage_ratio Ratio of task groups that activated at least one skill.")
+	fmt.Fprintln(&b, "# TYPE cursor_skill_task_coverage_ratio gauge")
+	fmt.Fprintf(&b, "cursor_skill_task_coverage_ratio %.6g\n", ratio(summary.Tasks.SkillTasks, summary.Tasks.Total))
+	fmt.Fprintln(&b, "# HELP cursor_mcp_task_coverage_ratio Ratio of task groups that used at least one MCP server.")
+	fmt.Fprintln(&b, "# TYPE cursor_mcp_task_coverage_ratio gauge")
+	fmt.Fprintf(&b, "cursor_mcp_task_coverage_ratio %.6g\n", ratio(summary.Tasks.MCPTasks, summary.Tasks.Total))
+	fmt.Fprintln(&b, "# HELP cursor_mcp_diversity_servers Distinct MCP servers used in the reporting window.")
+	fmt.Fprintln(&b, "# TYPE cursor_mcp_diversity_servers gauge")
+	fmt.Fprintf(&b, "cursor_mcp_diversity_servers %d\n", distinctMCPServers(summary.MCPServers))
+	fmt.Fprintln(&b, "# HELP cursor_subagent_invocations_total Subagent invocations by agent name.")
+	fmt.Fprintln(&b, "# TYPE cursor_subagent_invocations_total counter")
+	for _, subagent := range summary.Subagents {
+		fmt.Fprintf(&b, "cursor_subagent_invocations_total{agent=%q} %d\n", subagent.Detail, subagent.Count)
+	}
 	return b.String()
 }
 
@@ -58,4 +74,23 @@ func isGitMutation(event metrics.Event) bool {
 		return true
 	}
 	return event.Hook == "git-mutation"
+}
+
+func ratio(numerator, denominator int) float64 {
+	if denominator <= 0 {
+		return 0
+	}
+	return float64(numerator) / float64(denominator)
+}
+
+func distinctMCPServers(entries []metrics.MCPServerStats) int {
+	seen := make(map[string]bool)
+	for _, entry := range entries {
+		server := metrics.CanonicalMCPServerName(entry.Server)
+		if server == "" {
+			continue
+		}
+		seen[server] = true
+	}
+	return len(seen)
 }
