@@ -89,7 +89,7 @@ func (c *Canary) search(ctx context.Context, client *http.Client, query string) 
 		return false, fmt.Errorf("build request: %w", err)
 	}
 	if c.APIKey != "" {
-		req.Header.Set("Authorization", "Bearer "+c.APIKey)
+		req.Header.Set("X-API-Key", c.APIKey)
 	}
 
 	resp, err := client.Do(req)

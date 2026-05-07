@@ -14,7 +14,7 @@ func TestCanary_OSSHitRateAtLeast95Pct(t *testing.T) {
 	var served atomic.Int64
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		served.Add(1)
-		if r.Header.Get("Authorization") == "" {
+		if r.Header.Get("X-API-Key") != "test-key" {
 			http.Error(w, "missing auth", http.StatusUnauthorized)
 			return
 		}
@@ -110,7 +110,7 @@ func TestCanary_EmptyQueriesReturnsError(t *testing.T) {
 
 func TestCanary_MissingAPIKeyReturnsUnauth(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") == "" {
+		if r.Header.Get("X-API-Key") == "" {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
