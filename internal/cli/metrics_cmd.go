@@ -15,16 +15,18 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/clilog"
 	"github.com/nfsarch33/cursor-tools/internal/config"
 	"github.com/nfsarch33/cursor-tools/internal/evoloop"
+	"github.com/nfsarch33/cursor-tools/internal/hookmetrics"
 	"github.com/nfsarch33/cursor-tools/internal/metrics"
 )
 
 var metricsFlags struct {
-	days    int
-	export  string
-	compact bool
-	analyse bool
-	doctor  bool
-	fleet   bool
+	days       int
+	export     string
+	compact    bool
+	analyse    bool
+	doctor     bool
+	fleet      bool
+	prometheus bool
 }
 
 var metricsCmd = &cobra.Command{
@@ -41,6 +43,7 @@ func init() {
 	metricsCmd.Flags().BoolVar(&metricsFlags.analyse, "analyse", false, "Show actionable recommendations from data patterns")
 	metricsCmd.Flags().BoolVar(&metricsFlags.doctor, "doctor", false, "Include agent-doctor subsystem health summary")
 	metricsCmd.Flags().BoolVar(&metricsFlags.fleet, "fleet", false, "Show fleet EvoLoop parity from shared Mem0")
+	metricsCmd.Flags().BoolVar(&metricsFlags.prometheus, "prometheus", false, "Export hook hit-rate metrics in Prometheus text format")
 }
 
 func runMetrics(_ *cobra.Command, _ []string) error {
@@ -56,6 +59,10 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	}
 
 	since := time.Now().UTC().Add(-time.Duration(metricsFlags.days) * 24 * time.Hour)
+	if metricsFlags.prometheus {
+		fmt.Print(hookmetrics.ExportPrometheus(events, since))
+		return nil
+	}
 	summary := metrics.Summarise(events, since)
 	installedSkills := countSkillDirs(p.SkillsDir, map[string]bool{"00-index": true}) + countSkillDirs(p.AgentsSkillsDir, nil)
 	installedSubagents := countFiles(p.AgentsDir, ".md")
