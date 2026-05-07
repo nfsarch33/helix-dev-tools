@@ -28,6 +28,7 @@ var _ = Describe("metrics command", func() {
 		Expect(os.Setenv("HOME", oldHome)).To(Succeed())
 		metricsFlags.days = 7
 		metricsFlags.export = ""
+		metricsFlags.prometheus = false
 		metricsFlags.compact = false
 		metricsFlags.analyse = false
 		metricsFlags.fleet = false
@@ -64,6 +65,24 @@ var _ = Describe("metrics command", func() {
 		})).To(Succeed())
 
 		metricsFlags.compact = true
+		Expect(runMetrics(nil, nil)).To(Succeed())
+	})
+
+	It("exports hook hit-rate metrics in Prometheus format", func() {
+		metricsPath := filepath.Join(tmpDir, ".cursor", "hooks", "metrics.jsonl")
+		Expect(metrics.Record(metricsPath, metrics.Event{
+			Timestamp: time.Now().UTC().Add(-1 * time.Hour),
+			Category:  "git",
+			Action:    "mutation",
+			Detail:    "runx git commit",
+		})).To(Succeed())
+		Expect(metrics.Record(metricsPath, metrics.Event{
+			Timestamp: time.Now().UTC().Add(-1 * time.Hour),
+			Hook:      "pre-push",
+			Action:    "allow",
+		})).To(Succeed())
+
+		metricsFlags.prometheus = true
 		Expect(runMetrics(nil, nil)).To(Succeed())
 	})
 
