@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/nfsarch33/cursor-tools/internal/config"
@@ -99,7 +101,7 @@ func TestSignalCmdRegistered(t *testing.T) {
 }
 
 func TestSignalSubcommandsRegistered(t *testing.T) {
-	expected := []string{"state", "task", "blocker", "decision", "completed", "list", "search"}
+	expected := []string{"state", "task", "blocker", "alert-webhook", "decision", "completed", "list", "search"}
 	subCmds := signalCmd.Commands()
 	nameSet := make(map[string]bool)
 	for _, cmd := range subCmds {
@@ -109,5 +111,21 @@ func TestSignalSubcommandsRegistered(t *testing.T) {
 		if !nameSet[name] {
 			t.Errorf("subcommand %q not registered on signalCmd", name)
 		}
+	}
+}
+
+func TestReadSignalWebhookPayload_File(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "alert.json")
+	if err := os.WriteFile(path, []byte(`{"status":"firing"}`), 0600); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	data, err := readSignalWebhookPayload(path)
+	if err != nil {
+		t.Fatalf("readSignalWebhookPayload returned error: %v", err)
+	}
+	if string(data) != `{"status":"firing"}` {
+		t.Fatalf("payload = %q", string(data))
 	}
 }

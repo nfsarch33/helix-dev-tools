@@ -2,7 +2,10 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -56,6 +59,13 @@ var signalBlockerCmd = &cobra.Command{
 	RunE:  runSignalBlocker,
 }
 
+var signalAlertWebhookCmd = &cobra.Command{
+	Use:   "alert-webhook [json-file|-]",
+	Short: "Record an Alertmanager webhook as a coordination blocker",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSignalAlertWebhook,
+}
+
 var signalDecisionCmd = &cobra.Command{
 	Use:   "decision [message]",
 	Short: "Record a decision made during this session",
@@ -91,6 +101,7 @@ func init() {
 	signalCmd.AddCommand(signalStateCmd)
 	signalCmd.AddCommand(signalTaskCmd)
 	signalCmd.AddCommand(signalBlockerCmd)
+	signalCmd.AddCommand(signalAlertWebhookCmd)
 	signalCmd.AddCommand(signalDecisionCmd)
 	signalCmd.AddCommand(signalCompletedCmd)
 	signalCmd.AddCommand(signalListCmd)
@@ -151,12 +162,53 @@ func runSignalBlocker(_ *cobra.Command, args []string) error {
 	return sendSignal(coordination.SignalBlocker, args)
 }
 
+func runSignalAlertWebhook(_ *cobra.Command, args []string) error {
+	payload, err := readSignalWebhookPayload(args[0])
+	if err != nil {
+		return err
+	}
+	var webhook coordination.AlertmanagerWebhook
+	if err := json.Unmarshal(payload, &webhook); err != nil {
+		return fmt.Errorf("parsing Alertmanager webhook: %w", err)
+	}
+
+	p := config.DefaultPaths()
+	client, err := newCoordinationClient(p)
+	if err != nil {
+		return err
+	}
+
+	s := coordination.AlertmanagerBlockerSignal(webhook, signalFlags.sprint, time.Now())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := client.AddSignal(ctx, s); err != nil {
+		return fmt.Errorf("sending alert blocker signal: %w", err)
+	}
+	clilog.Success("alert blocker signal sent: %s", s.Message)
+	return nil
+}
+
 func runSignalDecision(_ *cobra.Command, args []string) error {
 	return sendSignal(coordination.SignalDecision, args)
 }
 
 func runSignalCompleted(_ *cobra.Command, args []string) error {
 	return sendSignal(coordination.SignalCompleted, args)
+}
+
+func readSignalWebhookPayload(path string) ([]byte, error) {
+	if path == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return nil, fmt.Errorf("reading stdin: %w", err)
+		}
+		return data, nil
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("reading webhook payload: %w", err)
+	}
+	return data, nil
 }
 
 func runSignalList(_ *cobra.Command, _ []string) error {
