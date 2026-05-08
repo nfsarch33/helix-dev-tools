@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop client filters Mem0 capsules by the canonical evoloop-daemon source label and wsl1 producer-machine name
+
 // Package evoloop queries Mem0 for EvoLoop capsules (rollups and cycles)
 // so any Cursor instance can read fleet-wide EvoLoop-DRL state at session
 // start, regardless of which machine wrote it.

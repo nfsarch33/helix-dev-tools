@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file personal_path_id — identity gate detects literal personal-stack identifiers, so the strings must remain in source
+
 package cli
 
 import (

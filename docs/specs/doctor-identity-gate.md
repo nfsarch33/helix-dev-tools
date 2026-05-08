@@ -1,3 +1,5 @@
+<!-- runx-public-repo-gate: allow-file personal_path_id — spec describes the identity gate using the literal personal-stack identifiers it detects -->
+
 # Spec: `cursor-tools doctor identity` — GitHub Identity Gate
 
 > **Status**: Draft (v256 W1 P0 #8)

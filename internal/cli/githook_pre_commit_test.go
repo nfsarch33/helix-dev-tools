@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file personal_path_id,fleet_host_alias — tests assert detection of literal personal-stack identifiers (gate test fixtures)
+
 package cli
 
 import (

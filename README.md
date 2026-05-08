@@ -68,8 +68,9 @@ testing private module fetches from this MacBook; do not write permanent global
 Git config for this.
 
 ```bash
+# Replace <your-github-alias> with your local SSH host alias from ~/.ssh/config
 GIT_CONFIG_COUNT=1 \
-GIT_CONFIG_KEY_0=url.git@github-agtc:.insteadOf \
+GIT_CONFIG_KEY_0=url.git@<your-github-alias>:.insteadOf \
 GIT_CONFIG_VALUE_0=https://github.com/ \
 GOPRIVATE=github.com/nfsarch33/* \
 GONOSUMDB=github.com/nfsarch33/* \

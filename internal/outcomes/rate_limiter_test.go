@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop tests verify machine and source filters using the literal canonical labels
+
 package outcomes
 
 import (

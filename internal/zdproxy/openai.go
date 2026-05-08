@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file secret_cred_ref,personal_path_id — zdproxy targets the Zendesk AI gateway and requires the literal gateway URL plus token env-var name
+
 package zdproxy
 
 import (

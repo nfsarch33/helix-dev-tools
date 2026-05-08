@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file personal_path_id — identity gate detects literal personal-stack identifiers, so the strings must remain in source
+
 // Package cli — git pre-commit handler.
 //
 // This hook enforces the v254 sprint cross-cutting policy:

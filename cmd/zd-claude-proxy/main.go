@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file secret_cred_ref,personal_path_id — this command is purpose-built to integrate with the Zendesk AI gateway, so the literal gateway URL, env-var name, and 1Password vault are required default flag values.
+
 // Command zd-claude-proxy runs a MacBook-local Anthropic-Messages translator
 // that routes Claude Code CLI / Desktop Code-runtime children to the Zendesk
 // AI gateway (Bedrock + OpenAI surfaces).

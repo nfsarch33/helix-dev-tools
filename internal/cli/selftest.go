@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file secret_cred_ref — code resolves and tests deny-list of literal SSH key paths and identifiers (id_rsa, agtc) for hook fixtures
+
 package cli
 
 import (

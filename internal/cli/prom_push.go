@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file internal_service_id — prom-push integrates with the upstream open-source Prometheus Pushgateway component, named explicitly by convention
+
 package cli
 
 import (

@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file secret_cred_ref,personal_path_id,network_topology — tests verify zdproxy gate against literal gateway URL, env-var, and Tailscale IP samples
+
 package zdproxy
 
 import (
