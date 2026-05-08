@@ -43,6 +43,15 @@ func withCapturedPrePushExit(t *testing.T) (*int, *bytes.Buffer) {
 	return &code, stderr
 }
 
+// withFakePublicRepoGate replaces the public-repo-gate evaluator for
+// the duration of a test. Returns nil (no findings) by default.
+func withFakePublicRepoGate(t *testing.T, fn func(remoteURL string) []string) {
+	t.Helper()
+	prev := publicRepoGateEvaluator
+	publicRepoGateEvaluator = fn
+	t.Cleanup(func() { publicRepoGateEvaluator = prev })
+}
+
 func TestPrePush_BlocksPoisonedGitHubTokenOnPersonalRemote(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
@@ -101,6 +110,139 @@ func TestPrePush_DoesNotGateZendeskWorkClone(t *testing.T) {
 	}
 	if *code != 0 {
 		t.Fatalf("work clone must not be blocked, got exit %d", *code)
+	}
+}
+
+// v317-1 RED test: a planted leak finding from runx public-repo-gate
+// must abort the push with exit 1 and emit the runx remediation hint.
+func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
+	withFakeAllowMainPush(t, false)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github-agtc:nfsarch33/ironclaw-mcp.git",
+		GitEmail:  "jaslian@gmail.com",
+		Env:       map[string]string{},
+	})
+	withFakePublicRepoGate(t, func(remoteURL string) []string {
+		return []string{
+			"public-repo-gate failed for nfsarch33/ironclaw-mcp (alias=ironclaw-mcp):",
+			"internal/foo.go:42 fleet_alias_2 win1",
+		}
+	})
+	code, stderr := withCapturedPrePushExit(t)
+
+	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/ironclaw-mcp.git"})
+	if *code != 1 {
+		t.Fatalf("public-repo-gate finding must block push, got exit %d", *code)
+	}
+	if !strings.Contains(stderr.String(), "public-repo-gate") {
+		t.Errorf("stderr should mention public-repo-gate: %q", stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "win1") {
+		t.Errorf("stderr should surface the finding body: %q", stderr.String())
+	}
+}
+
+// v317-1 GREEN test: a clean public-repo with no findings must allow
+// the push to continue through to the main-branch check.
+func TestPrePush_AllowsCleanPublicRepo(t *testing.T) {
+	withFakeAllowMainPush(t, false)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github-agtc:nfsarch33/ironclaw-mcp.git",
+		GitEmail:  "jaslian@gmail.com",
+		Env:       map[string]string{},
+	})
+	gateInvoked := false
+	withFakePublicRepoGate(t, func(remoteURL string) []string {
+		gateInvoked = true
+		return nil
+	})
+	code, _ := withCapturedPrePushExit(t)
+
+	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	if err := runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/ironclaw-mcp.git"}); err != nil {
+		t.Fatalf("clean public repo push should not error: %v", err)
+	}
+	if *code != 0 {
+		t.Fatalf("clean public repo push should not be blocked, got exit %d", *code)
+	}
+	if !gateInvoked {
+		t.Errorf("public-repo-gate must be invoked for public remote; was skipped")
+	}
+}
+
+// v317-1 SKIP test: private personal repos must not invoke the gate.
+// The default evaluator returns nil for any URL whose repo segment is
+// not in publicRepoGitHubNames; this test guarantees runPrePush only
+// passes the URL through and does not invent findings.
+func TestPrePush_SkipsGateForPrivatePersonalRepo(t *testing.T) {
+	withFakeAllowMainPush(t, false)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
+		GitEmail:  "jaslian@gmail.com",
+		Env:       map[string]string{},
+	})
+	gateInvoked := false
+	withFakePublicRepoGate(t, func(remoteURL string) []string {
+		gateInvoked = true
+		// real default returns nil for non-public; mirror that.
+		if _, ok := publicRepoGitHubNames[publicRepoNameFromURLDefault(remoteURL)]; !ok {
+			return nil
+		}
+		return []string{"unexpected"}
+	})
+	code, _ := withCapturedPrePushExit(t)
+
+	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	if err := runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-global-kb.git"}); err != nil {
+		t.Fatalf("private repo push should not error: %v", err)
+	}
+	if *code != 0 {
+		t.Fatalf("private repo push should not be blocked, got exit %d", *code)
+	}
+	if !gateInvoked {
+		t.Errorf("evaluator must still be called so it can decide; was skipped entirely")
+	}
+}
+
+// v317-1: URL parser unit tests for publicRepoNameFromURLDefault.
+func TestPublicRepoNameFromURLDefault_TableDriven(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{name: "ssh agtc personal", url: "git@github-agtc:nfsarch33/ironclaw-mcp.git", want: "ironclaw-mcp"},
+		{name: "ssh agtc no .git", url: "git@github-agtc:nfsarch33/ironclaw-mcp", want: "ironclaw-mcp"},
+		{name: "https personal", url: "https://github.com/nfsarch33/cursor-tools.git", want: "cursor-tools"},
+		{name: "zendesk work clone", url: "git@github.com:zendesk/secure-auth-platform.git", want: ""},
+		{name: "empty", url: "", want: ""},
+		{name: "personal but not github", url: "git@gitlab.com:nfsarch33/foo.git", want: "foo"}, // matches owner segment regardless of host
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got := publicRepoNameFromURLDefault(tc.url)
+			if got != tc.want {
+				t.Errorf("publicRepoNameFromURLDefault(%q) = %q, want %q", tc.url, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolvePublicRepoAlias(t *testing.T) {
+	t.Parallel()
+	if got := resolvePublicRepoAlias("llm-cluster-router"); got != "router" {
+		t.Errorf("resolvePublicRepoAlias(llm-cluster-router) = %q, want router", got)
+	}
+	if got := resolvePublicRepoAlias("ironclaw-mcp"); got != "ironclaw-mcp" {
+		t.Errorf("resolvePublicRepoAlias(ironclaw-mcp) = %q, want identity", got)
 	}
 }
 
