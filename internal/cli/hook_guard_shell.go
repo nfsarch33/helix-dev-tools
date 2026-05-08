@@ -105,6 +105,32 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 		return d, nil
 	}
 
+	if d := commitFormatLintDeny(input.Command); d != nil {
+		cmdShort := input.Command
+		if len(cmdShort) > 120 {
+			cmdShort = cmdShort[:120]
+		}
+		latencyMs := time.Since(start).Milliseconds()
+		_ = metrics.Record(h.metricsPath, metrics.Event{
+			Hook:      "guard-shell",
+			Action:    "deny",
+			Category:  "shell",
+			LatencyMs: latencyMs,
+			Detail:    "commit-format-lint: " + cmdShort,
+			BytesIn:   int64(len(input.Command)),
+		})
+		recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+			hookName:  "guard-shell",
+			action:    "deny",
+			category:  "shell",
+			latencyMs: latencyMs,
+			detail:    "commit-format-lint: " + cmdShort,
+			bytesIn:   int64(len(input.Command)),
+			extraMeta: map[string]string{"reason": "commit-format-lint"},
+		})
+		return d, nil
+	}
+
 	action, matchedPattern := h.matcher.Match(input.Command)
 
 	cmdShort := input.Command
