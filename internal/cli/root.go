@@ -55,6 +55,8 @@ func init() {
 	rootCmd.AddCommand(promPushCmd)
 	rootCmd.AddCommand(fleetPreflightCmd)
 	rootCmd.AddCommand(replicateCmd)
+	rootCmd.AddCommand(daemonCmd)
+	rootCmd.AddCommand(sprintScaffoldCmd)
 }
 
 var versionCmd = &cobra.Command{
