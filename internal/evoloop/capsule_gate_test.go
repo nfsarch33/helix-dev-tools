@@ -6,7 +6,7 @@ import (
 
 func TestCapsuleQualityGate_Pass(t *testing.T) {
 	c := Capsule{
-		Source: "wsl1",
+		Source: "test-hub",
 		Kind:   KindRollup,
 		Text:   "KPI improved: latency dropped 15% across fleet operations. Lesson: bounded worker pool reduces p99.",
 	}
@@ -18,7 +18,7 @@ func TestCapsuleQualityGate_Pass(t *testing.T) {
 
 func TestCapsuleQualityGate_MissingText(t *testing.T) {
 	c := Capsule{
-		Source: "wsl1",
+		Source: "test-hub",
 		Kind:   KindRollup,
 	}
 	result := CapsuleQualityGate(c)
@@ -32,7 +32,7 @@ func TestCapsuleQualityGate_MissingText(t *testing.T) {
 
 func TestCapsuleQualityGate_ShortText(t *testing.T) {
 	c := Capsule{
-		Source: "wsl1",
+		Source: "test-hub",
 		Kind:   KindRollup,
 		Text:   "ok",
 	}
@@ -44,7 +44,7 @@ func TestCapsuleQualityGate_ShortText(t *testing.T) {
 
 func TestCapsuleQualityGate_MissingKind(t *testing.T) {
 	c := Capsule{
-		Source: "wsl1",
+		Source: "test-hub",
 		Text:   "Valid summary with enough detail for the gate",
 	}
 	result := CapsuleQualityGate(c)
