@@ -774,7 +774,8 @@ func suiteProgrammaticCounts(p config.Paths) *Suite {
 	if err == nil {
 		hookRoutes = strings.Count(string(data), "cursor-tools hook")
 	}
-	s.Assert("hooks.json has 5 Go routes", hookRoutes == 5, itoa(hookRoutes))
+	const expectedGoHookRoutes = 6
+	s.Assert(fmt.Sprintf("hooks.json has %d Go routes", expectedGoHookRoutes), hookRoutes == expectedGoHookRoutes, itoa(hookRoutes))
 
 	agentCount := countFilesWithExt(p.AgentsDir, ".md")
 	s.Assert("agents = 6", agentCount == 6, itoa(agentCount))
