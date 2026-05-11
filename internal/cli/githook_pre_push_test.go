@@ -52,6 +52,13 @@ func withFakePublicRepoGate(t *testing.T, fn func(remoteURL string) []string) {
 	t.Cleanup(func() { publicRepoGateEvaluator = prev })
 }
 
+func withFakeAncestorChecker(t *testing.T, fn func(remoteSHA, localSHA string) bool) {
+	t.Helper()
+	prev := isAncestorChecker
+	isAncestorChecker = fn
+	t.Cleanup(func() { isAncestorChecker = prev })
+}
+
 func TestPrePush_BlocksPoisonedGitHubTokenOnPersonalRemote(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
@@ -100,6 +107,7 @@ func TestPrePush_DoesNotGateZendeskWorkClone(t *testing.T) {
 		GitEmail:  "jlianzendesk@zendesk.com",
 		Env:       map[string]string{"GITHUB_TOKEN": "ghp_work"},
 	})
+	withFakePublicRepoGate(t, func(string) []string { return nil })
 	code, _ := withCapturedPrePushExit(t)
 
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
@@ -110,6 +118,85 @@ func TestPrePush_DoesNotGateZendeskWorkClone(t *testing.T) {
 	}
 	if *code != 0 {
 		t.Fatalf("work clone must not be blocked, got exit %d", *code)
+	}
+}
+
+func TestPrePush_BlocksZendeskNonFastForwardWithFullSHAs(t *testing.T) {
+	withFakeAllowMainPush(t, true)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github.com:zendesk/secure-auth-platform.git",
+		GitEmail:  "jlianzendesk@zendesk.com",
+		Env:       map[string]string{},
+	})
+	withFakeAncestorChecker(t, func(_, _ string) bool { return false })
+	withFakePublicRepoGate(t, func(string) []string { return nil })
+	code, stderr := withCapturedPrePushExit(t)
+
+	line := "refs/heads/feature/foo " +
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa refs/heads/feature/foo " +
+		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+	prePushStdin = strings.NewReader(line)
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	_ = runPrePush(nil, []string{"origin", "git@github.com:zendesk/secure-auth-platform.git"})
+	if *code != 1 {
+		t.Fatalf("want exit 1 for zendesk non-fast-forward, got %d", *code)
+	}
+	if !strings.Contains(stderr.String(), "non-fast-forward refused") {
+		t.Errorf("stderr should mention refusal: %q", stderr.String())
+	}
+}
+
+func TestPrePush_AllowsZendeskFastForwardWithFullSHAs(t *testing.T) {
+	withFakeAllowMainPush(t, true)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github.com:zendesk/secure-auth-platform.git",
+		GitEmail:  "jlianzendesk@zendesk.com",
+		Env:       map[string]string{},
+	})
+	withFakeAncestorChecker(t, func(_, _ string) bool { return true })
+	withFakePublicRepoGate(t, func(string) []string { return nil })
+	code, _ := withCapturedPrePushExit(t)
+
+	line := "refs/heads/feature/foo " +
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa refs/heads/feature/foo " +
+		"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+	prePushStdin = strings.NewReader(line)
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	if err := runPrePush(nil, []string{"origin", "git@github.com:zendesk/secure-auth-platform.git"}); err != nil {
+		t.Fatalf("zendesk fast-forward push must not error: %v", err)
+	}
+	if *code != 0 {
+		t.Fatalf("want exit 0, got %d", *code)
+	}
+}
+
+func TestPrePush_AllowsZendeskNewBranchAllZeroRemoteSHA(t *testing.T) {
+	withFakeAllowMainPush(t, true)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github.com:zendesk/secure-auth-platform.git",
+		GitEmail:  "jlianzendesk@zendesk.com",
+		Env:       map[string]string{},
+	})
+	withFakeAncestorChecker(t, func(_, _ string) bool {
+		t.Fatal("merge-base probe should not run for all-zero remote sha")
+		return false
+	})
+	withFakePublicRepoGate(t, func(string) []string { return nil })
+	code, _ := withCapturedPrePushExit(t)
+
+	line := "refs/heads/feature/foo " +
+		"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa refs/heads/feature/foo " +
+		"0000000000000000000000000000000000000000\n"
+	prePushStdin = strings.NewReader(line)
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	if err := runPrePush(nil, []string{"origin", "git@github.com:zendesk/secure-auth-platform.git"}); err != nil {
+		t.Fatalf("zendesk new-branch push must not error: %v", err)
+	}
+	if *code != 0 {
+		t.Fatalf("want exit 0, got %d", *code)
 	}
 }
 

@@ -2,7 +2,7 @@
 
 // Package cli — git pre-push handler.
 //
-// This hook layers three policies:
+// This hook layers four policies:
 //
 //  1. Direct push to main/master is blocked unless the worktree opts in
 //     with `git config hooks.allowMainPush true` (legacy behaviour).
@@ -20,9 +20,18 @@
 //     etc.) aborts the push. Private repos and Zendesk work clones
 //     skip this layer. New in v317-1.
 //
+//  4. On GitHub zendesk/* remotes (work clones), any non-fast-forward
+//     ref update is blocked by inspecting pre-push stdin lines and
+//     running `git merge-base --is-ancestor <remote-sha> <local-sha>`.
+//     New-branch pushes (remote all-zero object name) are allowed;
+//     ref deletions are not treated as force-push here. Operator
+//     break-glass: git push --no-verify (same escape hatch as other
+//     hook layers).
+//
 // Policy 2 is the v257 W2 sprint deliverable. Policy 3 is the v317-1
-// sprint deliverable. Both are documented in
-// `sop/personal-repo-identity.md` and the public-repo sanitisation rule.
+// sprint deliverable. Policy 4 complements org-wide Zendesk PR workflow.
+// Policies 2–3 are documented in `sop/personal-repo-identity.md` and the
+// public-repo sanitisation rule.
 package cli
 
 import (
@@ -47,7 +56,90 @@ var (
 	allowMainPushGetter     = readAllowMainPush
 	publicRepoGateEvaluator = evaluatePublicRepoGateDefault
 	publicRepoNameFromURLFn = publicRepoNameFromURLDefault
+	isAncestorChecker       = gitIsAncestor
 )
+
+// isZendeskGitHubRemote reports whether the push URL targets the
+// github.com/zendesk org (SSH scp-style or https). Matches the work
+// clone convention used across cursor-tools identity tests.
+func isZendeskGitHubRemote(remoteURL string) bool {
+	r := strings.ToLower(strings.TrimSpace(remoteURL))
+	return strings.Contains(r, "github.com:zendesk/") ||
+		strings.Contains(r, "github.com/zendesk/")
+}
+
+func isAllZeroGitObjectName(name string) bool {
+	s := strings.TrimSpace(strings.ToLower(name))
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c != '0' {
+			return false
+		}
+	}
+	return true
+}
+
+func gitIsAncestor(remoteSHA, localSHA string) bool {
+	if remoteSHA == "" || localSHA == "" {
+		return false
+	}
+	cmd := exec.Command("git", "merge-base", "--is-ancestor", remoteSHA, localSHA)
+	return cmd.Run() == nil
+}
+
+func isFullHexObjectName(name string) bool {
+	s := strings.TrimSpace(strings.ToLower(name))
+	if len(s) != 40 {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > 'f' || (c > '9' && c < 'a') {
+			return false
+		}
+	}
+	return true
+}
+
+func zendeskNonFastForwardFailures(remoteURL string, stdinLines []string) []string {
+	if !isZendeskGitHubRemote(remoteURL) {
+		return nil
+	}
+	var out []string
+	for _, line := range stdinLines {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) < 4 {
+			continue
+		}
+		localRef, localSHA, remoteRef, remoteSHA := fields[0], fields[1], fields[2], fields[3]
+		if localRef == "(delete)" {
+			continue
+		}
+		if isAllZeroGitObjectName(remoteSHA) {
+			continue
+		}
+		if !isFullHexObjectName(localSHA) || !isFullHexObjectName(remoteSHA) {
+			continue
+		}
+		if isAncestorChecker(remoteSHA, localSHA) {
+			continue
+		}
+		out = append(out, fmt.Sprintf(
+			"non-fast-forward refused for Zendesk remote: %s -> %s (remote %s.. local %s..); use PR workflow instead of force or history rewrite",
+			localRef, remoteRef, shortenSHA(remoteSHA), shortenSHA(localSHA),
+		))
+	}
+	return out
+}
+
+func shortenSHA(hex string) string {
+	s := strings.TrimSpace(hex)
+	if len(s) <= 12 {
+		return s
+	}
+	return s[:12]
+}
 
 // publicRepoGitHubNames is the closed enumeration of GitHub repo
 // names (under nfsarch33/*) that are PUBLIC. Source of truth lives in
@@ -144,7 +236,7 @@ func resolvePublicRepoAlias(githubRepoName string) string {
 
 var prePushCmd = &cobra.Command{
 	Use:           "pre-push [remote] [url]",
-	Short:         "Block direct pushes to main/master and enforce personal-repo identity gate",
+	Short:         "Enforce push policy: identity, public repo gate, zendesk fast-forward-only, main branch",
 	Args:          cobra.RangeArgs(1, 2),
 	SilenceUsage:  true,
 	SilenceErrors: false,
@@ -160,6 +252,18 @@ func readAllowMainPush() bool {
 		return false
 	}
 	return strings.TrimSpace(string(out)) == "true"
+}
+
+func readPrePushStdinLines(stdin io.Reader) ([]string, error) {
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	scanner := bufio.NewScanner(stdin)
+	var lines []string
+	for scanner.Scan() {
+		lines = append(lines, scanner.Text())
+	}
+	return lines, scanner.Err()
 }
 
 func runPrePush(_ *cobra.Command, args []string) error {
@@ -179,14 +283,35 @@ func runPrePush(_ *cobra.Command, args []string) error {
 		return nil
 	}
 
-	// Policy 3: public-repo sanitisation gate. Runs only when the
-	// remote URL points at one of the closed enumeration of public
-	// nfsarch33/* repos. Skips silently for private repos and Zendesk
-	// work clones.
 	remoteURL := ""
 	if len(args) >= 2 {
 		remoteURL = args[1]
 	}
+
+	stdin := prePushStdin
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	stdinLines, err := readPrePushStdinLines(stdin)
+	if err != nil {
+		fmt.Fprintf(prePushStderr, "ERROR: cursor-tools pre-push could not read hook stdin: %v\n", err)
+		prePushExit(1)
+		return nil
+	}
+
+	if failures := zendeskNonFastForwardFailures(remoteURL, stdinLines); len(failures) > 0 {
+		fmt.Fprintln(prePushStderr, "ERROR: cursor-tools blocks non-fast-forward pushes to GitHub zendesk/* remotes (includes --force / history rewrite):")
+		for _, f := range failures {
+			fmt.Fprintln(prePushStderr, "  - "+f)
+		}
+		fmt.Fprintln(prePushStderr,
+			"\nRemediation:\n"+
+				"  Open a PR from a feature branch; do not rewrite published zendesk/* history from a laptop.\n"+
+				"  Emergency only: git push --no-verify (disables all pre-push layers; document out-of-band).")
+		prePushExit(1)
+		return nil
+	}
+
 	if findings := publicRepoGateEvaluator(remoteURL); len(findings) > 0 {
 		fmt.Fprintln(prePushStderr, "ERROR: cursor-tools public-repo-gate FAILED for public personal repo push:")
 		for _, f := range findings {
@@ -205,13 +330,8 @@ func runPrePush(_ *cobra.Command, args []string) error {
 	}
 
 	if !allowMainPushGetter() {
-		stdin := prePushStdin
-		if stdin == nil {
-			stdin = os.Stdin
-		}
-		scanner := bufio.NewScanner(stdin)
-		for scanner.Scan() {
-			fields := strings.Fields(scanner.Text())
+		for _, line := range stdinLines {
+			fields := strings.Fields(line)
 			if len(fields) < 3 {
 				continue
 			}
