@@ -25,6 +25,9 @@ cursor-tools version
 | `cursor-tools sync-counts [--apply]` | Verify and fix skill/hook counts in index files |
 | `cursor-tools promote [--workspace] [--dry-run]` | Promote learnings through memory hierarchy |
 | `cursor-tools health-check` | 33-suite integration health check |
+| `cursor-tools docsync check` | Audit README/VERSION/CHANGELOG/OpenAPI/ADR drift |
+| `cursor-tools docsync fix` | Repair deterministic docs drift such as ADR indexes and version fields |
+| `cursor-tools docs-check` | Backward-compatible wrapper for docs drift checks |
 | `cursor-tools selftest` | Hook unit tests (94 assertions) |
 | `cursor-tools memory-routine` | Export memory KPI and parity evidence, then optionally sync durable docs |
 | `cursor-tools bootstrap [--dry-run]` | Create all symlinks on a fresh machine |

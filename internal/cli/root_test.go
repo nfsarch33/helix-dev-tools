@@ -42,7 +42,7 @@ var _ = Describe("root helpers", func() {
 			gitHookNames = append(gitHookNames, cmd.Name())
 		}
 
-		Expect(rootNames).To(ContainElements("hook", "githook", "mcp-index", "doctor", "mem0-outbox"))
+		Expect(rootNames).To(ContainElements("hook", "githook", "mcp-index", "doctor", "mem0-outbox", "docsync", "docs-check"))
 		Expect(hookNames).To(ContainElements("guard-shell", "sanitize-read", "guard-mcp", "post-edit", "housekeeping"))
 		Expect(gitHookNames).To(ContainElements("commit-msg", "pre-push"))
 	})
