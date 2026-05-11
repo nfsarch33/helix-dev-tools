@@ -8,6 +8,8 @@ require (
 	github.com/spf13/cobra v1.10.2
 )
 
+require go.uber.org/goleak v1.3.0
+
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -18,7 +20,7 @@ require (
 	github.com/nfsarch33/offload-telemetry v0.3.0
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/mod v0.32.0 // indirect
 	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
