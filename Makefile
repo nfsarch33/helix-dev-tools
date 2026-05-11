@@ -53,9 +53,12 @@ fuzz:
 	go test -fuzz=FuzzPatternMatcher -fuzztime=30s ./internal/patterns/
 
 install: build
-	@tmp=~/bin/.$(BINARY).$$$$.new; \
-	cp bin/$(BINARY) "$$tmp" && mv -f "$$tmp" ~/bin/$(BINARY)
-	@echo "Installed to ~/bin/$(BINARY)"
+	@for dir in "$(HOME)/bin" "$(HOME)/.local/bin"; do \
+		mkdir -p "$$dir"; \
+		tmp="$$dir/.$(BINARY).$$$$.new"; \
+		cp bin/$(BINARY) "$$tmp" && mv -f "$$tmp" "$$dir/$(BINARY)"; \
+		echo "Installed to $$dir/$(BINARY)"; \
+	done
 
 dist-install:
 	@DIST=dist/$(BINARY)-$(HOST_OS)-$(HOST_GOARCH); \
