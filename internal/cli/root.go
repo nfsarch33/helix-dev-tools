@@ -52,6 +52,7 @@ func init() {
 	rootCmd.AddCommand(autoUpdateCmd)
 	rootCmd.AddCommand(claudeUsageCmd)
 	rootCmd.AddCommand(claudeRunCmd)
+	rootCmd.AddCommand(tokenUsageCmd)
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(promPushCmd)
 	rootCmd.AddCommand(fleetPreflightCmd)
