@@ -41,7 +41,7 @@ func runTestHelper() {
 	}
 
 	switch cmd {
-	case "sync-counts", "promote":
+	case "sync-counts", "promote", "workspace":
 		fmt.Fprintln(os.Stdout, "helper ok:", cmd)
 	default:
 		fmt.Fprintln(os.Stdout, "helper unknown:", cmd)

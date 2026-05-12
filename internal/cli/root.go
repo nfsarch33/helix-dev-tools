@@ -60,6 +60,7 @@ func init() {
 	rootCmd.AddCommand(sprintScaffoldCmd)
 	rootCmd.AddCommand(docsyncCmd)
 	rootCmd.AddCommand(docsCheckCmd)
+	rootCmd.AddCommand(branchCleanupCmd)
 }
 
 var versionCmd = &cobra.Command{
