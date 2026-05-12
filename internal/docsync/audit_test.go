@@ -83,6 +83,76 @@ func TestFixRepoRegeneratesADRIndex(t *testing.T) {
 	}
 }
 
+func TestAuditRepoCatchesReleaseChecklistVersionDrift(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "VERSION", "7.5.1\n")
+	writeFile(t, root, "README.md", "# Demo\n\nCurrent release: **v7.5.1**.\n")
+	writeFile(t, root, "CHANGELOG.md", "## 7.5.1\n")
+	writeFile(t, root, "docs/release-checklist.md", "# v6.6.0 Release Checklist\n\nUse this checklist before tagging `demo` v6.6.0.\n")
+
+	report, err := AuditRepo(root)
+	if err != nil {
+		t.Fatalf("AuditRepo: %v", err)
+	}
+	if !hasFinding(report, "RELEASE_CHECKLIST_VERSION") {
+		t.Fatalf("expected RELEASE_CHECKLIST_VERSION finding, got %#v", report.Findings)
+	}
+}
+
+func TestFixRepoUpdatesReleaseChecklistVersion(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "VERSION", "7.5.1\n")
+	writeFile(t, root, "README.md", "# Demo\n\nCurrent release: **v7.5.1**.\n")
+	writeFile(t, root, "CHANGELOG.md", "## 7.5.1\n")
+	writeFile(t, root, "docs/release-checklist.md", "# v6.6.0 Release Checklist\n\nUse this checklist before tagging `demo` v6.6.0.\n\n- `VERSION` contains `6.6.0`.\n")
+
+	report, err := FixRepo(root)
+	if err != nil {
+		t.Fatalf("FixRepo: %v", err)
+	}
+	if !contains(report.Fixed, filepath.Join("docs", "release-checklist.md")) {
+		t.Fatalf("fixed = %#v, missing release checklist", report.Fixed)
+	}
+	if !report.OK() {
+		t.Fatalf("expected fixed repo to pass audit, got %#v", report.Findings)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(root, "docs", "release-checklist.md"))
+	if err != nil {
+		t.Fatalf("read release checklist: %v", err)
+	}
+	got := string(raw)
+	for _, want := range []string{"# v7.5.1 Release Checklist", "tagging `demo` v7.5.1", "`VERSION` contains `7.5.1`"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("release checklist missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestFixRepoDoesNotRewriteReleaseChecklistToolchainVersions(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, root, "VERSION", "7.5.1\n")
+	writeFile(t, root, "README.md", "# Demo\n\nCurrent release: **v7.5.1**.\n")
+	writeFile(t, root, "CHANGELOG.md", "## 7.5.1\n")
+	writeFile(t, root, "docs/release-checklist.md", "# v6.6.0 Release Checklist\n\n- Go version `1.24.5` is installed.\n- `VERSION` contains `6.6.0`.\n")
+
+	if _, err := FixRepo(root); err != nil {
+		t.Fatalf("FixRepo: %v", err)
+	}
+
+	raw, err := os.ReadFile(filepath.Join(root, "docs", "release-checklist.md"))
+	if err != nil {
+		t.Fatalf("read release checklist: %v", err)
+	}
+	got := string(raw)
+	if !strings.Contains(got, "Go version `1.24.5`") {
+		t.Fatalf("toolchain version was rewritten:\n%s", got)
+	}
+	if !strings.Contains(got, "`VERSION` contains `7.5.1`") {
+		t.Fatalf("release VERSION line was not updated:\n%s", got)
+	}
+}
+
 func TestAuditRepoDoesNotRequireLicenseForDocsOnlyRepo(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, root, "README.md", "# Knowledge Base\n")

@@ -25,7 +25,7 @@ cursor-tools version
 | `cursor-tools sync-counts [--apply]` | Verify and fix skill/hook counts in index files |
 | `cursor-tools promote [--workspace] [--dry-run]` | Promote learnings through memory hierarchy |
 | `cursor-tools health-check` | 33-suite integration health check |
-| `cursor-tools docsync check` | Audit README/VERSION/CHANGELOG/OpenAPI/ADR drift |
+| `cursor-tools docsync check` | Audit README/VERSION/CHANGELOG/OpenAPI/release-checklist/ADR drift |
 | `cursor-tools docsync fix` | Repair deterministic docs drift such as ADR indexes and version fields |
 | `cursor-tools docs-check` | Backward-compatible wrapper for docs drift checks |
 | `cursor-tools selftest` | Hook unit tests (94 assertions) |

@@ -370,6 +370,8 @@ var _ = Describe("Suite 21: rtk Token Optimization", func() {
 
 		os.MkdirAll(rulesDir, 0o755)
 		os.WriteFile(filepath.Join(rulesDir, "rtk-token-optimization.md"), []byte("---\nalwaysApply: true\n---\n# rtk Token Optimization\nrtk git status\n"), 0o644)
+		os.MkdirAll(p.BinDir, 0o755)
+		os.WriteFile(filepath.Join(p.BinDir, "rtk"), []byte("#!/bin/sh\nprintf 'rtk fixture\\n'\n"), 0o755)
 
 		skillDir := filepath.Join(skillsDir, "rtk-integration")
 		os.MkdirAll(skillDir, 0o755)

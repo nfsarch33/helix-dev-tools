@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 )
@@ -51,6 +52,7 @@ func AuditRepoWithOptions(root string, opts Options) (Report, error) {
 		report.fileContains(root, "README.md", versionTokens(version), "README_VERSION", "README.md does not mention the current version")
 		report.fileContains(root, "CHANGELOG.md", versionTokens(version), "CHANGELOG_VERSION", "CHANGELOG.md does not mention the current version")
 		report.fileContains(root, filepath.Join("api", "openapi.yaml"), []string{"version: " + version, "version: \"" + version + "\""}, "OPENAPI_VERSION", "api/openapi.yaml version does not match VERSION")
+		report.fileContains(root, filepath.Join("docs", "release-checklist.md"), versionTokens(version), "RELEASE_CHECKLIST_VERSION", "docs/release-checklist.md does not mention the current version")
 	}
 
 	if pkgVersion, ok := packageVersion(root); ok && version != "" && pkgVersion != version {
@@ -86,6 +88,13 @@ func FixRepo(root string) (Report, error) {
 		}
 		if fixed {
 			report.Fixed = append(report.Fixed, filepath.Join("api", "openapi.yaml"))
+		}
+		fixed, err = updateReleaseChecklistVersion(root, version)
+		if err != nil {
+			return Report{}, err
+		}
+		if fixed {
+			report.Fixed = append(report.Fixed, filepath.Join("docs", "release-checklist.md"))
 		}
 	}
 	fixed, err := writeADRIndex(root)
@@ -261,6 +270,50 @@ func updateOpenAPIVersion(root, version string) (bool, error) {
 		return false, nil
 	}
 	return true, os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+func updateReleaseChecklistVersion(root, version string) (bool, error) {
+	path := filepath.Join(root, "docs", "release-checklist.md")
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	lines := strings.Split(string(raw), "\n")
+	changed := false
+	for i, line := range lines {
+		if !releaseChecklistVersionLine(line) {
+			continue
+		}
+		next := replaceSemver(line, version)
+		if next != line {
+			lines[i] = next
+			changed = true
+		}
+	}
+	if !changed {
+		return false, nil
+	}
+	return true, os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
+}
+
+func releaseChecklistVersionLine(line string) bool {
+	lower := strings.ToLower(line)
+	return strings.Contains(lower, "release") ||
+		strings.Contains(lower, "tagging") ||
+		strings.Contains(line, "VERSION")
+}
+
+func replaceSemver(line, version string) string {
+	re := regexp.MustCompile(`v?\d+\.\d+\.\d+`)
+	return re.ReplaceAllStringFunc(line, func(match string) string {
+		if strings.HasPrefix(match, "v") {
+			return "v" + strings.TrimPrefix(version, "v")
+		}
+		return strings.TrimPrefix(version, "v")
+	})
 }
 
 func leadingSpace(line string) string {
