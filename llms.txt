@@ -1,0 +1,73 @@
+# cursor-tools
+
+> Single Go binary for Cursor IDE hooks, git hooks, health checks, and memory
+> system management. Built for the nfsarch33 agent stack; zero runtime
+> dependencies beyond the Go standard library.
+
+## Overview
+
+- Name: cursor-tools
+- Purpose: Cursor IDE hook engine (shell guards, file-read sanitisation, MCP gating, post-edit automation), git hooks (commit-msg, pre-push), health-check runner, docs-sync auditor, memory promotion pipeline, and bootstrap installer.
+- Language(s): Go
+- License: MIT
+- Authoritative README: <https://github.com/nfsarch33/cursor-tools#readme>
+- Source of truth branch: `main`
+
+## Quick Start
+
+- Install / bootstrap:
+  ```
+  cd $HOME/cursor-tools
+  make build install
+  cursor-tools version
+  ```
+- Canonical CLI verbs:
+  - `cursor-tools hook guard-shell` — block dangerous shell commands
+  - `cursor-tools hook sanitize-read` — block secret file reads
+  - `cursor-tools hook guard-mcp` — gate destructive MCP tools
+  - `cursor-tools hook post-edit` — format, sync counts, promote
+  - `cursor-tools hook housekeeping` — log rotation, git sync, promote
+  - `cursor-tools githook commit-msg` — reject AI attribution, enforce conventional commits
+  - `cursor-tools githook pre-push` — block direct pushes to main/master
+  - `cursor-tools health-check` — 33-suite integration health check
+  - `cursor-tools docsync check` / `docsync fix` — audit and repair docs drift
+  - `cursor-tools selftest` — hook unit tests (94 assertions)
+  - `cursor-tools promote` — promote learnings through memory hierarchy
+  - `cursor-tools bootstrap` — create all symlinks on a fresh machine
+- Minimum runtime prerequisites: Go 1.22+, macOS or Linux
+
+## Key Concepts
+
+- Architecture: single binary, all internal packages under `/internal/` (Go compiler enforced, not importable externally)
+  - `internal/hookio` — Cursor hook JSON stdin/stdout protocol
+  - `internal/patterns` — pre-compiled regex deny/warn/allow pattern engine
+  - `internal/lockfile` — cross-platform mkdir and flock locking
+  - `internal/logger` — structured JSONL logging with rotation
+  - `internal/config` — platform-aware path configuration
+  - `internal/learnings` — self-improvement pipeline (parse, merge, digest)
+  - `internal/health` — multi-suite health check runner
+  - `internal/cli` — Cobra command definitions
+- Testing: `make test` (Ginkgo/Gomega with `-race`), `make test-cover`, `make lint`
+- Changelog: see repository commit history
+
+## Runnable Examples
+
+- Build and install: `make build install`
+- Run all tests: `make test`
+- Run health check: `cursor-tools health-check`
+- Run self-test: `cursor-tools selftest`
+
+## Related Repos
+
+- [global-kb](https://github.com/nfsarch33/cursor-global-kb) — keeps bootstrap pointers and configuration templates
+- [offload-telemetry](https://github.com/nfsarch33/offload-telemetry) — shared telemetry module
+
+## Operational Notes
+
+- Issue tracker: <https://github.com/nfsarch33/cursor-tools/issues>
+- Rollback: edit `~/.cursor/hooks.json` to point back to legacy `.sh` scripts; old scripts remain in `cursor-config/hooks/` and `cursor-config/bin/`
+
+---
+
+*This file follows the emerging `llms.txt` convention adopted by cloudwego/eino,
+Anthropic tooling, and others.*
