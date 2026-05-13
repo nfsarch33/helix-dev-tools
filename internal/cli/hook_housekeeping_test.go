@@ -174,6 +174,23 @@ func TestHousekeepingSyncRepoPullRepoAndHandle(t *testing.T) {
 	if !strings.Contains(logText, `"msg":"stop event received"`) || !strings.Contains(logText, `"status":"completed"`) {
 		t.Fatalf("housekeeping log missing completed event: %q", string(logData))
 	}
+
+	helperData, err := os.ReadFile(filepath.Join(home, "helper.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	helperText := string(helperData)
+	resourceIdx := strings.Index(helperText, "resource-probe-once")
+	handoffIdx := strings.Index(helperText, "session-handoff")
+	if resourceIdx == -1 {
+		t.Fatalf("helper log missing resource-probe-once in %q", helperText)
+	}
+	if handoffIdx == -1 {
+		t.Fatalf("helper log missing session-handoff in %q", helperText)
+	}
+	if resourceIdx > handoffIdx {
+		t.Fatalf("resource-probe-once should run before session-handoff: %q", helperText)
+	}
 }
 
 func TestCleanCoordinationSignals_CalledOnCompleted(t *testing.T) {

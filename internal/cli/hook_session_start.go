@@ -27,12 +27,6 @@ var sessionStartCmd = &cobra.Command{
 	},
 }
 
-type resourceProbeSnapshot struct {
-	Tier    string `json:"tier"`
-	FreePct int    `json:"free_pct"`
-	Err     string `json:"error,omitempty"`
-}
-
 type sessionStartHandler struct {
 	log            *logger.Logger
 	paths          config.Paths
@@ -135,7 +129,7 @@ func readLastProbeEntry(path string) resourceProbeSnapshot {
 	if err := json.Unmarshal([]byte(last), &result); err != nil {
 		return resourceProbeSnapshot{Tier: "UNKNOWN", Err: "probe parse error: " + err.Error()}
 	}
-	return result
+	return normalizeResourceProbeSnapshot(result)
 }
 
 func runSessionStart(stdin *os.File, stdout *os.File) error {

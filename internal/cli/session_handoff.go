@@ -115,12 +115,98 @@ func buildHandoffContent(p config.Paths, today string) string {
 	hostname, _ := os.Hostname()
 	platform := p.PlatformProfile()
 	signals := fetchHandoffSignals(p, platform)
+	runtime := collectHandoffRuntimeContext(p)
 
-	return renderHandoff(hostname, platform, today, buildRepoSection(p), signals)
+	return renderHandoff(hostname, platform, today, buildRepoSection(p), signals, runtime)
+}
+
+type handoffRuntimeContext struct {
+	Workspace handoffWorkspaceContext
+	Resource  resourceProbeSnapshot
+}
+
+type handoffWorkspaceContext struct {
+	Path      string
+	GitRoot   string
+	Branch    string
+	RepoAlias string
+	Mode      string
+}
+
+func collectHandoffRuntimeContext(p config.Paths) handoffRuntimeContext {
+	return handoffRuntimeContext{
+		Workspace: detectHandoffWorkspace(p),
+		Resource:  readLastProbeEntry(resourceProbePath()),
+	}
+}
+
+func detectHandoffWorkspace(p config.Paths) handoffWorkspaceContext {
+	workspace := strings.TrimSpace(os.Getenv("CURSOR_WORKSPACE"))
+	if workspace == "" || !filepath.IsAbs(workspace) {
+		if wd, err := os.Getwd(); err == nil && filepath.IsAbs(wd) {
+			workspace = wd
+		}
+	}
+	if workspace == "" {
+		return handoffWorkspaceContext{}
+	}
+
+	workspace = filepath.Clean(workspace)
+	ctx := handoffWorkspaceContext{Path: workspace}
+
+	if repoAlias := parseRunxWorktreeAlias(p.Home, workspace); repoAlias != "" {
+		ctx.Mode = "runx-managed worktree"
+		ctx.RepoAlias = repoAlias
+	}
+
+	if gitRoot := gitOutputStr(workspace, "rev-parse", "--show-toplevel"); gitRoot != "" && gitRoot != "(unavailable)" {
+		ctx.GitRoot = gitRoot
+	}
+	if branch := gitOutputStr(workspace, "branch", "--show-current"); branch != "" && branch != "(unavailable)" {
+		ctx.Branch = branch
+	}
+	if ctx.Mode == "" {
+		switch {
+		case ctx.GitRoot != "":
+			ctx.Mode = "git workspace"
+		default:
+			ctx.Mode = "non-git workspace"
+		}
+	}
+	if ctx.RepoAlias == "" {
+		ctx.RepoAlias = inferWorkspaceRepoAlias(p, ctx.GitRoot, workspace)
+	}
+
+	return ctx
+}
+
+func parseRunxWorktreeAlias(home, workspace string) string {
+	base := filepath.Join(home, "runs", "worktrees") + string(os.PathSeparator)
+	if !strings.HasPrefix(workspace, base) {
+		return ""
+	}
+	rel := strings.TrimPrefix(workspace, base)
+	parts := strings.Split(rel, string(os.PathSeparator))
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" {
+		return ""
+	}
+	return parts[0]
+}
+
+func inferWorkspaceRepoAlias(p config.Paths, gitRoot, workspace string) string {
+	candidate := strings.TrimSpace(gitRoot)
+	if candidate == "" {
+		candidate = workspace
+	}
+	switch candidate {
+	case p.GlobalKB:
+		return "global-kb"
+	}
+	return filepath.Base(candidate)
 }
 
 // renderHandoff is the pure, testable function.
-func renderHandoff(hostname, platform, today, repoSection string, signals []coordination.Signal) string {
+func renderHandoff(hostname, platform, today, repoSection string, signals []coordination.Signal, runtime handoffRuntimeContext) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("# Session Handoff: %s\n\n", today))
 	sb.WriteString(fmt.Sprintf("**Date**: %s  \n", today))
@@ -139,6 +225,9 @@ func renderHandoff(hostname, platform, today, repoSection string, signals []coor
 		sb.WriteString("- No new cross-machine decisions were detected by the signal reader.\n\n")
 	}
 
+	sb.WriteString(renderWorkspaceSection(runtime.Workspace))
+	sb.WriteString(renderResourceSection(runtime.Resource))
+
 	sb.WriteString("## Current State\n\n")
 	sb.WriteString(repoSection)
 
@@ -155,11 +244,17 @@ func renderHandoff(hostname, platform, today, repoSection string, signals []coor
 	}
 
 	sb.WriteString("## Resume Instructions\n\n")
-	sb.WriteString("1. Run: `git -C ~/Code/global-kb pull --ff-only origin main`\n")
-	sb.WriteString("2. Rebuild toolchain if source changed: `cd ~/Code/global-kb/cursor-config/cursor-tools && go build -o ~/bin/cursor-tools ./cmd/cursor-tools/`\n")
-	sb.WriteString("3. Run: `~/bin/cursor-tools doctor resume && ~/bin/cursor-tools health-check`\n")
-	sb.WriteString("4. Run: `~/bin/cursor-tools signal list` to check pending cross-machine signals\n")
-	sb.WriteString("5. Check the active sprint roadmap and evidence report before making changes.\n\n")
+	sb.WriteString("1. Run: `runx doctor && runx config check-aliases v302 && runx history audit && runx workspace doctor --quick`\n")
+	sb.WriteString("2. Run: `runx cursor-tools handoff-review` and `runx cursor-tools signal list`\n")
+	if runtime.Workspace.Mode == "runx-managed worktree" && runtime.Workspace.RepoAlias != "" {
+		sb.WriteString(fmt.Sprintf("3. Verify the active worktree: `runx worktree list --repo %s`\n", runtime.Workspace.RepoAlias))
+		sb.WriteString(fmt.Sprintf("4. Resume inside the `%s` worktree; avoid the canonical checkout unless ownership is explicitly transferred.\n", runtime.Workspace.RepoAlias))
+		sb.WriteString("5. Use `runx env personal-shell` or `runx env scrub --` before any mutating repo work.\n")
+		sb.WriteString("6. Review the active sprint roadmap and latest durable evidence before making changes.\n\n")
+	} else {
+		sb.WriteString("3. Use `runx env personal-shell` or `runx env scrub --` before any mutating repo work.\n")
+		sb.WriteString("4. Review the active sprint roadmap and latest durable evidence before making changes.\n\n")
+	}
 
 	sb.WriteString("## Context Files\n\n")
 	sb.WriteString("- `global-memories/daily-startup-prompt.md`\n")
@@ -169,6 +264,52 @@ func renderHandoff(hostname, platform, today, repoSection string, signals []coor
 	sb.WriteString("---\n\n")
 	sb.WriteString("*Generated by `cursor-tools session-handoff`.*\n")
 
+	return sb.String()
+}
+
+func renderWorkspaceSection(workspace handoffWorkspaceContext) string {
+	var sb strings.Builder
+	sb.WriteString("## Active Workspace\n\n")
+	if workspace.Path == "" {
+		sb.WriteString("- No active workspace detected.\n\n")
+		return sb.String()
+	}
+	sb.WriteString(fmt.Sprintf("- Workspace: `%s`\n", workspace.Path))
+	sb.WriteString(fmt.Sprintf("- Mode: `%s`\n", workspace.Mode))
+	if workspace.RepoAlias != "" {
+		sb.WriteString(fmt.Sprintf("- Repo alias: `%s`\n", workspace.RepoAlias))
+	}
+	if workspace.GitRoot != "" {
+		sb.WriteString(fmt.Sprintf("- Git root: `%s`\n", workspace.GitRoot))
+	}
+	if workspace.Branch != "" {
+		sb.WriteString(fmt.Sprintf("- Branch: `%s`\n", workspace.Branch))
+	}
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+func renderResourceSection(probe resourceProbeSnapshot) string {
+	var sb strings.Builder
+	sb.WriteString("## Resource Snapshot\n\n")
+	probe = normalizeResourceProbeSnapshot(probe)
+	if probe.Tier == "UNKNOWN" && probe.Err != "" && probe.FreePct == 0 {
+		sb.WriteString(fmt.Sprintf("- Resource probe unavailable: `%s`\n\n", probe.Err))
+		return sb.String()
+	}
+	sb.WriteString(fmt.Sprintf("- Tier: `%s`\n", probe.Tier))
+	if probe.FreePct >= 0 {
+		sb.WriteString(fmt.Sprintf("- Free memory: `%d%%`\n", probe.FreePct))
+	}
+	sb.WriteString(fmt.Sprintf("- Sentrux desktop processes: `%d`\n", probe.SentruxDesktopProcesses))
+	sb.WriteString(fmt.Sprintf("- Sentrux MCP processes: `%d`\n", probe.SentruxMCPProcesses))
+	if probe.Ts != "" {
+		sb.WriteString(fmt.Sprintf("- Sample time: `%s`\n", probe.Ts))
+	}
+	if probe.Err != "" {
+		sb.WriteString(fmt.Sprintf("- Note: `%s`\n", probe.Err))
+	}
+	sb.WriteString("\n")
 	return sb.String()
 }
 

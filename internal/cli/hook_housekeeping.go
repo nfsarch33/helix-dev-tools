@@ -91,6 +91,7 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	})
 
 	if input.Status == "completed" || input.Status == "aborted" {
+		h.runResourceProbe()
 		h.runSessionHandoff()
 		h.runSyncCounts()
 		h.runPromoteLearnings()
@@ -185,6 +186,14 @@ func (h *housekeepingHandler) runSessionHandoff() {
 		h.log.Log(fmt.Sprintf("session-handoff error: %s", string(out)))
 	} else {
 		h.log.Log("session-handoff: ok")
+	}
+}
+
+func (h *housekeepingHandler) runResourceProbe() {
+	if out, err := runSelfCommandOutput(30*time.Second, h.paths, "resource-probe-once"); err != nil {
+		h.log.Log(fmt.Sprintf("resource-probe-once error: %s", string(out)))
+	} else {
+		h.log.Log("resource-probe-once: ok")
 	}
 }
 

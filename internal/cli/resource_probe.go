@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -38,7 +39,12 @@ var resourceProbeOnceCmd = &cobra.Command{
 }
 
 func runResourceProbeOnce(cmd *cobra.Command, _ []string) error {
-	mp, err := captureMemoryPressure(cmd.Context())
+	ctx := context.Background()
+	if cmd != nil && cmd.Context() != nil {
+		ctx = cmd.Context()
+	}
+
+	mp, err := captureMemoryPressure(ctx)
 	if err != nil {
 		return err
 	}
@@ -57,28 +63,35 @@ func runResourceProbeOnce(cmd *cobra.Command, _ []string) error {
 	if err := enc.Encode(mp); err != nil {
 		return fmt.Errorf("resource-probe: encode: %w", err)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "free_pct=%d\n", mp.FreePct)
+	fmt.Fprintf(cmd.OutOrStdout(), "free_pct=%d tier=%s sentrux_desktop_processes=%d sentrux_mcp_processes=%d\n",
+		mp.FreePct, mp.Tier, mp.SentruxDesktopProcesses, mp.SentruxMCPProcesses)
 	return nil
 }
 
-// memoryPressureSample is the NDJSON shape persisted to disk.
-type memoryPressureSample struct {
-	Ts      string `json:"ts"`
-	Event   string `json:"event"`
-	Summary string `json:"summary"`
-	FreePct int    `json:"free_pct"`
+// resourceProbeSnapshot is the NDJSON shape persisted to disk and the
+// read model consumed by session-start/session-handoff.
+type resourceProbeSnapshot struct {
+	Ts                      string `json:"ts,omitempty"`
+	Event                   string `json:"event,omitempty"`
+	Summary                 string `json:"summary,omitempty"`
+	Tier                    string `json:"tier,omitempty"`
+	FreePct                 int    `json:"free_pct"`
+	SentruxDesktopProcesses int    `json:"sentrux_desktop_processes,omitempty"`
+	SentruxMCPProcesses     int    `json:"sentrux_mcp_processes,omitempty"`
+	Err                     string `json:"error,omitempty"`
 }
 
 // captureMemoryPressure runs the platform memory-pressure tool and
 // parses its summary line. On macOS this is `memory_pressure`; on
 // other platforms the function returns a stub with FreePct=-1 so
 // downstream consumers can detect "no sample" without crashing.
-func captureMemoryPressure(ctx context.Context) (memoryPressureSample, error) {
+func captureMemoryPressure(ctx context.Context) (resourceProbeSnapshot, error) {
 	now := time.Now().Format(time.RFC3339)
-	sample := memoryPressureSample{
+	sample := resourceProbeSnapshot{
 		Ts:      now,
 		Event:   "memory_pressure_probe",
 		FreePct: -1,
+		Tier:    "UNKNOWN",
 	}
 
 	bin, lookErr := exec.LookPath("memory_pressure")
@@ -97,7 +110,14 @@ func captureMemoryPressure(ctx context.Context) (memoryPressureSample, error) {
 	summary := firstSummaryLine(string(out))
 	sample.Summary = summary
 	sample.FreePct = parseFreePct(summary)
-	return sample, nil
+	desktop, mcp, err := captureSentruxProcessCounts(ctx)
+	if err != nil {
+		sample.Err = "sentrux process probe: " + err.Error()
+	} else {
+		sample.SentruxDesktopProcesses = desktop
+		sample.SentruxMCPProcesses = mcp
+	}
+	return normalizeResourceProbeSnapshot(sample), nil
 }
 
 // firstSummaryLine extracts the "System-wide memory free percentage"
@@ -139,6 +159,57 @@ func resourceProbePath() string {
 		return "resource-probe.ndjson"
 	}
 	return filepath.Join(home, "logs", "runx", "resource-probe.ndjson")
+}
+
+func normalizeResourceProbeSnapshot(sample resourceProbeSnapshot) resourceProbeSnapshot {
+	if sample.Tier == "" || (sample.Tier == "UNKNOWN" && sample.FreePct >= 0) {
+		sample.Tier = resourceProbeTier(sample.FreePct)
+	}
+	return sample
+}
+
+func resourceProbeTier(freePct int) string {
+	switch {
+	case freePct < 0:
+		return "UNKNOWN"
+	case freePct < 10:
+		return "RED"
+	case freePct < 20:
+		return "YELLOW"
+	default:
+		return "GREEN"
+	}
+}
+
+func captureSentruxProcessCounts(ctx context.Context) (desktop int, mcp int, err error) {
+	bin, lookErr := exec.LookPath("pgrep")
+	if lookErr != nil {
+		return 0, 0, nil
+	}
+
+	cctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(cctx, bin, "-af", "sentrux").Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 1 {
+			return 0, 0, nil
+		}
+		return 0, 0, err
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if strings.Contains(line, "--mcp") {
+			mcp++
+			continue
+		}
+		desktop++
+	}
+	return desktop, mcp, nil
 }
 
 // ensure resource-probe-once writes through the cobra default streams
