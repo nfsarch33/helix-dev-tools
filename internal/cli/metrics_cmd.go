@@ -38,7 +38,7 @@ var metricsCmd = &cobra.Command{
 
 func init() {
 	metricsCmd.Flags().IntVar(&metricsFlags.days, "days", 7, "Number of days to include in the report")
-	metricsCmd.Flags().StringVar(&metricsFlags.export, "export", "", "Export markdown report to file (e.g. ~/memo/global-memories/system-performance.md)")
+	metricsCmd.Flags().StringVar(&metricsFlags.export, "export", "", "Export markdown report to file (e.g. ~/Code/global-kb/global-memories/system-performance.md)")
 	metricsCmd.Flags().BoolVar(&metricsFlags.compact, "compact", false, "Single-line output for embedding in prompts")
 	metricsCmd.Flags().BoolVar(&metricsFlags.analyse, "analyse", false, "Show actionable recommendations from data patterns")
 	metricsCmd.Flags().BoolVar(&metricsFlags.doctor, "doctor", false, "Include agent-doctor subsystem health summary")

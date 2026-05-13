@@ -134,7 +134,7 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 
 	b.WriteString("## Why this exists\n")
 	b.WriteString("When you have hundreds of MCP tools, the goal is fast, safe selection with minimal context switching.\n")
-	b.WriteString("This file is canonical in the Git-backed startup docs: `~/memo/global-memories/mcp-index-and-selection-sop.md`.\n\n")
+	b.WriteString("This file is canonical in the Git-backed startup docs: `~/Code/global-kb/global-memories/mcp-index-and-selection-sop.md`.\n\n")
 
 	b.WriteString("## Tool selection SOP (KISS)\n")
 	b.WriteString("- If the task is read-only codebase investigation: use `context-mode` first, then `ReadFile`, `rg`, and `Glob`.\n")

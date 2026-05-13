@@ -295,7 +295,7 @@ func (d *dailyRefresher) syncFile(label, src, dst string) {
 
 func (d *dailyRefresher) stepSkillsSync() {
 	d.out.Info("step 8/8: skills")
-	skillsSrc := filepath.Join(d.paths.Memo, "skills")
+	skillsSrc := filepath.Join(d.paths.CursorConfigDir(), "skills")
 	skillsDst := d.paths.SkillsDir
 
 	if !isDir(skillsSrc) {

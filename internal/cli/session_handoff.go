@@ -23,7 +23,7 @@ var sessionHandoffDryRun bool
 var sessionHandoffCmd = &cobra.Command{
 	Use:   "session-handoff",
 	Short: "Write a session handoff document to global-memories",
-	Long: `Writes ~/memo/global-memories/session-handoff-<YYYY-MM-DD>-<platform>.md with
+	Long: `Writes ~/Code/global-kb/global-memories/session-handoff-<YYYY-MM-DD>-<platform>.md with
 current platform, git state for all tracked repos, and open-items stubs.
 Skips if today's platform-specific file already exists unless --force is given.`,
 	RunE: runSessionHandoff,

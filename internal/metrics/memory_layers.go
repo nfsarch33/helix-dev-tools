@@ -153,7 +153,6 @@ func InferMemoryContextFromReadPath(path string) (layer, op, result string) {
 	}
 
 	markers := []string{
-		"/memo/global-memories/",
 		"/code/global-kb/global-memories/",
 		"/code/global-kb/learnings/",
 		"/code/global-kb/sop/",

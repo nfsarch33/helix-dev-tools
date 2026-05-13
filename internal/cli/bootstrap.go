@@ -34,19 +34,14 @@ func runBootstrap(_ *cobra.Command, _ []string) error {
 	}
 	out.Info("unified-memory: %s", globalKB)
 
-	// ~/memo symlink
+	// The legacy ~/memo path is retired. Do not recreate or mutate it.
 	memoLink := filepath.Join(p.Home, "memo")
 	if info, err := os.Lstat(memoLink); err == nil {
 		if info.Mode()&os.ModeSymlink != 0 {
 			target, _ := os.Readlink(memoLink)
-			out.Info("~/memo symlink already exists -> %s", target)
+			out.Warn("~/memo is retired but still exists as a symlink -> %s", target)
 		} else if info.IsDir() {
-			out.Warn("~/memo is a real directory (legacy). Back up and replace.")
-		}
-	} else {
-		out.Info("Creating ~/memo symlink -> %s", globalKB)
-		if !bootstrapDryRun {
-			_ = os.Symlink(globalKB, memoLink)
+			out.Warn("~/memo is retired but still exists as a real directory. Migrate contents to ~/Code/global-kb and remove it.")
 		}
 	}
 

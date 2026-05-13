@@ -14,19 +14,51 @@ var _ = Describe("bootstrap helpers", func() {
 			base := GinkgoT().TempDir()
 			oldHome := os.Getenv("HOME")
 			oldGlobalKB := os.Getenv("GLOBAL_KB")
-			oldMemo := os.Getenv("MEMO")
 			defer os.Setenv("HOME", oldHome)
 			defer os.Setenv("GLOBAL_KB", oldGlobalKB)
-			defer os.Setenv("MEMO", oldMemo)
 
 			Expect(os.Setenv("HOME", base)).To(Succeed())
 			Expect(os.Setenv("GLOBAL_KB", filepath.Join(base, "Code", "global-kb"))).To(Succeed())
-			Expect(os.Setenv("MEMO", filepath.Join(base, "memo"))).To(Succeed())
 
 			bootstrapDryRun = true
 			defer func() { bootstrapDryRun = false }()
 
 			Expect(runBootstrap(nil, nil)).To(Succeed())
+		})
+
+		It("does not recreate the retired ~/memo path", func() {
+			base := GinkgoT().TempDir()
+			oldHome := os.Getenv("HOME")
+			oldGlobalKB := os.Getenv("GLOBAL_KB")
+			defer os.Setenv("HOME", oldHome)
+			defer os.Setenv("GLOBAL_KB", oldGlobalKB)
+
+			Expect(os.Setenv("HOME", base)).To(Succeed())
+			Expect(os.Setenv("GLOBAL_KB", filepath.Join(base, "Code", "global-kb"))).To(Succeed())
+
+			Expect(runBootstrap(nil, nil)).To(Succeed())
+			_, err := os.Lstat(filepath.Join(base, "memo"))
+			Expect(os.IsNotExist(err)).To(BeTrue())
+		})
+
+		It("leaves an existing legacy ~/memo directory untouched", func() {
+			base := GinkgoT().TempDir()
+			oldHome := os.Getenv("HOME")
+			oldGlobalKB := os.Getenv("GLOBAL_KB")
+			defer os.Setenv("HOME", oldHome)
+			defer os.Setenv("GLOBAL_KB", oldGlobalKB)
+
+			Expect(os.Setenv("HOME", base)).To(Succeed())
+			Expect(os.Setenv("GLOBAL_KB", filepath.Join(base, "Code", "global-kb"))).To(Succeed())
+
+			legacyMemo := filepath.Join(base, "memo")
+			Expect(os.MkdirAll(legacyMemo, 0o755)).To(Succeed())
+
+			Expect(runBootstrap(nil, nil)).To(Succeed())
+
+			info, err := os.Lstat(legacyMemo)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(info.IsDir()).To(BeTrue())
 		})
 	})
 

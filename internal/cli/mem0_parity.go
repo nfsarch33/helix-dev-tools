@@ -620,7 +620,7 @@ func parityKey(path, sourceID string) string {
 
 func normalisePath(path string) string {
 	path = filepath.ToSlash(strings.TrimSpace(path))
-	for _, marker := range []string{"/Code/global-kb/", "/memo/"} {
+	for _, marker := range []string{"/Code/global-kb/"} {
 		if idx := strings.Index(path, marker); idx >= 0 {
 			path = path[idx+1:]
 			path = strings.TrimPrefix(path, strings.TrimPrefix(marker, "/"))

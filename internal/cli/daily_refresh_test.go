@@ -232,7 +232,7 @@ func TestDailyRefreshStepsAndRunner(t *testing.T) {
 		p.HooksDir,
 		filepath.Join(p.GlobalKB, ".git"),
 		filepath.Join(p.GlobalKB, "cursor-config", "rules"),
-		filepath.Join(p.Memo, "skills", "demo-skill"),
+		filepath.Join(p.CursorConfigDir(), "skills", "demo-skill"),
 		filepath.Join(home, "repo-a"),
 		filepath.Join(home, "workspace-rules"),
 		p.SkillsDir,
@@ -266,7 +266,7 @@ func TestDailyRefreshStepsAndRunner(t *testing.T) {
 	if err := os.Setenv("WORKSPACE_RULES_PATH", ruleTarget+":zendesk-workspace.rules"); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(p.Memo, "skills", "demo-skill", "SKILL.md"), []byte("# Demo"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(p.CursorConfigDir(), "skills", "demo-skill", "SKILL.md"), []byte("# Demo"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 

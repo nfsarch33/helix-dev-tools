@@ -14,9 +14,9 @@ var _ = Describe("classifyLearningsPath", func() {
 		Expect(ws).To(Equal("/Users/jason.lian/agentic-ai-research"))
 	})
 
-	It("detects global learnings via ~/memo/ symlink path", func() {
+	It("does not treat the retired ~/memo path as canonical learnings", func() {
 		action, _ := classifyLearningsPath("/Users/jason.lian/memo/learnings/PATTERNS.md")
-		Expect(action).To(Equal(learningsGlobal))
+		Expect(action).To(Equal(learningsNone))
 	})
 
 	It("detects global learnings via ~/Code/global-kb/ real path", func() {

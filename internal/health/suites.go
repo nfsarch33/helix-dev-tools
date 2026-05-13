@@ -444,7 +444,8 @@ func suiteHooksSubagentsCommandsMCP(p config.Paths) *Suite {
 func suiteInstallReadiness(p config.Paths) *Suite {
 	s := &Suite{Name: "Install Readiness"}
 
-	s.AssertSymlink("~/memo is symlink", p.Memo)
+	ok, detail := legacyMemoRetired(p.Home)
+	s.Assert("legacy ~/memo path is retired", ok, detail)
 	s.AssertFileExists("cursor-tools binary exists", filepath.Join(p.BinDir, "cursor-tools"))
 	s.AssertSymlink("skills symlink exists", p.SkillsDir)
 	s.AssertSymlink("rules symlink exists", p.RulesDir)
@@ -757,7 +758,7 @@ func suiteProgrammaticCounts(p config.Paths) *Suite {
 	s := &Suite{Name: "Programmatic Count Verification"}
 
 	// Note: The total number of assertions in this health check
-	// is documented in ~/memo/global-memories/daily-startup-prompt.md.
+	// is documented in ~/Code/global-kb/global-memories/daily-startup-prompt.md.
 	// If you add or remove assertions, update the count in that file.
 
 	cursorCount := countDirsWithFile(p.SkillsDir, "SKILL.md", map[string]bool{"00-index": true})
@@ -1034,15 +1035,34 @@ func suiteRaceConditionPrevention(p config.Paths) *Suite {
 	return s
 }
 
+func legacyMemoRetired(home string) (bool, string) {
+	legacyPath := filepath.Join(home, "memo")
+	info, err := os.Lstat(legacyPath)
+	if os.IsNotExist(err) {
+		return true, ""
+	}
+	if err != nil {
+		return false, err.Error()
+	}
+	switch {
+	case info.Mode()&os.ModeSymlink != 0:
+		target, readErr := os.Readlink(legacyPath)
+		if readErr != nil {
+			return false, "legacy symlink present and unreadable"
+		}
+		return false, "legacy symlink present -> " + target
+	case info.IsDir():
+		return false, "legacy directory present"
+	default:
+		return false, "legacy path present"
+	}
+}
+
 func suiteDataIntegrity(p config.Paths) *Suite {
 	s := &Suite{Name: "Data Integrity"}
 
-	memoLink := filepath.Join(p.Home, "memo")
-	info, err := os.Lstat(memoLink)
-	s.Assert("~/memo is symlink", err == nil && info.Mode()&os.ModeSymlink != 0, "not a symlink")
-
-	target, err := os.Readlink(memoLink)
-	s.Assert("~/memo -> global-kb", err == nil && strings.Contains(target, "global-kb"), "wrong target: "+target)
+	ok, detail := legacyMemoRetired(p.Home)
+	s.Assert("legacy ~/memo path is retired", ok, detail)
 
 	remotes, _ := gitOutput(p.GlobalKB, "remote", "-v")
 	remoteCount := 0

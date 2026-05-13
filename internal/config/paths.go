@@ -35,7 +35,9 @@ func DefaultPaths() Paths {
 	}
 
 	globalKB := envOr("GLOBAL_KB", filepath.Join(home, "Code", "global-kb"))
-	memo := envOr("MEMO", filepath.Join(home, "memo"))
+	// Memo is retained as a deprecated alias so older call sites do not nil out,
+	// but active path resolution is now pinned to the Git-backed global-kb root.
+	memo := globalKB
 
 	return Paths{
 		Home:            home,
@@ -73,12 +75,12 @@ func (p Paths) SkillsCursorDir() string {
 
 // GlobalMemoriesDir returns the Git-backed startup-index directory.
 func (p Paths) GlobalMemoriesDir() string {
-	return filepath.Join(p.Memo, "global-memories")
+	return filepath.Join(p.GlobalKB, "global-memories")
 }
 
 // GlobalLearningsDir returns the global learnings directory.
 func (p Paths) GlobalLearningsDir() string {
-	return filepath.Join(p.Memo, "learnings")
+	return filepath.Join(p.GlobalKB, "learnings")
 }
 
 // SOPDir returns the SOP directory.
@@ -86,9 +88,9 @@ func (p Paths) SOPDir() string {
 	return filepath.Join(p.GlobalKB, "sop")
 }
 
-// ToolsDir returns the tools directory within memo (~/memo/tools).
+// ToolsDir returns the tools directory within the Git-backed global-kb root.
 func (p Paths) ToolsDir() string {
-	return filepath.Join(p.Memo, "tools")
+	return filepath.Join(p.GlobalKB, "tools")
 }
 
 // LogFile returns the log file path for a named hook.

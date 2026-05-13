@@ -93,6 +93,15 @@ func TestRenderHandoff_HeaderFields(t *testing.T) {
 	}
 }
 
+func TestSessionHandoffCommandUsesGlobalKBPath(t *testing.T) {
+	if strings.Contains(sessionHandoffCmd.Long, "~/memo/") {
+		t.Fatalf("session handoff help should not reference ~/memo: %q", sessionHandoffCmd.Long)
+	}
+	if !strings.Contains(sessionHandoffCmd.Long, "~/Code/global-kb/global-memories/session-handoff-") {
+		t.Fatalf("session handoff help should reference global-kb handoff path: %q", sessionHandoffCmd.Long)
+	}
+}
+
 func TestRenderHandoff_WithWorkspaceAndResourceSnapshot(t *testing.T) {
 	ctx := handoffRuntimeContext{
 		Workspace: handoffWorkspaceContext{

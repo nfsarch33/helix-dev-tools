@@ -43,6 +43,8 @@ var _ = Describe("mcp index helpers", func() {
 			Expect(md).To(ContainSubstring("### perplexity"))
 			Expect(md).To(ContainSubstring("***REDACTED***"))
 			Expect(md).To(ContainSubstring("PERPLEXITY_API_KEY"))
+			Expect(md).To(ContainSubstring("`~/Code/global-kb/global-memories/mcp-index-and-selection-sop.md`"))
+			Expect(md).NotTo(ContainSubstring("~/memo/global-memories/"))
 			Expect(md).NotTo(ContainSubstring(tokenValue))
 			Expect(md).NotTo(ContainSubstring(envValue))
 		})

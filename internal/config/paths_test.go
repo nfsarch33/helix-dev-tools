@@ -23,7 +23,7 @@ var _ = Describe("Paths", func() {
 			home := os.Getenv("HOME")
 			Expect(p.Home).To(Equal(home))
 			Expect(p.GlobalKB).To(ContainSubstring("Code/global-kb"))
-			Expect(p.Memo).To(ContainSubstring("memo"))
+			Expect(p.Memo).To(Equal(p.GlobalKB))
 			Expect(p.HooksDir).To(ContainSubstring(".cursor/hooks"))
 			Expect(p.SkillsDir).To(ContainSubstring(".cursor/skills"))
 		})
@@ -36,12 +36,12 @@ var _ = Describe("Paths", func() {
 			Expect(p.GlobalKB).To(Equal("/custom/path"))
 		})
 
-		It("respects MEMO env override", func() {
+		It("ignores MEMO env override and keeps global-kb as the durable root", func() {
 			os.Setenv("MEMO", "/custom/memo")
 			defer os.Unsetenv("MEMO")
 
 			p := config.DefaultPaths()
-			Expect(p.Memo).To(Equal("/custom/memo"))
+			Expect(p.Memo).To(Equal(p.GlobalKB))
 		})
 
 		It("populates all directory fields", func() {
@@ -73,13 +73,13 @@ var _ = Describe("Paths", func() {
 		It("computes GlobalMemoriesDir correctly", func() {
 			p := config.DefaultPaths()
 			Expect(p.GlobalMemoriesDir()).To(ContainSubstring("global-memories"))
-			Expect(p.GlobalMemoriesDir()).To(Equal(filepath.Join(p.Memo, "global-memories")))
+			Expect(p.GlobalMemoriesDir()).To(Equal(filepath.Join(p.GlobalKB, "global-memories")))
 		})
 
 		It("computes GlobalLearningsDir correctly", func() {
 			p := config.DefaultPaths()
 			Expect(p.GlobalLearningsDir()).To(ContainSubstring("learnings"))
-			Expect(p.GlobalLearningsDir()).To(Equal(filepath.Join(p.Memo, "learnings")))
+			Expect(p.GlobalLearningsDir()).To(Equal(filepath.Join(p.GlobalKB, "learnings")))
 		})
 
 		It("computes SOPDir correctly", func() {
@@ -123,13 +123,14 @@ var _ = Describe("Paths", func() {
 			Expect(lockFile).To(Equal(filepath.Join(p.HooksDir, ".promote.lock")))
 		})
 
-		It("uses Memo path for GlobalMemoriesDir", func() {
+		It("keeps global-kb derived paths even when MEMO is set", func() {
 			os.Setenv("MEMO", "/tmp/test-memo")
 			defer os.Unsetenv("MEMO")
 
 			p := config.DefaultPaths()
-			Expect(p.GlobalMemoriesDir()).To(Equal("/tmp/test-memo/global-memories"))
-			Expect(p.GlobalLearningsDir()).To(Equal("/tmp/test-memo/learnings"))
+			Expect(p.Memo).To(Equal(p.GlobalKB))
+			Expect(p.GlobalMemoriesDir()).To(Equal(filepath.Join(p.GlobalKB, "global-memories")))
+			Expect(p.GlobalLearningsDir()).To(Equal(filepath.Join(p.GlobalKB, "learnings")))
 		})
 
 		It("returns a recognised platform profile", func() {

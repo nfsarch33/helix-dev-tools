@@ -17,7 +17,7 @@ func TestDerivedPathsAndPlatformBranches(t *testing.T) {
 	defer os.Setenv("HOME", oldHome)
 
 	p := config.DefaultPaths()
-	if got := p.ToolsDir(); got != filepath.Join(p.Memo, "tools") {
+	if got := p.ToolsDir(); got != filepath.Join(p.GlobalKB, "tools") {
 		t.Fatalf("ToolsDir() = %q", got)
 	}
 	if got := p.MetricsFile(); got != filepath.Join(p.HooksDir, "metrics.jsonl") {

@@ -178,7 +178,7 @@ type learningsAction int
 const (
 	learningsNone   learningsAction = iota
 	learningsLocal                  // workspace .learnings/ edit
-	learningsGlobal                 // global learnings edit (via ~/memo or ~/Code/global-kb)
+	learningsGlobal                 // global learnings edit via ~/Code/global-kb
 )
 
 func classifyLearningsPath(filePath string) (learningsAction, string) {
@@ -186,8 +186,7 @@ func classifyLearningsPath(filePath string) (learningsAction, string) {
 		workspaceDir := filePath[:strings.Index(filePath, "/.learnings/")]
 		return learningsLocal, workspaceDir
 	}
-	if strings.Contains(filePath, "/memo/learnings/") ||
-		strings.Contains(filePath, "/global-kb/learnings/") {
+	if strings.Contains(filePath, "/global-kb/learnings/") {
 		return learningsGlobal, ""
 	}
 	return learningsNone, ""
