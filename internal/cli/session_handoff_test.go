@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file fleet_host_alias -- intentional test fixtures cover cleanup evidence labels for named testing-pool hosts.
+
 package cli
 
 import (

@@ -259,7 +259,7 @@ func suiteL1StartupIndexes(p config.Paths) *Suite {
 		s.AssertFileExists("Startup index: "+f, filepath.Join(gmDir, f))
 	}
 
-	s.AssertFileContains("daily prompt has memory system", filepath.Join(gmDir, "daily-startup-prompt.md"), "Memory System")
+	assertStartupPromptContains(s, p, "daily prompt has memory system", "Memory System")
 	s.AssertFileContains("skills index has count", filepath.Join(gmDir, "skills-index.md"), "unique skills")
 
 	credPatterns2 := []string{`ATATT3x`, `glpat-`, `ghp_`, `sk-proj-`, `sk-ant-`, `AKIA`}
@@ -279,6 +279,38 @@ func suiteL1StartupIndexes(p config.Paths) *Suite {
 	}
 
 	return s
+}
+
+func startupPromptBundle(p config.Paths) (label string, content string) {
+	paths := []string{
+		filepath.Join(p.GlobalMemoriesDir(), "daily-startup-prompt.md"),
+		filepath.Join(p.GlobalMemoriesDir(), "daily-startup-static.md"),
+		filepath.Join(p.GlobalMemoriesDir(), "daily-startup-sot.md"),
+	}
+	found := make([]string, 0, len(paths))
+	parts := make([]string, 0, len(paths))
+	for _, path := range paths {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		found = append(found, filepath.Base(path))
+		parts = append(parts, string(data))
+	}
+	if len(found) == 0 {
+		return "daily-startup-prompt.md", ""
+	}
+	return strings.Join(found, " + "), strings.Join(parts, "\n")
+}
+
+func assertStartupPromptContains(s *Suite, p config.Paths, name, needle string) {
+	label, content := startupPromptBundle(p)
+	s.Assert(name, strings.Contains(content, needle), fmt.Sprintf("%q not found in %s", needle, label))
+}
+
+func assertStartupPromptNotContains(s *Suite, p config.Paths, name, needle string) {
+	label, content := startupPromptBundle(p)
+	s.Assert(name, !strings.Contains(content, needle), fmt.Sprintf("%q unexpectedly found in %s", needle, label))
 }
 
 func suiteL2GlobalKB(p config.Paths) *Suite {
@@ -346,7 +378,6 @@ func suiteSkillsCursorPolicy(p config.Paths) *Suite {
 func suiteCrossFileConsistency(p config.Paths) *Suite {
 	s := &Suite{Name: "Cross-File Consistency"}
 
-	dailyPrompt := filepath.Join(p.GlobalMemoriesDir(), "daily-startup-prompt.md")
 	skillsIndex := filepath.Join(p.GlobalMemoriesDir(), "skills-index.md")
 
 	cursorCount := countDirsWithFile(p.SkillsDir, "SKILL.md", map[string]bool{"00-index": true})
@@ -354,15 +385,15 @@ func suiteCrossFileConsistency(p config.Paths) *Suite {
 	total := cursorCount + agentsCount
 	totalStr := itoa(total)
 
-	s.AssertFileContains("daily prompt has skill count", dailyPrompt, totalStr+" unique skills")
+	assertStartupPromptContains(s, p, "daily prompt has skill count", totalStr+" unique skills")
 	s.AssertFileContains("skills index has count", skillsIndex, totalStr+" unique skills")
 
-	s.AssertFileContains("daily prompt mentions hooks", dailyPrompt, "hooks")
-	s.AssertFileContains("daily prompt mentions sub-agents", dailyPrompt, "Sub-agents")
-	s.AssertFileContains("daily prompt mentions slash commands", dailyPrompt, "commands")
-	s.AssertFileContains("daily prompt mentions unified repo", dailyPrompt, "unified")
-	s.AssertFileContains("daily prompt mentions bootstrap", dailyPrompt, "bootstrap")
-	s.AssertFileContains("daily prompt mentions Context Mode", dailyPrompt, "Context Mode")
+	assertStartupPromptContains(s, p, "daily prompt mentions hooks", "hooks")
+	assertStartupPromptContains(s, p, "daily prompt mentions sub-agents", "Sub-agents")
+	assertStartupPromptContains(s, p, "daily prompt mentions slash commands", "commands")
+	assertStartupPromptContains(s, p, "daily prompt mentions unified repo", "unified")
+	assertStartupPromptContains(s, p, "daily prompt mentions bootstrap", "bootstrap")
+	assertStartupPromptContains(s, p, "daily prompt mentions Context Mode", "Context Mode")
 	s.AssertFileContains("skills index mentions cursor path", skillsIndex, ".cursor/skills")
 	s.AssertFileContains("skills index mentions agents path", skillsIndex, ".agents/skills")
 
@@ -587,7 +618,7 @@ func suiteResumeReadiness(p config.Paths) *Suite {
 	s.AssertFileExists("daily-startup prompt exists", dailyPrompt)
 	s.Assert("session handoff exists", handoff != "", "no session-handoff-*.md found in "+p.GlobalMemoriesDir())
 	s.AssertFileExists("MCP index exists", mcpIndex)
-	s.AssertFileContains("daily prompt references session handoff", dailyPrompt, "session-handoff")
+	assertStartupPromptContains(s, p, "daily prompt references session handoff", "session-handoff")
 	if handoff != "" {
 		s.AssertFileContains("session handoff has section headers", handoff, "## ")
 	}
@@ -607,13 +638,12 @@ func suiteMemoryRouting(p config.Paths) *Suite {
 	s.AssertFileExists("sop dir (L2)", p.SOPDir())
 	s.AssertFileExists("learnings dir", p.GlobalLearningsDir())
 
-	dailyPrompt := filepath.Join(p.GlobalMemoriesDir(), "daily-startup-prompt.md")
-	s.AssertFileContains("routing mentions L0", dailyPrompt, "L0")
-	s.AssertFileContains("routing mentions L1", dailyPrompt, "L1")
-	s.AssertFileContains("routing mentions L2", dailyPrompt, "L2")
-	s.AssertFileContains("routing mentions memo", dailyPrompt, "memo")
-	s.AssertFileContains("routing mentions Mem0", dailyPrompt, "Mem0")
-	s.AssertFileNotContains("daily prompt does not route primary memory to allPepper", dailyPrompt, "L1 Pepper")
+	assertStartupPromptContains(s, p, "routing mentions L0", "L0")
+	assertStartupPromptContains(s, p, "routing mentions L1", "L1")
+	assertStartupPromptContains(s, p, "routing mentions L2", "L2")
+	assertStartupPromptContains(s, p, "routing mentions memo", "memo")
+	assertStartupPromptContains(s, p, "routing mentions Mem0", "Mem0")
+	assertStartupPromptNotContains(s, p, "daily prompt does not route primary memory to allPepper", "L1 Pepper")
 
 	selfImproveSkill := filepath.Join(p.SkillsDir, "self-improving-agent", "SKILL.md")
 	s.AssertFileExists("self-improving-agent skill exists", selfImproveSkill)
@@ -1662,8 +1692,7 @@ func suiteCoordinationSignals(p config.Paths) *Suite {
 	s.AssertFileExists("multi-cursor-sync-protocol exists", syncProtocol)
 	s.AssertFileContains("sync protocol mentions Mem0 coordination", syncProtocol, "cursor-coordination")
 
-	dailyPrompt := filepath.Join(p.GlobalMemoriesDir(), "daily-startup-prompt.md")
-	s.AssertFileContains("daily prompt references signal list", dailyPrompt, "signal list")
+	assertStartupPromptContains(s, p, "daily prompt references signal list", "signal list")
 
 	signalBin := filepath.Join(p.BinDir, "cursor-tools")
 	s.AssertFileExists("cursor-tools binary exists", signalBin)
