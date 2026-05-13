@@ -63,6 +63,7 @@ func init() {
 	rootCmd.AddCommand(docsCheckCmd)
 	rootCmd.AddCommand(branchCleanupCmd)
 	rootCmd.AddCommand(sessionIndexCmd)
+	rootCmd.AddCommand(mem0UsageCmd)
 }
 
 var versionCmd = &cobra.Command{

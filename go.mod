@@ -1,6 +1,6 @@
 module github.com/nfsarch33/cursor-tools
 
-go 1.24.5
+go 1.25.0
 
 require (
 	github.com/onsi/ginkgo/v2 v2.28.1
@@ -8,7 +8,11 @@ require (
 	github.com/spf13/cobra v1.10.2
 )
 
-require go.uber.org/goleak v1.3.0
+require (
+	go.etcd.io/bbolt v1.4.0
+	go.uber.org/goleak v1.3.0
+	golang.org/x/time v0.15.0
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
