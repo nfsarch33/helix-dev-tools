@@ -10,12 +10,11 @@ import (
 	"github.com/nfsarch33/cursor-tools/internal/config"
 )
 
-func TestProgrammaticCountsAcceptsSixHookRoutes(t *testing.T) {
+func TestProgrammaticCountsAcceptsFiveHookRoutes(t *testing.T) {
 	p := programmaticCountsFixture(t)
 
 	routes := []string{
 		"post-edit",
-		"post-shell",
 		"guard-mcp",
 		"sanitize-read",
 		"guard-shell",
@@ -41,7 +40,7 @@ func TestProgrammaticCountsAcceptsSixHookRoutes(t *testing.T) {
 		t.Fatalf("missing hooks.json Go route count assertion in %+v", suite.Results)
 	}
 	if !hookRoutes.Passed {
-		t.Fatalf("six hook routes should pass count verification, got detail %q", hookRoutes.Detail)
+		t.Fatalf("five hook routes should pass count verification, got detail %q", hookRoutes.Detail)
 	}
 }
 
