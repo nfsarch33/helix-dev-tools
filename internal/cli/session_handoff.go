@@ -2,11 +2,13 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -123,6 +125,7 @@ func buildHandoffContent(p config.Paths, today string) string {
 type handoffRuntimeContext struct {
 	Workspace handoffWorkspaceContext
 	Resource  resourceProbeSnapshot
+	Testing   handoffTestingContext
 }
 
 type handoffWorkspaceContext struct {
@@ -133,11 +136,104 @@ type handoffWorkspaceContext struct {
 	Mode      string
 }
 
+type handoffTestingContext struct {
+	Cleanups []testLaneCleanupEvidence
+}
+
+type testLaneCleanupEvidence struct {
+	Timestamp string
+	Pool      string
+	Lane      string
+	Target    string
+	Status    string
+	Note      string
+	Cleanup   testLaneCleanupStatus
+}
+
+type testLaneCleanupStatus struct {
+	ContainersStopped bool `json:"containers_stopped,omitempty"`
+	BrowsersStopped   bool `json:"browsers_stopped,omitempty"`
+	SentruxStopped    bool `json:"sentrux_stopped,omitempty"`
+	RemoteJobsStopped bool `json:"remote_jobs_stopped,omitempty"`
+}
+
+type runxTestLaneSummary struct {
+	Timestamp    string                `json:"timestamp"`
+	Lane         string                `json:"lane"`
+	Target       string                `json:"target"`
+	ResolvedPool string                `json:"resolved_pool"`
+	Status       string                `json:"status"`
+	Note         string                `json:"note,omitempty"`
+	Cleanup      testLaneCleanupStatus `json:"cleanup,omitempty"`
+}
+
 func collectHandoffRuntimeContext(p config.Paths) handoffRuntimeContext {
 	return handoffRuntimeContext{
 		Workspace: detectHandoffWorkspace(p),
 		Resource:  readLastProbeEntry(resourceProbePath()),
+		Testing:   collectTestingCleanupContext(p),
 	}
+}
+
+func collectTestingCleanupContext(p config.Paths) handoffTestingContext {
+	base := filepath.Join(p.Home, "logs", "runx", "test-lanes")
+	entries, err := os.ReadDir(base)
+	if err != nil {
+		return handoffTestingContext{}
+	}
+
+	latestByPool := map[string]testLaneCleanupEvidence{}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		summaryPath := filepath.Join(base, entry.Name(), "summary.json")
+		raw, readErr := os.ReadFile(summaryPath)
+		if readErr != nil {
+			continue
+		}
+		var summary runxTestLaneSummary
+		if jsonErr := json.Unmarshal(raw, &summary); jsonErr != nil {
+			continue
+		}
+		if strings.TrimSpace(summary.ResolvedPool) == "" {
+			continue
+		}
+		if !strings.Contains(summary.Lane, "cleanup") && !hasCleanupEvidence(summary.Cleanup) && strings.TrimSpace(summary.Note) == "" {
+			continue
+		}
+		candidate := testLaneCleanupEvidence{
+			Timestamp: summary.Timestamp,
+			Pool:      summary.ResolvedPool,
+			Lane:      summary.Lane,
+			Target:    summary.Target,
+			Status:    summary.Status,
+			Note:      summary.Note,
+			Cleanup:   summary.Cleanup,
+		}
+		current, ok := latestByPool[candidate.Pool]
+		if !ok || candidate.Timestamp > current.Timestamp {
+			latestByPool[candidate.Pool] = candidate
+		}
+	}
+
+	if len(latestByPool) == 0 {
+		return handoffTestingContext{}
+	}
+	pools := make([]string, 0, len(latestByPool))
+	for pool := range latestByPool {
+		pools = append(pools, pool)
+	}
+	sort.Strings(pools)
+	out := handoffTestingContext{Cleanups: make([]testLaneCleanupEvidence, 0, len(pools))}
+	for _, pool := range pools {
+		out.Cleanups = append(out.Cleanups, latestByPool[pool])
+	}
+	return out
+}
+
+func hasCleanupEvidence(cleanup testLaneCleanupStatus) bool {
+	return cleanup.ContainersStopped || cleanup.BrowsersStopped || cleanup.SentruxStopped || cleanup.RemoteJobsStopped
 }
 
 func detectHandoffWorkspace(p config.Paths) handoffWorkspaceContext {
@@ -227,6 +323,7 @@ func renderHandoff(hostname, platform, today, repoSection string, signals []coor
 
 	sb.WriteString(renderWorkspaceSection(runtime.Workspace))
 	sb.WriteString(renderResourceSection(runtime.Resource))
+	sb.WriteString(renderTestingSection(runtime.Testing))
 
 	sb.WriteString("## Current State\n\n")
 	sb.WriteString(repoSection)
@@ -308,6 +405,35 @@ func renderResourceSection(probe resourceProbeSnapshot) string {
 	}
 	if probe.Err != "" {
 		sb.WriteString(fmt.Sprintf("- Note: `%s`\n", probe.Err))
+	}
+	sb.WriteString("\n")
+	return sb.String()
+}
+
+func renderTestingSection(testing handoffTestingContext) string {
+	var sb strings.Builder
+	sb.WriteString("## Testing Pool Cleanup\n\n")
+	if len(testing.Cleanups) == 0 {
+		sb.WriteString("- No runx test-lane cleanup evidence detected.\n\n")
+		return sb.String()
+	}
+	for _, cleanup := range testing.Cleanups {
+		sb.WriteString(fmt.Sprintf("- Pool `%s`: lane `%s` on `%s` -> `%s`", cleanup.Pool, cleanup.Lane, cleanup.Target, cleanup.Status))
+		if cleanup.Timestamp != "" {
+			sb.WriteString(fmt.Sprintf(" at `%s`", cleanup.Timestamp))
+		}
+		if cleanup.Note != "" {
+			sb.WriteString(fmt.Sprintf(" (`%s`)", cleanup.Note))
+		}
+		if hasCleanupEvidence(cleanup.Cleanup) {
+			sb.WriteString(fmt.Sprintf(" [containers=%t browsers=%t sentrux=%t remote_jobs=%t]",
+				cleanup.Cleanup.ContainersStopped,
+				cleanup.Cleanup.BrowsersStopped,
+				cleanup.Cleanup.SentruxStopped,
+				cleanup.Cleanup.RemoteJobsStopped,
+			))
+		}
+		sb.WriteString("\n")
 	}
 	sb.WriteString("\n")
 	return sb.String()

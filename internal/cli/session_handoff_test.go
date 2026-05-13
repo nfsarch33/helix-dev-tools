@@ -142,6 +142,58 @@ func TestRenderHandoff_WithWorkspaceAndResourceSnapshot(t *testing.T) {
 	}
 }
 
+func TestRenderHandoff_WithTestingPoolCleanupEvidence(t *testing.T) {
+	ctx := handoffRuntimeContext{
+		Testing: handoffTestingContext{
+			Cleanups: []testLaneCleanupEvidence{
+				{
+					Timestamp: "2026-05-14T01:02:03Z",
+					Pool:      "primary-testing",
+					Lane:      "cleanup-testing",
+					Target:    "wsl1",
+					Status:    "ok",
+					Cleanup: testLaneCleanupStatus{
+						ContainersStopped: true,
+						BrowsersStopped:   true,
+						SentruxStopped:    true,
+						RemoteJobsStopped: true,
+					},
+				},
+				{
+					Timestamp: "2026-05-14T02:03:04Z",
+					Pool:      "secondary-testing",
+					Lane:      "cleanup-testing",
+					Target:    "wsl2",
+					Status:    "skipped",
+					Note:      "standby-offline",
+				},
+			},
+		},
+	}
+
+	result := renderHandoff("myhost", "macos", "2026-03-20", "### global-kb\n\n", nil, ctx)
+
+	for _, want := range []string{
+		"## Testing Pool Cleanup",
+		"`primary-testing`",
+		"`secondary-testing`",
+		"`cleanup-testing`",
+		"`wsl1`",
+		"`wsl2`",
+		"`ok`",
+		"`skipped`",
+		"`standby-offline`",
+		"containers=true",
+		"browsers=true",
+		"sentrux=true",
+		"remote_jobs=true",
+	} {
+		if !strings.Contains(result, want) {
+			t.Fatalf("renderHandoff missing %q in %q", want, result)
+		}
+	}
+}
+
 func TestHasBlockerSignals(t *testing.T) {
 	if hasBlockerSignals(nil) {
 		t.Error("nil signals should return false")
