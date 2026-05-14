@@ -182,3 +182,81 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, DefaultThreshold, d.cfg.Threshold)
 	assert.Equal(t, KnownMCPBinaries, d.cfg.BinaryNames)
 }
+
+// ---- v415-4 tests ----
+
+func TestDetector_100Cycles_ZeroFalsePositives(t *testing.T) {
+	lister := &fakeProcessLister{
+		procs: []ProcessInfo{
+			{PID: 1, PPID: 42, Name: "sentrux", Elapsed: 30 * time.Minute},
+			{PID: 2, PPID: 42, Name: "mem0-mcp-go", Elapsed: 1 * time.Hour},
+			{PID: 3, PPID: 42, Name: "pdf-mcp-server", Elapsed: 2 * time.Hour},
+			{PID: 4, PPID: 42, Name: "cursor-tools", Elapsed: 3 * time.Hour},
+		},
+	}
+	d := NewDetector(lister, DetectorConfig{Threshold: DefaultThreshold})
+
+	for cycle := 0; cycle < 100; cycle++ {
+		stale, err := d.Scan()
+		require.NoError(t, err, "cycle %d", cycle)
+		assert.Empty(t, stale, "cycle %d: expected zero stale for healthy processes", cycle)
+	}
+}
+
+func TestDetector_MixedProcesses(t *testing.T) {
+	threshold := 4 * time.Hour
+	lister := &fakeProcessLister{
+		procs: []ProcessInfo{
+			// 3 healthy: known MCP name, non-orphan, below threshold
+			{PID: 100, PPID: 42, Name: "sentrux", Elapsed: 30 * time.Minute},
+			{PID: 101, PPID: 42, Name: "mem0-mcp-go", Elapsed: 1 * time.Hour},
+			{PID: 102, PPID: 42, Name: "pdf-mcp-server", Elapsed: 2 * time.Hour},
+			// 2 orphaned: PPID=1
+			{PID: 200, PPID: 1, Name: "sentrux", Elapsed: 10 * time.Minute},
+			{PID: 201, PPID: 1, Name: "ironclaw-mcp", Elapsed: 5 * time.Minute},
+			// 1 long-running: exceeds threshold
+			{PID: 300, PPID: 42, Name: "cursor-tools", Elapsed: 5 * time.Hour},
+		},
+	}
+	d := NewDetector(lister, DetectorConfig{Threshold: threshold})
+
+	stale, err := d.Scan()
+	require.NoError(t, err)
+	require.Len(t, stale, 3, "expected 2 orphaned + 1 long-running")
+
+	reasons := map[string]int{}
+	for _, s := range stale {
+		if s.Reason == "orphaned (PPID=1)" {
+			reasons["orphaned"]++
+		} else {
+			reasons["elapsed"]++
+		}
+	}
+	assert.Equal(t, 2, reasons["orphaned"])
+	assert.Equal(t, 1, reasons["elapsed"])
+}
+
+func TestDetector_ThresholdBoundary(t *testing.T) {
+	threshold := 4 * time.Hour
+	lister := &fakeProcessLister{
+		procs: []ProcessInfo{
+			{PID: 10, PPID: 42, Name: "sentrux", Elapsed: threshold},
+			{PID: 11, PPID: 42, Name: "sentrux", Elapsed: threshold + time.Second},
+		},
+	}
+	d := NewDetector(lister, DetectorConfig{Threshold: threshold})
+
+	stale, err := d.Scan()
+	require.NoError(t, err)
+	require.Len(t, stale, 1, "only the process exceeding threshold should be stale")
+	assert.Equal(t, 11, stale[0].PID, "process at threshold+1s should be stale")
+}
+
+func TestDetector_EmptyProcessList(t *testing.T) {
+	lister := &fakeProcessLister{procs: []ProcessInfo{}}
+	d := NewDetector(lister, DetectorConfig{})
+
+	stale, err := d.Scan()
+	require.NoError(t, err)
+	assert.Empty(t, stale, "empty process list should yield zero stale reports")
+}

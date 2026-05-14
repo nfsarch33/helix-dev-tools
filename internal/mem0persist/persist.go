@@ -236,3 +236,25 @@ func (s *Store) FileSize() (int64, error) {
 	}
 	return info.Size(), nil
 }
+
+// Rotate archives the current NDJSON file by renaming it with a
+// nanosecond-precision suffix. After rotation the original path is
+// free for new writes. Returns the archive path, or ("", nil) if the
+// pending file does not exist.
+func (s *Store) Rotate() (archived string, err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, statErr := os.Stat(s.path); statErr != nil {
+		if errors.Is(statErr, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", statErr
+	}
+
+	archived = fmt.Sprintf("%s.%d", s.path, time.Now().UnixNano())
+	if err := os.Rename(s.path, archived); err != nil {
+		return "", fmt.Errorf("rotate: %w", err)
+	}
+	return archived, nil
+}

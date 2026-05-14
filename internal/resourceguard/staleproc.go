@@ -88,7 +88,7 @@ func (d *Detector) Scan() ([]StaleProcess, error) {
 			})
 			continue
 		}
-		if p.Elapsed >= d.cfg.Threshold {
+		if p.Elapsed > d.cfg.Threshold {
 			stale = append(stale, StaleProcess{
 				ProcessInfo: p,
 				Reason:      fmt.Sprintf("elapsed %s >= threshold %s", p.Elapsed.Truncate(time.Second), d.cfg.Threshold),
