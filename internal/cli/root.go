@@ -60,6 +60,7 @@ func init() {
 	rootCmd.AddCommand(branchCleanupCmd)
 	rootCmd.AddCommand(sessionIndexCmd)
 	rootCmd.AddCommand(mem0UsageCmd)
+	rootCmd.AddCommand(mem0ExportCmd)
 	rootCmd.AddCommand(mcpFilterCmd)
 	rootCmd.AddCommand(observabilityReportCmd)
 	rootCmd.AddCommand(agentraceSearchCmd)
