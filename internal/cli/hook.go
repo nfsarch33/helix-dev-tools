@@ -15,4 +15,6 @@ func init() {
 	hookCmd.AddCommand(housekeepingCmd)
 	hookCmd.AddCommand(guardNoShellLeakSyncCmd)
 	hookCmd.AddCommand(sessionStartCmd)
+	hookCmd.AddCommand(rtkRewriteCmd)
+	hookCmd.AddCommand(rtkSessionSavingsCmd)
 }

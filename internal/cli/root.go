@@ -64,6 +64,7 @@ func init() {
 	rootCmd.AddCommand(mcpFilterCmd)
 	rootCmd.AddCommand(observabilityReportCmd)
 	rootCmd.AddCommand(agentraceSearchCmd)
+	rootCmd.AddCommand(fleetCmd)
 }
 
 var versionCmd = &cobra.Command{

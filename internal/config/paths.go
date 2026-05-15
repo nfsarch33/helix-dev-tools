@@ -108,6 +108,11 @@ func (p Paths) LockFile(name string) string {
 	return filepath.Join(p.HooksDir, "."+name+".lock")
 }
 
+// LogDir returns the runx-style log directory ($HOME/logs/runx).
+func (p Paths) LogDir() string {
+	return filepath.Join(p.Home, "logs", "runx")
+}
+
 // MetricsFile returns the path to the JSONL metrics file.
 func (p Paths) MetricsFile() string {
 	return filepath.Join(p.HooksDir, "metrics.jsonl")
