@@ -1,0 +1,37 @@
+components:
+  runx:
+    description: "CLI wrapper for no-shell-leak operations"
+    binary: "$HOME/runs/runx"
+    source: "go build -o $HOME/runs/runx ./cmd/runx"
+    check: "runx --version"
+    platforms: [darwin, linux]
+
+  sentrux:
+    description: "Code quality gate"
+    binary: "$HOME/runs/sentrux"
+    check: "sentrux --version"
+    platforms: [darwin, linux]
+
+  mem0-oss-client:
+    description: "Mem0 OSS MCP Go client"
+    binary: "$HOME/runs/mem0-mcp-go"
+    check: "mem0-mcp-go --version"
+    platforms: [darwin, linux]
+
+  hooks:
+    description: "Git hooks (pre-push identity gate, rebrand gate)"
+    target: "$HOME/.config/cursor-tools/hooks/"
+    check: "cursor-tools githook pre-push --version"
+    platforms: [darwin, linux]
+
+  daemons:
+    description: "Background services (resource-probe, fleet-health)"
+    check: "cursor-tools daemon status"
+    platforms: [darwin, linux]
+    subcomponents:
+      resource-probe:
+        launchd: "com.user.cursor-resource-probe"
+        systemd: "cursor-resource-probe.service"
+      fleet-health:
+        launchd: "com.user.cursor-fleet-health"
+        systemd: "cursor-fleet-health.service"
