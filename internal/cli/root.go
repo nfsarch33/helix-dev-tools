@@ -64,6 +64,8 @@ func init() {
 	rootCmd.AddCommand(mcpFilterCmd)
 	rootCmd.AddCommand(observabilityReportCmd)
 	rootCmd.AddCommand(agentraceSearchCmd)
+	rootCmd.AddCommand(githubCmd)
+	rootCmd.AddCommand(rebrandCmd)
 	rootCmd.AddCommand(fleetCmd)
 }
 

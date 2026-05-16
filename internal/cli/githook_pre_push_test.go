@@ -353,3 +353,105 @@ func TestPrePush_StillBlocksPushToMainOnPersonalRemote(t *testing.T) {
 		t.Errorf("stderr should mention main: %q", stderr.String())
 	}
 }
+
+// withFakeRebrandGate replaces the rebrand-gate evaluator for tests.
+func withFakeRebrandGate(t *testing.T, fn func(remoteURL string) []string) {
+	t.Helper()
+	prev := rebrandGateEvaluator
+	rebrandGateEvaluator = fn
+	t.Cleanup(func() { rebrandGateEvaluator = prev })
+}
+
+func TestIsHelixonRemote(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		url  string
+		want bool
+	}{
+		{"git@github-agtc:nfsarch33/helixon-ops.git", true},
+		{"https://github.com/nfsarch33/helixon-mcp.git", true},
+		{"git@github-agtc:nfsarch33/helixon-kb.git", true},
+		{"git@github-agtc:nfsarch33/cursor-tools.git", false},
+		{"git@github.com:zendesk/secure-auth-platform.git", false},
+		{"", false},
+	}
+	for _, tc := range cases {
+		got := isHelixonRemote(tc.url)
+		if got != tc.want {
+			t.Errorf("isHelixonRemote(%q) = %v, want %v", tc.url, got, tc.want)
+		}
+	}
+}
+
+func TestPrePush_RebrandGateBlocksHelixonRemote(t *testing.T) {
+	withFakeAllowMainPush(t, true)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github-agtc:nfsarch33/helixon-ops.git",
+		GitEmail:  "jaslian@gmail.com",
+		Env:       map[string]string{},
+	})
+	withFakePublicRepoGate(t, func(string) []string { return nil })
+	withFakeRebrandGate(t, func(url string) []string {
+		if isHelixonRemote(url) {
+			return []string{"rebrand-gate: 5 legacy term(s) found in repo (run `cursor-tools rebrand scan` for details)"}
+		}
+		return nil
+	})
+	code, stderr := withCapturedPrePushExit(t)
+
+	prePushStdin = strings.NewReader("refs/heads/feat/init local-sha refs/heads/feat/init remote-sha\n")
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/helixon-ops.git"})
+	if *code != 1 {
+		t.Fatalf("want exit 1 for helixon remote with legacy terms, got %d", *code)
+	}
+	if !strings.Contains(stderr.String(), "rebrand-gate") {
+		t.Errorf("stderr should mention rebrand-gate: %q", stderr.String())
+	}
+}
+
+func TestPrePush_RebrandGateSkipsNonHelixonRemote(t *testing.T) {
+	withFakeAllowMainPush(t, true)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github-agtc:nfsarch33/cursor-tools.git",
+		GitEmail:  "jaslian@gmail.com",
+		Env:       map[string]string{},
+	})
+	withFakePublicRepoGate(t, func(string) []string { return nil })
+	withFakeRebrandGate(t, func(url string) []string {
+		if isHelixonRemote(url) {
+			return []string{"rebrand-gate: would block"}
+		}
+		return nil
+	})
+	code, _ := withCapturedPrePushExit(t)
+
+	prePushStdin = strings.NewReader("refs/heads/feat/foo local-sha refs/heads/feat/foo remote-sha\n")
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-tools.git"})
+	if *code != 0 {
+		t.Fatalf("non-helixon remote should not trigger rebrand gate, got exit %d", *code)
+	}
+}
+
+func TestPrePush_RebrandGatePassesCleanHelixonRepo(t *testing.T) {
+	withFakeAllowMainPush(t, true)
+	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
+		RemoteURL: "git@github-agtc:nfsarch33/helixon-mcp.git",
+		GitEmail:  "jaslian@gmail.com",
+		Env:       map[string]string{},
+	})
+	withFakePublicRepoGate(t, func(string) []string { return nil })
+	withFakeRebrandGate(t, func(string) []string { return nil })
+	code, _ := withCapturedPrePushExit(t)
+
+	prePushStdin = strings.NewReader("refs/heads/feat/init local-sha refs/heads/feat/init remote-sha\n")
+	defer func() { prePushStdin = io.Reader(nil) }()
+
+	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/helixon-mcp.git"})
+	if *code != 0 {
+		t.Fatalf("clean helixon repo should pass rebrand gate, got exit %d", *code)
+	}
+}

@@ -57,6 +57,7 @@ var (
 	publicRepoGateEvaluator = evaluatePublicRepoGateDefault
 	publicRepoNameFromURLFn = publicRepoNameFromURLDefault
 	isAncestorChecker       = gitIsAncestor
+	rebrandGateEvaluator    = evaluateRebrandGateDefault
 )
 
 // isZendeskGitHubRemote reports whether the push URL targets the
@@ -234,9 +235,40 @@ func resolvePublicRepoAlias(githubRepoName string) string {
 	return githubRepoName
 }
 
+// isHelixonRemote reports whether the push URL targets a helixon-*
+// repository (new rebrand namespace). When true, the rebrand scanner
+// gate blocks pushes containing legacy terms.
+func isHelixonRemote(remoteURL string) bool {
+	r := strings.ToLower(strings.TrimSpace(remoteURL))
+	return strings.Contains(r, "helixon-")
+}
+
+// evaluateRebrandGateDefault scans the repo working directory for legacy
+// brand terms when pushing to a helixon-* remote. Returns nil if the
+// remote is not a helixon repo or no findings exist.
+func evaluateRebrandGateDefault(remoteURL string) []string {
+	if !isHelixonRemote(remoteURL) {
+		return nil
+	}
+	cwd, err := os.Getwd()
+	if err != nil {
+		return []string{fmt.Sprintf("rebrand-gate: cannot determine working directory: %v", err)}
+	}
+	findings, err := scanDirectory(cwd)
+	if err != nil {
+		return []string{fmt.Sprintf("rebrand-gate: scan error: %v", err)}
+	}
+	if len(findings) == 0 {
+		return nil
+	}
+	return []string{
+		fmt.Sprintf("rebrand-gate: %d legacy term(s) found in repo (run `cursor-tools rebrand scan` for details)", len(findings)),
+	}
+}
+
 var prePushCmd = &cobra.Command{
 	Use:           "pre-push [remote] [url]",
-	Short:         "Enforce push policy: identity, public repo gate, zendesk fast-forward-only, main branch",
+	Short:         "Enforce push policy: identity, public repo gate, rebrand gate, zendesk fast-forward-only, main branch",
 	Args:          cobra.RangeArgs(1, 2),
 	SilenceUsage:  true,
 	SilenceErrors: false,
@@ -325,6 +357,21 @@ func runPrePush(_ *cobra.Command, args []string) error {
 				"  See sop/public-repo-sanitization.md for the category taxonomy.\n"+
 				"To bypass for one push (rare; document the exemption in the commit body):\n"+
 				"  git push --no-verify  # NOTE: this also disables the identity gate")
+		prePushExit(1)
+		return nil
+	}
+
+	if findings := rebrandGateEvaluator(remoteURL); len(findings) > 0 {
+		fmt.Fprintln(prePushStderr, "ERROR: cursor-tools rebrand-gate FAILED for helixon-* repo push:")
+		for _, f := range findings {
+			fmt.Fprintln(prePushStderr, "  - "+f)
+		}
+		fmt.Fprintln(prePushStderr,
+			"\nRemediation:\n"+
+				"  cursor-tools rebrand scan --dir .   # see all findings\n"+
+				"  Replace legacy terms (ironclaw, cursor-tools, cylrl, evomap) with Helixon equivalents.\n"+
+				"To bypass for one push (rare; document the exemption in the commit body):\n"+
+				"  git push --no-verify  # NOTE: this also disables all pre-push layers")
 		prePushExit(1)
 		return nil
 	}
