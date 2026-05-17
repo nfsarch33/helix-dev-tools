@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/coordination"
+	"github.com/nfsarch33/helix-dev-tools/internal/coordination"
 )
 
 // DefaultEmitter returns the process-wide singleton emitter. Hooks call this

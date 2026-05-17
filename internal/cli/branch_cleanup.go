@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/branchcleanup"
-	"github.com/nfsarch33/cursor-tools/internal/workspace"
+	"github.com/nfsarch33/helix-dev-tools/internal/branchcleanup"
+	"github.com/nfsarch33/helix-dev-tools/internal/workspace"
 )
 
 type execGitRunner struct {

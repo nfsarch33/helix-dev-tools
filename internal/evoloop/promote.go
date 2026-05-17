@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/mem0outbox"
+	"github.com/nfsarch33/helix-dev-tools/internal/mem0outbox"
 )
 
 // PromotionState distinguishes the outcomes the promoter can produce

@@ -9,8 +9,8 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/nfsarch33/cursor-tools/internal/hookio"
-	"github.com/nfsarch33/cursor-tools/internal/logger"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookio"
+	"github.com/nfsarch33/helix-dev-tools/internal/logger"
 )
 
 var _ = Describe("sanitizeReadHandler", func() {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
 )
 
 // ExportPrometheus renders hook hit-rate metrics in Prometheus text format.

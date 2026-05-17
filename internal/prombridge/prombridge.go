@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
 )
 
 var safeLabel = regexp.MustCompile(`[^a-zA-Z0-9_]`)

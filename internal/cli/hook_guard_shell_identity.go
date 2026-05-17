@@ -3,7 +3,7 @@ package cli
 import (
 	"strings"
 
-	"github.com/nfsarch33/cursor-tools/internal/hookio"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookio"
 )
 
 // identityGateStateProviderForTest is the seam tests use to inject a

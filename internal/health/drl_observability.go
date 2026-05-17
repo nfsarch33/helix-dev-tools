@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
 )
 
 // httpProbeGET performs a GET with ctx and returns HTTP status (0 if transport error).

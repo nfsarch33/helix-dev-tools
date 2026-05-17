@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/fleetk8s"
+	"github.com/nfsarch33/helix-dev-tools/internal/fleetk8s"
 )
 
 var fleetKubeconfigPath string

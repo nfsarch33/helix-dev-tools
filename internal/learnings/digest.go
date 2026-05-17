@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/nfsarch33/cursor-tools/internal/lockfile"
+	"github.com/nfsarch33/helix-dev-tools/internal/lockfile"
 )
 
 // PromoteResults holds outcomes from the full promotion pipeline.

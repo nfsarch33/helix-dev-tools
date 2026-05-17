@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/mcpfilter/compression"
+	"github.com/nfsarch33/helix-dev-tools/internal/mcpfilter/compression"
 )
 
 func TestE2E_RoundTripPreservesCriticalFields(t *testing.T) {

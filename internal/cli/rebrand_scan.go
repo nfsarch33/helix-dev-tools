@@ -38,7 +38,7 @@ var rebrandRules = []rebrandRule{
 	{"github.com/nfsarch33/ironclaw-", catGoModule, "github.com/nfsarch33/helixon-"},
 	{"github.com/nfsarch33/cylrl-", catGoModule, "github.com/nfsarch33/helixon-"},
 	{"github.com/nfsarch33/cursor-global-kb", catGoModule, "github.com/nfsarch33/helixon-kb"},
-	{"github.com/nfsarch33/cursor-tools", catGoModule, "github.com/nfsarch33/helix-dev-tools"},
+	{"github.com/nfsarch33/helix-dev-tools", catGoModule, "github.com/nfsarch33/helix-dev-tools"},
 
 	// Docker image names
 	{"ironclaw/", catDockerImage, "helixon/"},

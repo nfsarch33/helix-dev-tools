@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/nfsarch33/cursor-tools/internal/supervisor"
+	"github.com/nfsarch33/helix-dev-tools/internal/supervisor"
 	"github.com/spf13/cobra"
 )
 

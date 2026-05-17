@@ -11,12 +11,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/claude"
-	"github.com/nfsarch33/cursor-tools/internal/clilog"
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/evoloop"
-	"github.com/nfsarch33/cursor-tools/internal/hookmetrics"
-	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/claude"
+	"github.com/nfsarch33/helix-dev-tools/internal/clilog"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/evoloop"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookmetrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
 )
 
 var metricsFlags struct {

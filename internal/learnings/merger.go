@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/nfsarch33/cursor-tools/internal/lockfile"
+	"github.com/nfsarch33/helix-dev-tools/internal/lockfile"
 )
 
 // WorkspaceResult holds counts of promoted items from a workspace.

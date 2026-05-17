@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/dockerhealth"
+	"github.com/nfsarch33/helix-dev-tools/internal/dockerhealth"
 )
 
 func TestParseDockerPS_ValidOutput(t *testing.T) {

@@ -25,7 +25,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nfsarch33/cursor-tools/internal/replicate"
+	"github.com/nfsarch33/helix-dev-tools/internal/replicate"
 )
 
 func main() {

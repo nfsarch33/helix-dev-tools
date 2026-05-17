@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/mem0outbox"
+	"github.com/nfsarch33/helix-dev-tools/internal/mem0outbox"
 )
 
 // GateResult is the structured outcome of one TDD gate invocation. The

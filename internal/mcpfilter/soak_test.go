@@ -3,7 +3,7 @@ package mcpfilter_test
 import (
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/mcpfilter"
+	"github.com/nfsarch33/helix-dev-tools/internal/mcpfilter"
 )
 
 func TestSoak_AllProfilesSurvive100Sessions(t *testing.T) {

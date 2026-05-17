@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/tokenusage"
+	"github.com/nfsarch33/helix-dev-tools/internal/tokenusage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/goleak"

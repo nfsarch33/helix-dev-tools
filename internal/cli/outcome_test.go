@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/outcomes"
+	"github.com/nfsarch33/helix-dev-tools/internal/outcomes"
 )
 
 func TestOutcomeCmdRegistered(t *testing.T) {

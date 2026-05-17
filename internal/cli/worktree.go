@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nfsarch33/cursor-tools/internal/worktree"
+	"github.com/nfsarch33/helix-dev-tools/internal/worktree"
 	"github.com/spf13/cobra"
 )
 

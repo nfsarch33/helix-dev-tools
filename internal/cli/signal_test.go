@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/coordination"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/coordination"
 )
 
 func TestBuildSignal_State(t *testing.T) {

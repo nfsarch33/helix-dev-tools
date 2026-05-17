@@ -12,12 +12,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/coordination"
-	"github.com/nfsarch33/cursor-tools/internal/hookio"
-	"github.com/nfsarch33/cursor-tools/internal/logger"
-	"github.com/nfsarch33/cursor-tools/internal/metrics"
-	"github.com/nfsarch33/cursor-tools/internal/outcomes"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/coordination"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookio"
+	"github.com/nfsarch33/helix-dev-tools/internal/logger"
+	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/outcomes"
 )
 
 var postEditCmd = &cobra.Command{

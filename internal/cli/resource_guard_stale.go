@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/resourceguard"
+	"github.com/nfsarch33/helix-dev-tools/internal/resourceguard"
 	"github.com/spf13/cobra"
 )
 

@@ -4,8 +4,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/outcomes"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/outcomes"
 )
 
 // hookOutcomeEmitter returns the singleton outcome emitter for hook handlers.

@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/zdproxy"
+	"github.com/nfsarch33/helix-dev-tools/internal/zdproxy"
 )
 
 var version = "dev"

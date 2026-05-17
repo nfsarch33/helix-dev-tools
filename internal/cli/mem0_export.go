@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/nfsarch33/cursor-tools/internal/mem0export"
+	"github.com/nfsarch33/helix-dev-tools/internal/mem0export"
 	"github.com/spf13/cobra"
 )
 

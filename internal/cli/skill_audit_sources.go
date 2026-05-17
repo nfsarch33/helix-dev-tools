@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nfsarch33/cursor-tools/internal/sourceaudit"
+	"github.com/nfsarch33/helix-dev-tools/internal/sourceaudit"
 	"github.com/spf13/cobra"
 )
 

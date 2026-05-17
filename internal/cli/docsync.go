@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nfsarch33/cursor-tools/internal/docsync"
+	"github.com/nfsarch33/helix-dev-tools/internal/docsync"
 	"github.com/spf13/cobra"
 	"go.yaml.in/yaml/v3"
 )

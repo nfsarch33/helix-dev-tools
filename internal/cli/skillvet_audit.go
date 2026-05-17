@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/nfsarch33/cursor-tools/internal/skillvet"
+	"github.com/nfsarch33/helix-dev-tools/internal/skillvet"
 	"github.com/spf13/cobra"
 )
 

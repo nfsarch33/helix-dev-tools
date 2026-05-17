@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/mem0outbox"
+	"github.com/nfsarch33/helix-dev-tools/internal/mem0outbox"
 )
 
 type recorder struct {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/supervisor"
+	"github.com/nfsarch33/helix-dev-tools/internal/supervisor"
 )
 
 type testDaemonService struct {

@@ -1,4 +1,4 @@
-module github.com/nfsarch33/cursor-tools
+module github.com/nfsarch33/helix-dev-tools
 
 go 1.25.0
 
@@ -12,12 +12,12 @@ require (
 	go.etcd.io/bbolt v1.4.0
 	go.uber.org/goleak v1.3.0
 	golang.org/x/time v0.15.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
 require (

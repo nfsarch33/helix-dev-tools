@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/clilog"
-	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/clilog"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
 )
 
 var autoUpdateCheck bool

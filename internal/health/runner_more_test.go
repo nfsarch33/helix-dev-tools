@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/health"
+	"github.com/nfsarch33/helix-dev-tools/internal/health"
 )
 
 func TestRunnerAndAssertFileMatches(t *testing.T) {

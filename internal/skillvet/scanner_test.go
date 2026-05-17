@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/skillvet"
+	"github.com/nfsarch33/helix-dev-tools/internal/skillvet"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )

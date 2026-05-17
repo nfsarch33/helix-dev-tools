@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/ansiblevalidator"
+	"github.com/nfsarch33/helix-dev-tools/internal/ansiblevalidator"
 )
 
 func TestSSHMatrixBuilder_DefaultFleet(t *testing.T) {

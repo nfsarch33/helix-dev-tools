@@ -13,9 +13,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/metrics"
-	"github.com/nfsarch33/cursor-tools/internal/prombridge"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/prombridge"
 )
 
 var promPushFlags struct {

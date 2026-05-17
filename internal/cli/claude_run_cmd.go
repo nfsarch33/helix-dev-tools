@@ -8,8 +8,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/claude"
-	"github.com/nfsarch33/cursor-tools/internal/clilog"
+	"github.com/nfsarch33/helix-dev-tools/internal/claude"
+	"github.com/nfsarch33/helix-dev-tools/internal/clilog"
 )
 
 var claudeRunFlags struct {

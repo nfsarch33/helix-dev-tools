@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/nfsarch33/cursor-tools/internal/agentrace"
+	"github.com/nfsarch33/helix-dev-tools/internal/agentrace"
 	"github.com/spf13/cobra"
 )
 

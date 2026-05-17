@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/patterns"
+	"github.com/nfsarch33/helix-dev-tools/internal/patterns"
 )
 
 func TestHookEntrypointsAndSmallWrappers(t *testing.T) {

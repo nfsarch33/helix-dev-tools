@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/hookio"
-	"github.com/nfsarch33/cursor-tools/internal/logger"
-	"github.com/nfsarch33/cursor-tools/internal/patterns"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookio"
+	"github.com/nfsarch33/helix-dev-tools/internal/logger"
+	"github.com/nfsarch33/helix-dev-tools/internal/patterns"
 )
 
 // TestIsConventionalCommitInvalid_MultiScope is the RED gate for v318-3:

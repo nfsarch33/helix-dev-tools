@@ -307,7 +307,7 @@ func TestPublicRepoNameFromURLDefault_TableDriven(t *testing.T) {
 	}{
 		{name: "ssh agtc personal", url: "git@github-agtc:nfsarch33/ironclaw-mcp.git", want: "ironclaw-mcp"},
 		{name: "ssh agtc no .git", url: "git@github-agtc:nfsarch33/ironclaw-mcp", want: "ironclaw-mcp"},
-		{name: "https personal", url: "https://github.com/nfsarch33/cursor-tools.git", want: "cursor-tools"},
+		{name: "https personal", url: "https://github.com/nfsarch33/helix-dev-tools.git", want: "helix-dev-tools"},
 		{name: "zendesk work clone", url: "git@github.com:zendesk/secure-auth-platform.git", want: ""},
 		{name: "empty", url: "", want: ""},
 		{name: "personal but not github", url: "git@gitlab.com:nfsarch33/foo.git", want: "foo"}, // matches owner segment regardless of host

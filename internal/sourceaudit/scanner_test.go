@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/sourceaudit"
+	"github.com/nfsarch33/helix-dev-tools/internal/sourceaudit"
 )
 
 func TestScanSkillWithSource(t *testing.T) {

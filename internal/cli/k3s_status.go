@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/k3svalidator"
+	"github.com/nfsarch33/helix-dev-tools/internal/k3svalidator"
 )
 
 var k3sKubeconfigPath string

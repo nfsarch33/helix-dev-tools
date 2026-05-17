@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/noshellleaksync"
+	"github.com/nfsarch33/helix-dev-tools/internal/noshellleaksync"
 )
 
 var guardNoShellLeakSyncCmd = &cobra.Command{

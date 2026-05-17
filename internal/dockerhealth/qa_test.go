@@ -6,7 +6,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/dockerhealth"
+	"github.com/nfsarch33/helix-dev-tools/internal/dockerhealth"
 )
 
 func TestQA_Mem0AlertRulesFile(t *testing.T) {

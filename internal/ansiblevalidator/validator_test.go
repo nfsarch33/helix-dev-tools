@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/ansiblevalidator"
+	"github.com/nfsarch33/helix-dev-tools/internal/ansiblevalidator"
 )
 
 func TestValidateInventoryYAML_ValidStructure(t *testing.T) {

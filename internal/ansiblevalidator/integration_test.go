@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/ansiblevalidator"
+	"github.com/nfsarch33/helix-dev-tools/internal/ansiblevalidator"
 )
 
 func skipIfNoRunx(t *testing.T) {

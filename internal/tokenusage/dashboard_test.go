@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/tokenusage"
+	"github.com/nfsarch33/helix-dev-tools/internal/tokenusage"
 )
 
 func TestDashboard_7DayTrend(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
 )
 
 // AuditResult summarizes whether hook fire coverage meets a target threshold.

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/health"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/health"
 )
 
 func TestRunSuitesAggregatesCounts(t *testing.T) {

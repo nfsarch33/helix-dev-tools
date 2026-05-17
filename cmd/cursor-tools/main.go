@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/nfsarch33/cursor-tools/internal/cli"
+	"github.com/nfsarch33/helix-dev-tools/internal/cli"
 )
 
 var version = "dev"

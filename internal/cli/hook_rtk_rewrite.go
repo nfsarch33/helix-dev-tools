@@ -11,7 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/hookio"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookio"
 )
 
 var rtkRewriteCmd = &cobra.Command{

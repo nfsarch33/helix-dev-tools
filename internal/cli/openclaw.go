@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/openclaw"
+	"github.com/nfsarch33/helix-dev-tools/internal/openclaw"
 	"github.com/spf13/cobra"
 )
 

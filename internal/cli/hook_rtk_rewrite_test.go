@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/hookio"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookio"
 )
 
 func TestRtkRewriteHandler_NoRtk(t *testing.T) {

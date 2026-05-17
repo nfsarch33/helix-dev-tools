@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/evoloop"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/evoloop"
 )
 
 type fakeEvoloopClient struct {

@@ -8,7 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/nfsarch33/cursor-tools/internal/patterns"
+	"github.com/nfsarch33/helix-dev-tools/internal/patterns"
 )
 
 func TestPatterns(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/nfsarch33/cursor-tools/internal/sprintgen"
+	"github.com/nfsarch33/helix-dev-tools/internal/sprintgen"
 	"github.com/spf13/cobra"
 )
 

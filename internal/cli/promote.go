@@ -3,9 +3,9 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/clilog"
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/learnings"
+	"github.com/nfsarch33/helix-dev-tools/internal/clilog"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/learnings"
 )
 
 var promoteWorkspace string

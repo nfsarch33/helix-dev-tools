@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/replicate"
+	"github.com/nfsarch33/helix-dev-tools/internal/replicate"
 )
 
 var (

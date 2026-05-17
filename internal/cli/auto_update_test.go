@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/clilog"
-	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/clilog"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
 )
 
 func TestApplyDistUpdateInstallsNewerBinary(t *testing.T) {

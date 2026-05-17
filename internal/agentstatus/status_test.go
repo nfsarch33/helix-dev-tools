@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/agentstatus"
+	"github.com/nfsarch33/helix-dev-tools/internal/agentstatus"
 )
 
 type stubSource struct {

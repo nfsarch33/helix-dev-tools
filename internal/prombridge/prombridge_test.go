@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
 )
 
 func TestFormat_EmptySummary(t *testing.T) {

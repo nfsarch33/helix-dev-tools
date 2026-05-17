@@ -14,10 +14,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/clilog"
-	"github.com/nfsarch33/cursor-tools/internal/hookio"
-	"github.com/nfsarch33/cursor-tools/internal/logger"
-	"github.com/nfsarch33/cursor-tools/internal/patterns"
+	"github.com/nfsarch33/helix-dev-tools/internal/clilog"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookio"
+	"github.com/nfsarch33/helix-dev-tools/internal/logger"
+	"github.com/nfsarch33/helix-dev-tools/internal/patterns"
 )
 
 var selftestCmd = &cobra.Command{

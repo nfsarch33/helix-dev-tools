@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/nfsarch33/cursor-tools/internal/mcpfilter"
+	"github.com/nfsarch33/helix-dev-tools/internal/mcpfilter"
 	"github.com/spf13/cobra"
 )
 

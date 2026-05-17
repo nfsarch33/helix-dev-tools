@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
-	"github.com/nfsarch33/cursor-tools/internal/ctxmode"
-	"github.com/nfsarch33/cursor-tools/internal/logger"
-	"github.com/nfsarch33/cursor-tools/internal/metrics"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/ctxmode"
+	"github.com/nfsarch33/helix-dev-tools/internal/logger"
+	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
 )
 
 var sessionIndexConfigPath string

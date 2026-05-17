@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/config"
+	"github.com/nfsarch33/helix-dev-tools/internal/config"
 )
 
 func TestCrossFileConsistencyUsesSplitStartupPromptSources(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/nfsarch33/cursor-tools/internal/installer"
+	"github.com/nfsarch33/helix-dev-tools/internal/installer"
 )
 
 // --- mock installer ---

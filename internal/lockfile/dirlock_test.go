@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/nfsarch33/cursor-tools/internal/lockfile"
+	"github.com/nfsarch33/helix-dev-tools/internal/lockfile"
 )
 
 func TestLockfile(t *testing.T) {

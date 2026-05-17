@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/nfsarch33/cursor-tools/internal/hookio"
+	"github.com/nfsarch33/helix-dev-tools/internal/hookio"
 )
 
 // strictConventionalCommit is the v318-3 pre-flight regex. It is
