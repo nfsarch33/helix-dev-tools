@@ -1,0 +1,51 @@
+---
+groups:
+  - name: mem0-selfhost
+    rules:
+      - alert: Mem0APIDown
+        expr: up{job="mem0-api"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: mem0
+        annotations:
+          summary: "Mem0 API is down for >2 minutes"
+          description: "The Mem0 self-hosted API endpoint has been unreachable for more than 2 minutes."
+
+      - alert: Mem0APIHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="mem0-api"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: mem0
+        annotations:
+          summary: "Mem0 API p95 latency exceeds 5s"
+          description: "The 95th percentile request latency for Mem0 API has exceeded 5 seconds for 5 minutes."
+
+      - alert: Mem0PostgresDown
+        expr: up{job="mem0-postgres"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: mem0
+        annotations:
+          summary: "Mem0 PostgreSQL is down for >2 minutes"
+
+      - alert: Mem0QdrantDown
+        expr: up{job="mem0-qdrant"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: mem0
+        annotations:
+          summary: "Mem0 Qdrant vector store is down for >2 minutes"
+
+      - alert: Mem0ContainerRestarting
+        expr: increase(container_restart_count{name=~"mem0.*"}[15m]) > 2
+        for: 1m
+        labels:
+          severity: warning
+          service: mem0
+        annotations:
+          summary: "Mem0 container has restarted >2 times in 15 minutes"
+          description: "Container {{ $labels.name }} is restart-looping."
