@@ -68,6 +68,7 @@ func init() {
 	rootCmd.AddCommand(rebrandCmd)
 	rootCmd.AddCommand(installCmd)
 	rootCmd.AddCommand(botPRsCmd)
+	rootCmd.AddCommand(k3sCmd)
 }
 
 var versionCmd = &cobra.Command{
