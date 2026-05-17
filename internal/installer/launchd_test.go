@@ -1,6 +1,7 @@
 package installer
 
 import (
+	"encoding/xml"
 	"os"
 	"path/filepath"
 	"strings"
@@ -306,6 +307,62 @@ func TestNewLaunchdInstaller_DefaultDir(t *testing.T) {
 	expected := filepath.Join(home, "Library", "LaunchAgents")
 	if inst.PlistDir != expected {
 		t.Errorf("expected PlistDir=%s, got %s", expected, inst.PlistDir)
+	}
+}
+
+// --- integration: XML validity ---
+
+func TestGeneratePlist_ValidXML(t *testing.T) {
+	cfg := DaemonConfig{
+		Label:      "com.user.test-daemon",
+		Binary:     "/usr/local/bin/test",
+		Args:       []string{"--flag", "value with <special> & chars"},
+		WorkingDir: "/tmp/work dir",
+		LogPath:    "/tmp/test.log",
+		Interval:   60,
+		Environment: map[string]string{
+			"KEY_ONE": "val<ue",
+			"KEY_TWO": "normal",
+		},
+	}
+	plist, err := GeneratePlist(cfg)
+	if err != nil {
+		t.Fatalf("GeneratePlist: %v", err)
+	}
+
+	dec := xml.NewDecoder(strings.NewReader(string(plist)))
+	for {
+		_, err := dec.Token()
+		if err != nil {
+			break
+		}
+	}
+	if dec.InputOffset() == 0 {
+		t.Error("XML parser consumed zero bytes; plist is likely malformed")
+	}
+}
+
+func TestLaunchdInstaller_Install_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	exec := newMockExec()
+	exec.outputs["id -u"] = "501"
+	inst := &LaunchdInstaller{PlistDir: dir, Exec: exec}
+	cfg := DaemonConfig{
+		Label:  "com.user.idempotent-test",
+		Binary: "/usr/local/bin/cursor-tools",
+		Args:   []string{"probe"},
+	}
+
+	if err := inst.Install("com.user.idempotent-test", cfg); err != nil {
+		t.Fatalf("first install: %v", err)
+	}
+	if err := inst.Install("com.user.idempotent-test", cfg); err != nil {
+		t.Fatalf("second install (idempotent): %v", err)
+	}
+
+	path := filepath.Join(dir, "com.user.idempotent-test.plist")
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("plist file missing after idempotent install: %v", err)
 	}
 }
 

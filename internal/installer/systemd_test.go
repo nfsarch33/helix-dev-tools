@@ -250,6 +250,58 @@ func TestNewSystemdInstaller_DefaultDir(t *testing.T) {
 	}
 }
 
+// --- integration: unit structure validity ---
+
+func TestGenerateUnit_HasRequiredSections(t *testing.T) {
+	cfg := DaemonConfig{
+		Label:  "test-unit",
+		Binary: "/usr/local/bin/test",
+		Args:   []string{"run"},
+	}
+	content := GenerateUnit(cfg)
+	for _, section := range []string{"[Unit]", "[Service]", "[Install]"} {
+		if !strings.Contains(content, section) {
+			t.Errorf("generated unit missing required section %s", section)
+		}
+	}
+	mustContainSys(t, content, "ExecStart=")
+	mustContainSys(t, content, "Restart=on-failure")
+}
+
+func TestGenerateUnit_PeriodicHasTimerSection(t *testing.T) {
+	cfg := DaemonConfig{
+		Label:    "periodic-test",
+		Binary:   "/usr/local/bin/test",
+		Interval: 300,
+	}
+	content := GenerateUnit(cfg)
+	mustContainSys(t, content, "[Timer]")
+	mustContainSys(t, content, "OnUnitActiveSec=300s")
+}
+
+func TestSystemdInstaller_Install_Idempotent(t *testing.T) {
+	dir := t.TempDir()
+	exec := newMockExec()
+	inst := &SystemdInstaller{UnitDir: dir, Exec: exec}
+	cfg := DaemonConfig{
+		Label:  "idempotent-test",
+		Binary: "/usr/local/bin/cursor-tools",
+		Args:   []string{"probe"},
+	}
+
+	if err := inst.Install("idempotent-test", cfg); err != nil {
+		t.Fatalf("first install: %v", err)
+	}
+	if err := inst.Install("idempotent-test", cfg); err != nil {
+		t.Fatalf("second install (idempotent): %v", err)
+	}
+
+	path := filepath.Join(dir, "idempotent-test.service")
+	if _, err := os.Stat(path); err != nil {
+		t.Errorf("unit file missing after idempotent install: %v", err)
+	}
+}
+
 // --- helpers ---
 
 func mustContainSys(t *testing.T, haystack, needle string) {
