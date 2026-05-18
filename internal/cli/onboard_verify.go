@@ -20,7 +20,7 @@ var onboardVerifyCmd = &cobra.Command{
 			Check  func() bool
 			Fix    string
 		}{
-			{"cursor-tools binary", func() bool { return fileExists(filepath.Join(home, "bin", "cursor-tools")) }, "go build -o ~/bin/cursor-tools ./cmd/cursor-tools/"},
+			{"helix-dev-tools binary", func() bool { return checkHelixBinary(filepath.Join(home, "bin")) }, "make install-helixon  # installs helix-dev-tools + cursor-tools symlink"},
 			{"runx binary", func() bool { return fileExists(filepath.Join(home, "runs", "runx")) }, "cd ~/runs/runx-src && go build -o ~/runs/runx ."},
 			{"mem0-mcp-go binary", func() bool { return fileExists(filepath.Join(home, "runs", "mem0-mcp-go")) }, "cd ~/Code/personal/mem0-mcp-go && go build -o ~/runs/mem0-mcp-go ./cmd/mem0-mcp-go/"},
 			{"sprintboard-mcp binary", func() bool { return fileExists(filepath.Join(home, "runs", "sprintboard-mcp")) }, "go build -o ~/runs/sprintboard-mcp ./cmd/sprintboard-mcp/"},
@@ -62,6 +62,14 @@ var onboardVerifyCmd = &cobra.Command{
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// checkHelixBinary returns true when binDir contains either helix-dev-tools
+// (canonical name) or cursor-tools (backward-compat symlink or binary).
+// This supports the 30-day burn-in where both names coexist.
+func checkHelixBinary(binDir string) bool {
+	return fileExists(filepath.Join(binDir, "helix-dev-tools")) ||
+		fileExists(filepath.Join(binDir, "cursor-tools"))
 }
 
 var onboardCmd = &cobra.Command{

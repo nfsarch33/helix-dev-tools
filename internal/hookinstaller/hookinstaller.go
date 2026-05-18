@@ -31,6 +31,27 @@ type hookData struct {
 	Binary string
 }
 
+// InstallSymlink creates a symlink at dst pointing to src using an atomic
+// write-then-rename so there is no window where dst is absent. If dst already
+// exists (file or symlink), it is atomically replaced.
+func InstallSymlink(src, dst string) error {
+	dir := filepath.Dir(dst)
+	base := filepath.Base(dst)
+	tmp := filepath.Join(dir, "."+base+".symlink.tmp")
+
+	if err := os.Remove(tmp); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove tmp symlink: %w", err)
+	}
+	if err := os.Symlink(src, tmp); err != nil {
+		return fmt.Errorf("create tmp symlink: %w", err)
+	}
+	if err := os.Rename(tmp, dst); err != nil {
+		os.Remove(tmp)
+		return fmt.Errorf("rename symlink: %w", err)
+	}
+	return nil
+}
+
 // InstallPrePushHook writes a pre-push shell hook to <repoDir>/.git/hooks/pre-push.
 // The hook invokes <binary> rebrand scan --dir . and blocks the push when legacy
 // terms are found. Creates .git/hooks if it does not exist.
