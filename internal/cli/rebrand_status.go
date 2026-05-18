@@ -56,6 +56,16 @@ func parseRebrandSOP(path string) (rebrandSOPSummary, error) {
 	return summary, scanner.Err()
 }
 
+// runxAliasMigrationStatus returns "PENDING" when the runx override_remote
+// diff file exists (waiting for operator to apply), "DONE" when it is absent
+// (operator has applied and removed it).
+func runxAliasMigrationStatus(diffPath string) string {
+	if _, err := os.Stat(diffPath); err == nil {
+		return "PENDING"
+	}
+	return "DONE"
+}
+
 var rebrandStatusSOPPath string
 
 var rebrandStatusCmd = &cobra.Command{
