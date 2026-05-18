@@ -6,10 +6,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/nfsarch33/helix-dev-tools/internal/eval"
 	"github.com/nfsarch33/helix-dev-tools/internal/platform/agentidentity"
 	"github.com/nfsarch33/helix-dev-tools/internal/platform/handoffgen"
 	"github.com/nfsarch33/helix-dev-tools/internal/platform/sprintboard"
 )
+
+// CloseoutResult holds the sprint closeout outcome.
+type CloseoutResult struct {
+	SprintID    string
+	EvalPass    bool
+	EvalReport  string // markdown summary
+	PassRate    float64
+	Blocked     bool
+	BlockReason string
+}
 
 type CLI struct {
 	store *sprintboard.Store
@@ -145,4 +156,37 @@ func (c *CLI) GenerateHandoff(ticketID, toAgent string) (string, error) {
 	})
 
 	return h.Content, nil
+}
+
+// Closeout runs the eval gate (when evalsDir != "") and produces a closeout
+// summary for the sprint. If evalsDir is empty, the eval gate is skipped and
+// EvalPass is set to true. When minPassRate is 0.0, the gate never blocks.
+// A pass rate below minPassRate sets Blocked=true but does NOT return an error.
+func (c *CLI) Closeout(sprintID, evalsDir string, minPassRate float64) (CloseoutResult, error) {
+	res := CloseoutResult{
+		SprintID: sprintID,
+		EvalPass: true,
+		PassRate: 1.0,
+	}
+
+	if evalsDir == "" {
+		return res, nil
+	}
+
+	results, err := eval.RunAllEvalsInDir(evalsDir)
+	if err != nil {
+		return CloseoutResult{}, fmt.Errorf("closeout %s: run evals: %w", sprintID, err)
+	}
+
+	report := eval.GenerateReport(sprintID, results)
+	res.EvalReport = report.ToMarkdown()
+	res.PassRate = report.PassRate
+	res.EvalPass = report.PassCount == report.EvalCount && report.EvalCount > 0
+
+	if minPassRate > 0.0 && res.PassRate < minPassRate {
+		res.Blocked = true
+		res.BlockReason = fmt.Sprintf("eval pass rate %.2f < threshold %.2f", res.PassRate, minPassRate)
+	}
+
+	return res, nil
 }
