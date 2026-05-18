@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/nfsarch33/helix-dev-tools/internal/platform/mcptelemetry"
 	"github.com/nfsarch33/helix-dev-tools/internal/platform/sprintboard"
 )
 
@@ -72,13 +73,21 @@ func main() {
 	}
 	defer store.Close()
 
-	server := &Server{store: store, agentID: resolveAgentID()}
+	telemetry, err := mcptelemetry.New(mcptelemetry.DefaultConfig())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "telemetry init (non-fatal): %v\n", err)
+		telemetry, _ = mcptelemetry.New(mcptelemetry.Config{Enabled: false})
+	}
+	defer telemetry.Close()
+
+	server := &Server{store: store, agentID: resolveAgentID(), telemetry: telemetry}
 	server.serve(os.Stdin, os.Stdout)
 }
 
 type Server struct {
-	store   *sprintboard.Store
-	agentID string
+	store     *sprintboard.Store
+	agentID   string
+	telemetry *mcptelemetry.Recorder
 }
 
 func (s *Server) serve(in io.Reader, out io.Writer) {
@@ -158,6 +167,17 @@ func (s *Server) handleToolsCall(req JSONRPCRequest) JSONRPCResponse {
 }
 
 func (s *Server) dispatch(tool string, args json.RawMessage) (string, bool) {
+	start := time.Now()
+	result, isErr := s.dispatchInner(tool, args)
+	errMsg := ""
+	if isErr {
+		errMsg = result
+	}
+	s.telemetry.Record(tool, s.agentID, time.Since(start), isErr, errMsg)
+	return result, isErr
+}
+
+func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool) {
 	switch tool {
 	case "sprint_create":
 		return s.sprintCreate(args)

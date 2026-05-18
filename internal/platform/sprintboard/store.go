@@ -174,8 +174,10 @@ func (s *Store) migrate() error {
 	CREATE INDEX IF NOT EXISTS idx_handoffs_ticket ON handoffs(ticket_id);
 	`
 
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	return s.migrateVectors()
 }
 
 func (s *Store) CreateSprint(sp Sprint) error {
