@@ -177,7 +177,13 @@ func (s *Store) migrate() error {
 	if _, err := s.db.Exec(schema); err != nil {
 		return err
 	}
-	return s.migrateVectors()
+	if err := s.migrateVectors(); err != nil {
+		return err
+	}
+	if err := s.migrateAgents(); err != nil {
+		return err
+	}
+	return s.migrateClaiming()
 }
 
 func (s *Store) CreateSprint(sp Sprint) error {
