@@ -80,7 +80,9 @@ func main() {
 	}
 	defer telemetry.Close()
 
-	server := &Server{store: store, agentID: resolveAgentID(), telemetry: telemetry}
+	embedder := sprintboard.NewEmbedder(sprintboard.DefaultEmbedderConfig())
+
+	server := &Server{store: store, agentID: resolveAgentID(), telemetry: telemetry, embedder: embedder}
 	server.serve(os.Stdin, os.Stdout)
 }
 
@@ -88,6 +90,7 @@ type Server struct {
 	store     *sprintboard.Store
 	agentID   string
 	telemetry *mcptelemetry.Recorder
+	embedder  *sprintboard.Embedder
 }
 
 func (s *Server) serve(in io.Reader, out io.Writer) {
@@ -148,6 +151,8 @@ func (s *Server) handleToolsList(req JSONRPCRequest) JSONRPCResponse {
 		{Name: "ticket_assign", Description: "Assign a ticket to an agent", InputSchema: ticketAssignSchema()},
 		{Name: "handoff_create", Description: "Create a handoff record for a ticket", InputSchema: handoffCreateSchema()},
 		{Name: "handoff_list", Description: "List handoffs for a ticket", InputSchema: idOnlySchema("ticket_id")},
+		{Name: "ticket_search", Description: "Semantic search across tickets by natural language query", InputSchema: searchSchema()},
+		{Name: "sprint_search", Description: "Semantic search across sprints by theme or description", InputSchema: searchSchema()},
 	}
 	return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{"tools": tools}}
 }
@@ -199,6 +204,10 @@ func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool)
 		return s.handoffCreate(args)
 	case "handoff_list":
 		return s.handoffList(args)
+	case "ticket_search":
+		return s.ticketSearch(args)
+	case "sprint_search":
+		return s.sprintSearch(args)
 	default:
 		return fmt.Sprintf("unknown tool: %s", tool), true
 	}
@@ -280,6 +289,14 @@ func (s *Server) ticketCreate(args json.RawMessage) (string, bool) {
 	if err != nil {
 		return err.Error(), true
 	}
+
+	go func() {
+		text := p.Title + " " + p.Description
+		if vec, err := s.embedder.Embed(text); err == nil {
+			s.store.StoreEmbedding("ticket", p.ID, vec)
+		}
+	}()
+
 	return fmt.Sprintf("Ticket %q created in sprint %q", p.ID, p.SprintID), false
 }
 
@@ -475,4 +492,75 @@ func handoffCreateSchema() map[string]interface{} {
 		},
 		"required": []string{"ticket_id", "to_agent"},
 	}
+}
+
+func searchSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"query": map[string]string{"type": "string", "description": "Natural language search query"},
+			"limit": map[string]string{"type": "integer", "description": "Max results (default 5)"},
+		},
+		"required": []string{"query"},
+	}
+}
+
+func (s *Server) ticketSearch(args json.RawMessage) (string, bool) {
+	var p struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if p.Limit <= 0 {
+		p.Limit = 5
+	}
+
+	queryVec, err := s.embedder.Embed(p.Query)
+	if err != nil {
+		return err.Error(), true
+	}
+
+	results, err := s.store.SearchSimilar(queryVec, "ticket", p.Limit)
+	if err != nil {
+		return err.Error(), true
+	}
+
+	if len(results) == 0 {
+		return "[]", false
+	}
+
+	data, _ := json.MarshalIndent(results, "", "  ")
+	return string(data), false
+}
+
+func (s *Server) sprintSearch(args json.RawMessage) (string, bool) {
+	var p struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if p.Limit <= 0 {
+		p.Limit = 5
+	}
+
+	queryVec, err := s.embedder.Embed(p.Query)
+	if err != nil {
+		return err.Error(), true
+	}
+
+	results, err := s.store.SearchSimilar(queryVec, "sprint", p.Limit)
+	if err != nil {
+		return err.Error(), true
+	}
+
+	if len(results) == 0 {
+		return "[]", false
+	}
+
+	data, _ := json.MarshalIndent(results, "", "  ")
+	return string(data), false
 }

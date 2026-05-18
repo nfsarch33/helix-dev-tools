@@ -161,8 +161,8 @@ func TestE2EToolsList(t *testing.T) {
 	if !ok {
 		t.Fatal("expected tools array")
 	}
-	if len(tools) != 10 {
-		t.Errorf("expected 10 tools, got %d", len(tools))
+	if len(tools) != 12 {
+		t.Errorf("expected 12 tools, got %d", len(tools))
 	}
 }
 
