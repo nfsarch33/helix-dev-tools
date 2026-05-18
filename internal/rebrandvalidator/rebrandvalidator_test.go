@@ -45,7 +45,7 @@ func TestScanDirectoryRecursive(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(sub, "nested.go"), []byte("cursor-tools config\n"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "clean.go"), []byte("nothing here\n"), 0644))
 
-	result, err := ScanDirectory(dir, nil)
+	result, err := ScanDirectory(dir, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 2, result.FindingCount)
 	assert.GreaterOrEqual(t, result.FileCount, 3)
@@ -62,7 +62,7 @@ func TestScanDirectoryExcludes(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"), []byte("cursor-tools dep\n"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("clean code\n"), 0644))
 
-	result, err := ScanDirectory(dir, []string{".git", "vendor", "node_modules"})
+	result, err := ScanDirectory(dir, []string{".git", "vendor", "node_modules"}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.FindingCount)
 }
@@ -106,14 +106,14 @@ func TestScanDirectoryCountsFiles(t *testing.T) {
 		require.NoError(t, os.WriteFile(name, []byte("clean\n"), 0644))
 	}
 
-	result, err := ScanDirectory(dir, nil)
+	result, err := ScanDirectory(dir, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 5, result.FileCount)
 }
 
 func TestScanEmptyDirectory(t *testing.T) {
 	dir := t.TempDir()
-	result, err := ScanDirectory(dir, nil)
+	result, err := ScanDirectory(dir, nil, nil)
 	require.NoError(t, err)
 	assert.Equal(t, 0, result.FindingCount)
 	assert.Equal(t, 0, result.FileCount)
@@ -154,6 +154,92 @@ func TestScanFileLargeFile(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, findings, 1)
 	assert.Less(t, elapsed, time.Second)
+}
+
+// TestScanDirectory_WithAllowlist: file+term combination in the allowlist must
+// suppress a finding and increment SuppressedCount, not FindingCount.
+func TestScanDirectory_WithAllowlist(t *testing.T) {
+	dir := t.TempDir()
+	// A file with a legacy term that we want to allowlist.
+	path := filepath.Join(dir, "legacy-sop.md")
+	require.NoError(t, os.WriteFile(path, []byte("This doc references ironclaw for historical reasons.\n"), 0644))
+
+	// GIVEN: allowlist suppresses ironclaw in *.md files.
+	allowlist := []AllowlistEntry{
+		{File: "*.md", Term: "ironclaw"},
+	}
+
+	// WHEN: ScanDirectory called with allowlist.
+	result, err := ScanDirectory(dir, nil, allowlist)
+	require.NoError(t, err)
+
+	// THEN: finding is suppressed, FindingCount == 0, SuppressedCount == 1.
+	assert.Equal(t, 0, result.FindingCount, "suppressed finding must not count as a finding")
+	assert.Equal(t, 1, result.SuppressedCount, "SuppressedCount must reflect suppressed findings")
+	assert.Empty(t, result.Findings, "Findings slice must be empty when all are suppressed")
+}
+
+// TestScanDirectory_AllowlistDoesNotSuppressOtherTerms ensures the allowlist is
+// scoped: a file+term allowlist entry only suppresses that specific term in that
+// file pattern, not other terms.
+func TestScanDirectory_AllowlistDoesNotSuppressOtherTerms(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "doc.md")
+	require.NoError(t, os.WriteFile(path, []byte("ironclaw and cursor-tools both appear here.\n"), 0644))
+
+	// Only suppress ironclaw in .md files; cursor-tools is NOT suppressed.
+	allowlist := []AllowlistEntry{
+		{File: "*.md", Term: "ironclaw"},
+	}
+
+	result, err := ScanDirectory(dir, nil, allowlist)
+	require.NoError(t, err)
+
+	// cursor-tools must still be reported; ironclaw must be suppressed.
+	assert.Equal(t, 1, result.FindingCount)
+	assert.Equal(t, 1, result.SuppressedCount)
+}
+
+// TestScanDirectory_EmptyAllowlist verifies backward-compatible behaviour:
+// nil allowlist produces the same result as before.
+func TestScanDirectory_EmptyAllowlist(t *testing.T) {
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("ironclaw ref\n"), 0644))
+
+	result, err := ScanDirectory(dir, nil, nil)
+	require.NoError(t, err)
+
+	assert.Equal(t, 1, result.FindingCount)
+	assert.Equal(t, 0, result.SuppressedCount)
+}
+
+// TestLoadAllowlistYAML_ParsesEntries verifies well-formed YAML is parsed correctly.
+func TestLoadAllowlistYAML_ParsesEntries(t *testing.T) {
+	dir := t.TempDir()
+	content := `entries:
+  - file: "*.md"
+    term: "cursor-tools"
+  - file: "Makefile"
+    term: "cursor-tools"
+`
+	path := filepath.Join(dir, ".rebrand-allowlist.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
+
+	entries, err := LoadAllowlistYAML(path)
+	require.NoError(t, err)
+	require.Len(t, entries, 2)
+	assert.Equal(t, "*.md", entries[0].File)
+	assert.Equal(t, "cursor-tools", entries[0].Term)
+	assert.Equal(t, "Makefile", entries[1].File)
+	assert.Equal(t, "cursor-tools", entries[1].Term)
+}
+
+// TestLoadAllowlistYAML_MissingFileIsOK verifies that a missing allowlist file
+// returns an empty slice without error (opt-in, not required).
+func TestLoadAllowlistYAML_MissingFileIsOK(t *testing.T) {
+	entries, err := LoadAllowlistYAML("/nonexistent/.rebrand-allowlist.yaml")
+	require.NoError(t, err)
+	assert.Empty(t, entries)
 }
 
 func TestScanResultJSON(t *testing.T) {

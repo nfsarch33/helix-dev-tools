@@ -242,6 +242,145 @@ func TestWriteRebrandJSON(t *testing.T) {
 	}
 }
 
+// TestRebrandScan_DocRepoFlag: --doc-repo skips brand-name, tool-name, and
+// deprecated-name categories; only go-module-path, k8s-label, docker-image,
+// and env-var categories are enforced.
+func TestRebrandScan_DocRepoFlag(t *testing.T) {
+	// brand-name/tool-name/deprecated-name: must be suppressed with --doc-repo.
+	brandOnlyContent := "IronClaw is the old brand name.\ncursor-global-kb was renamed.\ncylrl is deprecated.\n"
+	// go-module-path: must still fire even with --doc-repo.
+	moduleContent := "module github.com/nfsarch33/ironclaw-mcp\n"
+
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "history.md"), []byte(brandOnlyContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(moduleContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Without --doc-repo: history.md should produce findings.
+	allFindings, err := scanFile(filepath.Join(dir, "history.md"), "history.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(allFindings) == 0 {
+		t.Fatal("brand/deprecated terms must fire without doc-repo flag")
+	}
+
+	// With --doc-repo: history.md must produce 0 findings.
+	docRepoFindings, err := scanFileDocRepo(filepath.Join(dir, "history.md"), "history.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(docRepoFindings) != 0 {
+		t.Fatalf("brand/tool/deprecated categories must be skipped in doc-repo mode, got %d: %+v", len(docRepoFindings), docRepoFindings)
+	}
+
+	// go.mod with a go-module-path term must still fire in doc-repo mode.
+	modFindings, err := scanFileDocRepo(filepath.Join(dir, "go.mod"), "go.mod")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(modFindings) == 0 {
+		t.Fatal("go-module-path must still fire in doc-repo mode")
+	}
+}
+
+// TestDocRepoCategoriesEnforced ensures exactly the right categories are still
+// enforced when --doc-repo is set.
+func TestDocRepoCategoriesEnforced(t *testing.T) {
+	dir := t.TempDir()
+
+	cases := []struct {
+		name     string
+		content  string
+		category rebrandCategory
+		wantHit  bool
+	}{
+		{"brand-name", "IronClaw here\n", catBrandName, false},
+		{"tool-name", "cursor-global-kb here\n", catToolName, false},
+		{"deprecated-name", "evomap here\n", catDeprecated, false},
+		{"env-var", "IRONCLAW_TOKEN=x\n", catEnvVar, true},
+		{"k8s-label", "namespace: ironclaw-system\n", catK8sLabel, true},
+		{"docker-image", "image: ironclaw/agent\n", catDockerImage, true},
+		{"go-module-path", "module github.com/nfsarch33/ironclaw-mcp\n", catGoModule, true},
+	}
+
+	for _, tc := range cases {
+		t.Run(string(tc.category), func(t *testing.T) {
+			path := filepath.Join(dir, tc.name+".txt")
+			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			findings, err := scanFileDocRepo(path, tc.name+".txt")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wantHit && len(findings) == 0 {
+				t.Fatalf("category %s must still fire in doc-repo mode but got 0 findings", tc.category)
+			}
+			if !tc.wantHit && len(findings) > 0 {
+				t.Fatalf("category %s must be suppressed in doc-repo mode but got %d findings: %+v", tc.category, len(findings), findings)
+			}
+		})
+	}
+}
+
+// TestScanDirectory_LoadsAllowlistYAML verifies that scanDirectory automatically
+// loads .rebrand-allowlist.yaml from the root and suppresses matching findings.
+func TestScanDirectory_LoadsAllowlistYAML(t *testing.T) {
+	dir := t.TempDir()
+
+	// A file with a legacy term that IS in rebrandRules (ironclaw -> brand-name).
+	if err := os.WriteFile(filepath.Join(dir, "history.md"), []byte("ironclaw was the old name\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Confirm the finding fires WITHOUT allowlist.
+	findingsBefore, err := scanDirectoryWalk(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(findingsBefore) == 0 {
+		t.Fatal("ironclaw must fire without allowlist")
+	}
+
+	// Allowlist that suppresses ironclaw in *.md files.
+	allowlistContent := "entries:\n  - file: \"*.md\"\n    term: \"ironclaw\"\n"
+	if err := os.WriteFile(filepath.Join(dir, ".rebrand-allowlist.yaml"), []byte(allowlistContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	findings, err := scanDirectory(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// .rebrand-allowlist.yaml itself will also be scanned -- filter it out.
+	var nonAllowlistFindings []rebrandFinding
+	for _, f := range findings {
+		if !strings.HasSuffix(f.File, ".rebrand-allowlist.yaml") {
+			nonAllowlistFindings = append(nonAllowlistFindings, f)
+		}
+	}
+	if len(nonAllowlistFindings) != 0 {
+		t.Fatalf("allowlist should suppress ironclaw in .md; got %d findings: %+v", len(nonAllowlistFindings), nonAllowlistFindings)
+	}
+}
+
+// TestScanDirectory_AllowlistMissingOK verifies that the absence of
+// .rebrand-allowlist.yaml does not cause an error -- it is optional.
+func TestScanDirectory_AllowlistMissingOK(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "clean.go"), []byte("package clean\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// No .rebrand-allowlist.yaml -- must not error.
+	if _, err := scanDirectory(dir); err != nil {
+		t.Fatalf("missing allowlist must not cause error: %v", err)
+	}
+}
+
 func TestRebrandRules_ReplacementMap(t *testing.T) {
 	wantMappings := map[string]string{
 		"ironclaw":                          "helixon",

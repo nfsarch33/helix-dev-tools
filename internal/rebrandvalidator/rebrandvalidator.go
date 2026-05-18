@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Finding represents a single legacy-term occurrence in a scanned file.
@@ -18,11 +20,60 @@ type Finding struct {
 	LineNumber int    `json:"line_number"`
 }
 
+// AllowlistEntry suppresses a specific legacy term in files matching a glob
+// pattern. If Term matches a finding's LegacyTerm and File glob matches the
+// file path, the finding is suppressed rather than reported.
+type AllowlistEntry struct {
+	File string `yaml:"file"`
+	Term string `yaml:"term"`
+}
+
+// allowlistFile is the YAML shape of .rebrand-allowlist.yaml.
+type allowlistFile struct {
+	Entries []AllowlistEntry `yaml:"entries"`
+}
+
+// LoadAllowlistYAML reads a .rebrand-allowlist.yaml file and returns its
+// entries. A missing file is not an error -- allowlists are opt-in.
+func LoadAllowlistYAML(path string) ([]AllowlistEntry, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var af allowlistFile
+	if err := yaml.Unmarshal(data, &af); err != nil {
+		return nil, err
+	}
+	return af.Entries, nil
+}
+
+// isSuppressed reports whether a finding should be suppressed by the allowlist.
+func isSuppressed(filePath, term string, allowlist []AllowlistEntry) bool {
+	base := filepath.Base(filePath)
+	for _, e := range allowlist {
+		if e.Term != term {
+			continue
+		}
+		matched, err := filepath.Match(e.File, base)
+		if err != nil {
+			continue
+		}
+		if matched {
+			return true
+		}
+	}
+	return false
+}
+
 // ScanResult aggregates findings from a directory scan.
 type ScanResult struct {
-	Findings     []Finding `json:"findings"`
-	FileCount    int       `json:"file_count"`
-	FindingCount int       `json:"finding_count"`
+	Findings        []Finding `json:"findings"`
+	FileCount       int       `json:"file_count"`
+	FindingCount    int       `json:"finding_count"`
+	SuppressedCount int       `json:"suppressed_count"`
 }
 
 // DefaultLegacyTerms returns the canonical list of terms that must be rebranded.
@@ -78,7 +129,9 @@ func ScanFile(path string, terms []string) ([]Finding, error) {
 
 // ScanDirectory walks root recursively, scanning each file for legacy terms.
 // Directories whose base name appears in excludeDirs are skipped entirely.
-func ScanDirectory(root string, excludeDirs []string) (ScanResult, error) {
+// Allowlist entries suppress specific term+file-glob combinations: suppressed
+// findings increment SuppressedCount but are not added to Findings.
+func ScanDirectory(root string, excludeDirs []string, allowlist []AllowlistEntry) (ScanResult, error) {
 	excluded := make(map[string]bool, len(excludeDirs))
 	for _, d := range excludeDirs {
 		excluded[d] = true
@@ -105,8 +158,15 @@ func ScanDirectory(root string, excludeDirs []string) (ScanResult, error) {
 		if scanErr != nil {
 			return scanErr
 		}
-		result.Findings = append(result.Findings, findings...)
-		result.FindingCount += len(findings)
+
+		for _, f := range findings {
+			if isSuppressed(f.FilePath, f.LegacyTerm, allowlist) {
+				result.SuppressedCount++
+			} else {
+				result.Findings = append(result.Findings, f)
+				result.FindingCount++
+			}
+		}
 
 		return nil
 	})
