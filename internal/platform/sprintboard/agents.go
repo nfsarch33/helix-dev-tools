@@ -2,6 +2,7 @@ package sprintboard
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 )
@@ -29,7 +30,14 @@ func (s *Store) migrateAgents() error {
 		);
 		CREATE INDEX IF NOT EXISTS idx_agents_surface ON agents(surface);
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	addCol := `ALTER TABLE agents ADD COLUMN preferences TEXT`
+	if _, err := s.db.Exec(addCol); err != nil && !isAlterColumnExists(err) {
+		return err
+	}
+	return nil
 }
 
 func (s *Store) RegisterAgent(a Agent) error {
@@ -120,6 +128,38 @@ func (s *Store) GetAgent(id string) (*Agent, error) {
 		a.CurrentTicketID = ticket.String
 	}
 	return a, nil
+}
+
+func (s *Store) UpdatePreferences(agentID string, prefs map[string]string) error {
+	data, err := json.Marshal(prefs)
+	if err != nil {
+		return fmt.Errorf("marshal preferences: %w", err)
+	}
+	res, err := s.db.Exec(`UPDATE agents SET preferences = ? WHERE id = ?`, string(data), agentID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("agent %q not registered", agentID)
+	}
+	return nil
+}
+
+func (s *Store) GetPreferences(agentID string) (map[string]string, error) {
+	var raw sql.NullString
+	err := s.db.QueryRow(`SELECT preferences FROM agents WHERE id = ?`, agentID).Scan(&raw)
+	if err != nil {
+		return nil, err
+	}
+	if !raw.Valid || raw.String == "" {
+		return map[string]string{}, nil
+	}
+	var prefs map[string]string
+	if err := json.Unmarshal([]byte(raw.String), &prefs); err != nil {
+		return nil, err
+	}
+	return prefs, nil
 }
 
 func scanAgents(rows *sql.Rows) ([]Agent, error) {

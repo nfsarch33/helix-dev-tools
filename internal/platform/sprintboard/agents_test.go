@@ -99,6 +99,54 @@ func TestListActiveAgents(t *testing.T) {
 	}
 }
 
+func TestUpdatePreferences(t *testing.T) {
+	s := testStore(t)
+	defer s.Close()
+
+	s.RegisterAgent(Agent{ID: "a1", Surface: "cursor"})
+
+	prefs := map[string]string{"indent": "tabs", "line_length": "100"}
+	err := s.UpdatePreferences("a1", prefs)
+	if err != nil {
+		t.Fatalf("UpdatePreferences: %v", err)
+	}
+
+	got, err := s.GetPreferences("a1")
+	if err != nil {
+		t.Fatalf("GetPreferences: %v", err)
+	}
+	if got["indent"] != "tabs" {
+		t.Errorf("indent = %q, want tabs", got["indent"])
+	}
+	if got["line_length"] != "100" {
+		t.Errorf("line_length = %q, want 100", got["line_length"])
+	}
+}
+
+func TestUpdatePreferences_UnregisteredFails(t *testing.T) {
+	s := testStore(t)
+	defer s.Close()
+
+	err := s.UpdatePreferences("ghost", map[string]string{"k": "v"})
+	if err == nil {
+		t.Fatal("expected error for unregistered agent")
+	}
+}
+
+func TestGetPreferences_Empty(t *testing.T) {
+	s := testStore(t)
+	defer s.Close()
+
+	s.RegisterAgent(Agent{ID: "a1", Surface: "cursor"})
+	prefs, err := s.GetPreferences("a1")
+	if err != nil {
+		t.Fatalf("GetPreferences: %v", err)
+	}
+	if len(prefs) != 0 {
+		t.Errorf("expected empty prefs, got %v", prefs)
+	}
+}
+
 func TestExpireStaleAgents_30MinWindow(t *testing.T) {
 	s := testStore(t)
 	defer s.Close()

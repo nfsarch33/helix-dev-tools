@@ -153,6 +153,12 @@ func (s *Server) handleToolsList(req JSONRPCRequest) JSONRPCResponse {
 		{Name: "handoff_list", Description: "List handoffs for a ticket", InputSchema: idOnlySchema("ticket_id")},
 		{Name: "ticket_search", Description: "Semantic search across tickets by natural language query", InputSchema: searchSchema()},
 		{Name: "sprint_search", Description: "Semantic search across sprints by theme or description", InputSchema: searchSchema()},
+		{Name: "agent_register", Description: "Register an agent with its capabilities (auto-expires after 30min without heartbeat)", InputSchema: agentRegisterSchema()},
+		{Name: "agent_heartbeat", Description: "Send heartbeat to keep agent registration active", InputSchema: agentHeartbeatSchema()},
+		{Name: "task_claim", Description: "Atomically claim a ticket (prevents double-assignment)", InputSchema: taskClaimSchema()},
+		{Name: "task_complete", Description: "Mark a claimed ticket as done with evidence", InputSchema: taskCompleteSchema()},
+		{Name: "handoff_publish", Description: "Publish cross-agent handoff (also bridges to Mem0 cursor-coordination)", InputSchema: handoffPublishSchema()},
+		{Name: "handoff_subscribe", Description: "Check for handoffs addressed to this agent", InputSchema: handoffSubscribeSchema()},
 	}
 	return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{"tools": tools}}
 }
@@ -208,6 +214,18 @@ func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool)
 		return s.ticketSearch(args)
 	case "sprint_search":
 		return s.sprintSearch(args)
+	case "agent_register":
+		return s.agentRegister(args)
+	case "agent_heartbeat":
+		return s.agentHeartbeat(args)
+	case "task_claim":
+		return s.taskClaim(args)
+	case "task_complete":
+		return s.taskComplete(args)
+	case "handoff_publish":
+		return s.handoffPublish(args)
+	case "handoff_subscribe":
+		return s.handoffSubscribe(args)
 	default:
 		return fmt.Sprintf("unknown tool: %s", tool), true
 	}
@@ -533,6 +551,199 @@ func (s *Server) ticketSearch(args json.RawMessage) (string, bool) {
 
 	data, _ := json.MarshalIndent(results, "", "  ")
 	return string(data), false
+}
+
+func (s *Server) agentRegister(args json.RawMessage) (string, bool) {
+	var p struct {
+		AgentID      string `json:"agent_id"`
+		Surface      string `json:"surface"`
+		Capabilities string `json:"capabilities"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if p.AgentID == "" {
+		p.AgentID = s.agentID
+	}
+	if p.Surface == "" {
+		p.Surface = "unknown"
+	}
+	err := s.store.RegisterAgent(sprintboard.Agent{
+		ID: p.AgentID, Surface: p.Surface, Capabilities: p.Capabilities,
+	})
+	if err != nil {
+		return err.Error(), true
+	}
+	return fmt.Sprintf("Agent %q registered (surface: %s)", p.AgentID, p.Surface), false
+}
+
+func (s *Server) agentHeartbeat(args json.RawMessage) (string, bool) {
+	var p struct {
+		AgentID         string `json:"agent_id"`
+		CurrentTicketID string `json:"current_ticket_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if p.AgentID == "" {
+		p.AgentID = s.agentID
+	}
+	if err := s.store.AgentHeartbeat(p.AgentID, p.CurrentTicketID); err != nil {
+		return err.Error(), true
+	}
+	return fmt.Sprintf("Heartbeat from %q", p.AgentID), false
+}
+
+func (s *Server) taskClaim(args json.RawMessage) (string, bool) {
+	var p struct {
+		TicketID string `json:"ticket_id"`
+		AgentID  string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if p.AgentID == "" {
+		p.AgentID = s.agentID
+	}
+	result, err := s.store.ClaimTicket(p.TicketID, p.AgentID)
+	if err != nil {
+		return err.Error(), true
+	}
+	data, _ := json.MarshalIndent(result, "", "  ")
+	return string(data), false
+}
+
+func (s *Server) taskComplete(args json.RawMessage) (string, bool) {
+	var p struct {
+		TicketID string `json:"ticket_id"`
+		AgentID  string `json:"agent_id"`
+		Evidence string `json:"evidence"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if p.AgentID == "" {
+		p.AgentID = s.agentID
+	}
+	if err := s.store.CompleteTicket(p.TicketID, p.AgentID, p.Evidence); err != nil {
+		return err.Error(), true
+	}
+	return fmt.Sprintf("Ticket %q completed by %s", p.TicketID, p.AgentID), false
+}
+
+func (s *Server) handoffPublish(args json.RawMessage) (string, bool) {
+	var p struct {
+		TicketID string `json:"ticket_id"`
+		ToAgent  string `json:"to_agent"`
+		Summary  string `json:"summary"`
+		Branch   string `json:"branch"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	id, err := s.store.PublishHandoff(sprintboard.CoordinationHandoff{
+		TicketID:  p.TicketID,
+		FromAgent: s.agentID,
+		ToAgent:   p.ToAgent,
+		Summary:   p.Summary,
+		Branch:    p.Branch,
+	})
+	if err != nil {
+		return err.Error(), true
+	}
+	return fmt.Sprintf("Handoff #%d published: %s -> %s for ticket %q", id, s.agentID, p.ToAgent, p.TicketID), false
+}
+
+func (s *Server) handoffSubscribe(args json.RawMessage) (string, bool) {
+	var p struct {
+		AgentID string `json:"agent_id"`
+		Since   string `json:"since"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if p.AgentID == "" {
+		p.AgentID = s.agentID
+	}
+	since := time.Now().Add(-24 * time.Hour)
+	if p.Since != "" {
+		if t, err := time.Parse(time.RFC3339, p.Since); err == nil {
+			since = t
+		}
+	}
+	handoffs, err := s.store.SubscribeHandoffs(p.AgentID, since)
+	if err != nil {
+		return err.Error(), true
+	}
+	data, _ := json.MarshalIndent(handoffs, "", "  ")
+	return string(data), false
+}
+
+func agentRegisterSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"agent_id":     map[string]string{"type": "string", "description": "Agent ID (defaults to auto-detected)"},
+			"surface":      map[string]string{"type": "string", "description": "Agent surface: cursor, codex, claude-code, operator"},
+			"capabilities": map[string]string{"type": "string", "description": "Comma-separated capabilities"},
+		},
+	}
+}
+
+func agentHeartbeatSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"agent_id":          map[string]string{"type": "string", "description": "Agent ID (defaults to auto-detected)"},
+			"current_ticket_id": map[string]string{"type": "string", "description": "Ticket currently being worked on"},
+		},
+	}
+}
+
+func taskClaimSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"ticket_id": map[string]string{"type": "string", "description": "Ticket ID to claim"},
+			"agent_id":  map[string]string{"type": "string", "description": "Agent ID (defaults to auto-detected)"},
+		},
+		"required": []string{"ticket_id"},
+	}
+}
+
+func taskCompleteSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"ticket_id": map[string]string{"type": "string", "description": "Ticket ID to complete"},
+			"agent_id":  map[string]string{"type": "string", "description": "Agent ID (defaults to auto-detected)"},
+			"evidence":  map[string]string{"type": "string", "description": "Completion evidence (commit SHA, test output)"},
+		},
+		"required": []string{"ticket_id"},
+	}
+}
+
+func handoffPublishSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"ticket_id": map[string]string{"type": "string", "description": "Ticket ID"},
+			"to_agent":  map[string]string{"type": "string", "description": "Agent receiving the handoff"},
+			"summary":   map[string]string{"type": "string", "description": "Handoff summary"},
+			"branch":    map[string]string{"type": "string", "description": "Git branch name"},
+		},
+		"required": []string{"ticket_id", "to_agent", "summary"},
+	}
+}
+
+func handoffSubscribeSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"agent_id": map[string]string{"type": "string", "description": "Agent ID to check handoffs for (defaults to auto-detected)"},
+			"since":    map[string]string{"type": "string", "description": "ISO 8601 timestamp to filter from (defaults to 24h ago)"},
+		},
+	}
 }
 
 func (s *Server) sprintSearch(args json.RawMessage) (string, bool) {
