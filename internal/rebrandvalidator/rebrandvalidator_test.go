@@ -259,3 +259,30 @@ func TestScanResultJSON(t *testing.T) {
 	assert.Equal(t, result.FindingCount, decoded.FindingCount)
 	assert.Len(t, decoded.Findings, 1)
 }
+
+// TestScanResult_HasFindings: ScanResult.HasFindings() returns true when
+// FindingCount > 0, false when FindingCount == 0.
+func TestScanResult_HasFindings(t *testing.T) {
+	tests := []struct {
+		name         string
+		findingCount int
+		want         bool
+	}{
+		{"zero findings", 0, false},
+		{"one finding", 1, true},
+		{"multiple findings", 5, true},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			r := ScanResult{FindingCount: tc.findingCount}
+			assert.Equal(t, tc.want, r.HasFindings())
+		})
+	}
+}
+
+// TestScanResult_HasFindings_SuppressedDoNotCount: suppressed findings do not
+// make HasFindings() true -- only FindingCount matters.
+func TestScanResult_HasFindings_SuppressedDoNotCount(t *testing.T) {
+	r := ScanResult{FindingCount: 0, SuppressedCount: 5}
+	assert.False(t, r.HasFindings(), "suppressed-only result must not be HasFindings")
+}

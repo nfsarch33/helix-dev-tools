@@ -381,6 +381,82 @@ func TestScanDirectory_AllowlistMissingOK(t *testing.T) {
 	}
 }
 
+// TestRebrandStatusCmd_EmitsStructuredSummary verifies that
+// "cursor-tools rebrand status" outputs a summary with done/pending counters.
+func TestRebrandStatusCmd_EmitsStructuredSummary(t *testing.T) {
+	dir := t.TempDir()
+	// Write a minimal rebranding SOP fixture with a markdown table.
+	sopContent := `# Helixon Rebranding
+
+## Section 2.1 GitHub Repository Renames
+
+| Repository | Status |
+|---|---|
+| cursor-tools | DONE |
+| ironclaw-ops | DONE |
+
+## Section 2.2 Go Module Path Migrations
+
+| Module | Status |
+|---|---|
+| ironclaw-mcp | DONE |
+| ai-agent-business-stack/go | PENDING |
+`
+	sopPath := filepath.Join(dir, "helixon-rebranding-coordination.md")
+	if err := os.WriteFile(sopPath, []byte(sopContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRebrandStatusCmd(sopPath)
+	var out strings.Builder
+	cmd.SetOut(&out)
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("rebrand status: %v", err)
+	}
+
+	result := out.String()
+	// Must include done and pending counts.
+	if !strings.Contains(result, "DONE") {
+		t.Errorf("output must reference DONE status: %q", result)
+	}
+	if !strings.Contains(result, "PENDING") {
+		t.Errorf("output must reference PENDING status: %q", result)
+	}
+}
+
+// TestRebrandStatusCmd_ParsesStatusColumn verifies that the status parser
+// correctly distinguishes DONE, PENDING, and DEFERRED entries.
+func TestRebrandStatusCmd_ParsesStatusColumn(t *testing.T) {
+	dir := t.TempDir()
+	sopContent := `## Section 2.1
+
+| Item | Status |
+|---|---|
+| alpha | DONE |
+| beta | PENDING |
+| gamma | DEFERRED |
+| delta | DONE |
+`
+	sopPath := filepath.Join(dir, "sop.md")
+	if err := os.WriteFile(sopPath, []byte(sopContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, err := parseRebrandSOP(sopPath)
+	if err != nil {
+		t.Fatalf("parseRebrandSOP: %v", err)
+	}
+	if summary.Done != 2 {
+		t.Errorf("want Done=2, got %d", summary.Done)
+	}
+	if summary.Pending != 1 {
+		t.Errorf("want Pending=1, got %d", summary.Pending)
+	}
+	if summary.Deferred != 1 {
+		t.Errorf("want Deferred=1, got %d", summary.Deferred)
+	}
+}
+
 func TestRebrandRules_ReplacementMap(t *testing.T) {
 	wantMappings := map[string]string{
 		"ironclaw":                          "helixon",
