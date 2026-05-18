@@ -10,6 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/nfsarch33/helix-dev-tools/internal/hookinstaller"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -155,13 +156,37 @@ var rebrandScanCmd = &cobra.Command{
 	RunE:         runRebrandScan,
 }
 
+var rebrandInstallHooksCmd = &cobra.Command{
+	Use:          "install-hooks [repo-dir]",
+	Short:        "Install rebrand pre-push git hook into a repository",
+	Args:         cobra.MaximumNArgs(1),
+	SilenceUsage: true,
+	RunE:         runRebrandInstallHooks,
+}
+
+var rebrandHookBinary string
+
 func init() {
 	rebrandScanCmd.Flags().StringVar(&rebrandRepo, "repo", "", "Repository path or runx alias")
 	rebrandScanCmd.Flags().BoolVar(&rebrandAllOwned, "all-owned", false, "Scan all owned repositories")
 	rebrandScanCmd.Flags().StringVar(&rebrandFormat, "format", "human", "Output format: human or json")
 	rebrandScanCmd.Flags().StringVar(&rebrandDir, "dir", ".", "Directory to scan (defaults to cwd)")
 	rebrandScanCmd.Flags().BoolVar(&rebrandDocRepo, "doc-repo", false, "Doc-only repo mode: skip brand-name, tool-name, and deprecated-name categories")
+	rebrandInstallHooksCmd.Flags().StringVar(&rebrandHookBinary, "binary", "cursor-tools", "Binary name to embed in the hook script")
 	rebrandCmd.AddCommand(rebrandScanCmd)
+	rebrandCmd.AddCommand(rebrandInstallHooksCmd)
+}
+
+func runRebrandInstallHooks(cmd *cobra.Command, args []string) error {
+	dir := "."
+	if len(args) > 0 {
+		dir = args[0]
+	}
+	if err := hookinstaller.InstallPrePushHook(dir, rebrandHookBinary); err != nil {
+		return fmt.Errorf("install pre-push hook: %w", err)
+	}
+	fmt.Fprintf(cmd.OutOrStdout(), "Installed pre-push hook in %s/.git/hooks/pre-push (binary: %s)\n", dir, rebrandHookBinary)
+	return nil
 }
 
 // rebrandExitFunc is overridable in tests.

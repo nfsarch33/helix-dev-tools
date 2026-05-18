@@ -1,0 +1,112 @@
+package cli
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/spf13/cobra"
+)
+
+// rebrandSOPSummary holds parsed counts from the rebranding SOP markdown tables.
+type rebrandSOPSummary struct {
+	Done     int
+	Pending  int
+	Deferred int
+}
+
+func (s rebrandSOPSummary) Total() int { return s.Done + s.Pending + s.Deferred }
+
+// parseRebrandSOP reads a markdown file and counts rows whose last | -delimited
+// cell contains DONE, PENDING, or DEFERRED (case-sensitive).
+func parseRebrandSOP(path string) (rebrandSOPSummary, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return rebrandSOPSummary{}, err
+	}
+	defer f.Close()
+
+	var summary rebrandSOPSummary
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "|") {
+			continue
+		}
+		// Skip separator rows (---|---).
+		if strings.Contains(line, "---") {
+			continue
+		}
+		cells := strings.Split(line, "|")
+		// cells[0] is empty (leading |), cells[len-1] is empty (trailing |).
+		for _, cell := range cells {
+			cell = strings.TrimSpace(cell)
+			switch cell {
+			case "DONE":
+				summary.Done++
+			case "PENDING":
+				summary.Pending++
+			case "DEFERRED":
+				summary.Deferred++
+			}
+		}
+	}
+	return summary, scanner.Err()
+}
+
+var rebrandStatusSOPPath string
+
+var rebrandStatusCmd = &cobra.Command{
+	Use:          "status",
+	Short:        "Report Helixon rebranding progress from the coordination SOP",
+	SilenceUsage: true,
+	RunE:         runRebrandStatus,
+}
+
+func init() {
+	defaultSOP := filepath.Join(os.Getenv("HOME"), "Code", "global-kb", "sop", "helixon-rebranding-coordination.md")
+	rebrandStatusCmd.Flags().StringVar(&rebrandStatusSOPPath, "sop", defaultSOP, "Path to helixon-rebranding-coordination.md")
+	rebrandCmd.AddCommand(rebrandStatusCmd)
+}
+
+// newRebrandStatusCmd returns a cobra.Command pre-configured with a custom SOP
+// path. Used by tests to avoid filesystem side-effects.
+func newRebrandStatusCmd(sopPath string) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:          "status",
+		Short:        "Report rebranding progress",
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			return emitRebrandStatus(cmd, sopPath)
+		},
+	}
+	return cmd
+}
+
+func runRebrandStatus(cmd *cobra.Command, _ []string) error {
+	return emitRebrandStatus(cmd, rebrandStatusSOPPath)
+}
+
+func emitRebrandStatus(cmd *cobra.Command, sopPath string) error {
+	summary, err := parseRebrandSOP(sopPath)
+	if err != nil {
+		return fmt.Errorf("read SOP: %w", err)
+	}
+
+	w := cmd.OutOrStdout()
+	fmt.Fprintf(w, "Helixon Rebranding Status\n")
+	fmt.Fprintf(w, "=========================\n")
+	fmt.Fprintf(w, "  DONE:     %d\n", summary.Done)
+	fmt.Fprintf(w, "  PENDING:  %d\n", summary.Pending)
+	fmt.Fprintf(w, "  DEFERRED: %d\n", summary.Deferred)
+	fmt.Fprintf(w, "  TOTAL:    %d\n", summary.Total())
+
+	if summary.Pending > 0 {
+		fmt.Fprintf(w, "\n%d item(s) still PENDING. See SOP: %s\n", summary.Pending, sopPath)
+	} else {
+		fmt.Fprintf(w, "\nAll tracked items DONE or DEFERRED.\n")
+	}
+	return nil
+}
