@@ -183,7 +183,10 @@ func (s *Store) migrate() error {
 	if err := s.migrateAgents(); err != nil {
 		return err
 	}
-	return s.migrateClaiming()
+	if err := s.migrateClaiming(); err != nil {
+		return err
+	}
+	return s.migrateDAG()
 }
 
 func (s *Store) CreateSprint(sp Sprint) error {
