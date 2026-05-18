@@ -6,10 +6,10 @@ max_iterations: 3
 criteria:
   - name: eval_tests_pass
     grader_type: shell
-    command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C /Users/jason.lian/cursor-tools ./internal/eval/... -count=1"
+    command: "cd $HOME/cursor-tools && go test ./internal/eval/... -count=1"
   - name: sprintboard_tests_pass
     grader_type: shell
-    command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C /Users/jason.lian/cursor-tools ./internal/platform/sprintboard/... -count=1"
+    command: "cd $HOME/cursor-tools && go test ./internal/platform/sprintboard/... -count=1"
   - name: sessionhook_tests_pass
     grader_type: shell
-    command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C /Users/jason.lian/cursor-tools ./internal/platform/sessionhook/... -count=1"
+    command: "cd $HOME/cursor-tools && go test ./internal/platform/sessionhook/... -count=1"

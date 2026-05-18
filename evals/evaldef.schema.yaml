@@ -46,4 +46,4 @@
 # criteria:
 #   - name: healthz_ok
 #     grader: shell
-#     command: "curl -sf --max-time 1 http://127.0.0.1:18888/healthz"
+#     command: "curl -sf --max-time 1 http://127.0.0.1:${MEM0_PORT:-18888}/healthz"
