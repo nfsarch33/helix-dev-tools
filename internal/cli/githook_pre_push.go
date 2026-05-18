@@ -154,10 +154,15 @@ func shortenSHA(hex string) string {
 var publicRepoGitHubNames = map[string]struct{}{
 	"agentic-ecommerce-web": {},
 	"ansible-win":           {},
-	"cursor-tools":          {},
-	"fleet-bench":           {},
+	// Legacy name preserved for dual-remote period (origin still points here).
+	"cursor-tools":    {},
+	"fleet-bench":     {},
+	"helix-dev-tools": {}, // Helixon R0 rename of cursor-tools
+	// Legacy names preserved for dual-remote period.
 	"ironclaw-mcp":          {},
 	"ironclaw-ops":          {},
+	"helixon-mcp":           {}, // Helixon R0 rename of ironclaw-mcp
+	"helixon-ops":           {}, // Helixon R0 rename of ironclaw-ops
 	"llm-cluster-router":    {},
 	"mem0-mcp-go":           {},
 	"minimax-openai-bridge": {},
@@ -235,12 +240,12 @@ func resolvePublicRepoAlias(githubRepoName string) string {
 	return githubRepoName
 }
 
-// isHelixonRemote reports whether the push URL targets a helixon-*
-// repository (new rebrand namespace). When true, the rebrand scanner
-// gate blocks pushes containing legacy terms.
+// isHelixonRemote reports whether the push URL targets a Helixon-branded
+// repository (helixon-* or helix-dev-tools). When true, the rebrand
+// scanner gate blocks pushes containing legacy terms.
 func isHelixonRemote(remoteURL string) bool {
 	r := strings.ToLower(strings.TrimSpace(remoteURL))
-	return strings.Contains(r, "helixon-")
+	return strings.Contains(r, "helixon-") || strings.Contains(r, "helix-dev-tools")
 }
 
 // evaluateRebrandGateDefault scans the repo working directory for legacy
