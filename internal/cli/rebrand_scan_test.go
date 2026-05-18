@@ -482,6 +482,48 @@ func TestRebrandStatusCmd_ParsesStatusColumn(t *testing.T) {
 	}
 }
 
+// TestRebrandStatusDashboard_EmitsMarkdownTable verifies that buildRebrandDashboard
+// returns a Markdown table with the canonical rebrand items.
+func TestRebrandStatusDashboard_EmitsMarkdownTable(t *testing.T) {
+	dir := t.TempDir()
+	sopPath := filepath.Join(dir, "sop.md")
+	if err := os.WriteFile(sopPath, []byte("| item | DONE |\n|---|---|\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// No diff file present -- runx migration is DONE.
+	diffPath := filepath.Join(dir, "nonexistent.diff")
+
+	table := buildRebrandDashboard(sopPath, diffPath, "2026-05-19T15:00+10:00")
+	if !strings.Contains(table, "| ") {
+		t.Errorf("expected markdown table, got: %q", table)
+	}
+	if !strings.Contains(table, "GitHub Renames") {
+		t.Errorf("expected GitHub Renames section, got: %q", table)
+	}
+	if !strings.Contains(table, "runx Alias Migration") {
+		t.Errorf("expected runx Alias Migration row, got: %q", table)
+	}
+}
+
+// TestRebrandStatusDashboard_RunxStatePropagates verifies that the dashboard
+// reflects PENDING runx state when the diff file exists.
+func TestRebrandStatusDashboard_RunxStatePropagates(t *testing.T) {
+	dir := t.TempDir()
+	sopPath := filepath.Join(dir, "sop.md")
+	if err := os.WriteFile(sopPath, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	diffPath := filepath.Join(dir, "runx.diff")
+	if err := os.WriteFile(diffPath, []byte("+ override: helixon"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	table := buildRebrandDashboard(sopPath, diffPath, "2026-05-19T15:00+10:00")
+	if !strings.Contains(table, "PENDING") {
+		t.Errorf("expected PENDING in dashboard, got: %q", table)
+	}
+}
+
 func TestRebrandRules_ReplacementMap(t *testing.T) {
 	wantMappings := map[string]string{
 		"ironclaw":                          "helixon",
