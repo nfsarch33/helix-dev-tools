@@ -381,6 +381,31 @@ func TestScanDirectory_AllowlistMissingOK(t *testing.T) {
 	}
 }
 
+// TestRebrandStatusRunxState_PendingWhenDiffPresent verifies that
+// runxAliasMigrationStatus returns "PENDING" when the diff file exists.
+func TestRebrandStatusRunxState_PendingWhenDiffPresent(t *testing.T) {
+	dir := t.TempDir()
+	diffPath := filepath.Join(dir, "runx-override-remote.yaml.diff")
+	if err := os.WriteFile(diffPath, []byte("# diff\n+ override_remote: helixon\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	state := runxAliasMigrationStatus(diffPath)
+	if state != "PENDING" {
+		t.Errorf("want PENDING, got %q", state)
+	}
+}
+
+// TestRebrandStatusRunxState_DoneWhenDiffAbsent verifies that
+// runxAliasMigrationStatus returns "DONE" when the diff file is absent
+// (operator has applied and removed it).
+func TestRebrandStatusRunxState_DoneWhenDiffAbsent(t *testing.T) {
+	state := runxAliasMigrationStatus("/nonexistent/path/runx-override-remote.yaml.diff")
+	if state != "DONE" {
+		t.Errorf("want DONE, got %q", state)
+	}
+}
+
 // TestRebrandStatusCmd_EmitsStructuredSummary verifies that
 // "cursor-tools rebrand status" outputs a summary with done/pending counters.
 func TestRebrandStatusCmd_EmitsStructuredSummary(t *testing.T) {
