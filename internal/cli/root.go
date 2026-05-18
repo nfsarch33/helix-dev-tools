@@ -71,6 +71,7 @@ func init() {
 	rootCmd.AddCommand(k3sCmd)
 	rootCmd.AddCommand(sprintCmd)
 	rootCmd.AddCommand(handoffCmd)
+	rootCmd.AddCommand(agentraceReportCmd)
 }
 
 var versionCmd = &cobra.Command{
