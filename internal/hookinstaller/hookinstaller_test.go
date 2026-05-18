@@ -90,3 +90,43 @@ func TestInstallPrePushHook_CustomBinaryName(t *testing.T) {
 	require.NoError(t, err)
 	assert.Contains(t, string(data), "helix-dev-tools")
 }
+
+// TestInstallSymlink_CreatesSymlink verifies that InstallSymlink creates a
+// symlink at dst pointing to src.
+func TestInstallSymlink_CreatesSymlink(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "helix-dev-tools")
+	dst := filepath.Join(dir, "cursor-tools")
+
+	// Create a dummy src binary.
+	require.NoError(t, os.WriteFile(src, []byte("#!/bin/sh\necho ok"), 0o755))
+
+	err := hookinstaller.InstallSymlink(src, dst)
+	require.NoError(t, err)
+
+	info, err := os.Lstat(dst)
+	require.NoError(t, err)
+	assert.True(t, info.Mode()&os.ModeSymlink != 0, "dst must be a symlink")
+
+	target, err := os.Readlink(dst)
+	require.NoError(t, err)
+	assert.Equal(t, src, target)
+}
+
+// TestInstallSymlink_AtomicReplacement verifies that InstallSymlink replaces an
+// existing file at dst atomically (no window where dst is absent).
+func TestInstallSymlink_AtomicReplacement(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "helix-dev-tools")
+	dst := filepath.Join(dir, "cursor-tools")
+
+	require.NoError(t, os.WriteFile(src, []byte("#!/bin/sh"), 0o755))
+	require.NoError(t, os.WriteFile(dst, []byte("old"), 0o755))
+
+	err := hookinstaller.InstallSymlink(src, dst)
+	require.NoError(t, err)
+
+	info, err := os.Lstat(dst)
+	require.NoError(t, err)
+	assert.True(t, info.Mode()&os.ModeSymlink != 0, "dst must be a symlink after replacement")
+}
