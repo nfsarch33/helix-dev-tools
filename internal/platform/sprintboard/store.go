@@ -99,6 +99,13 @@ func Open(dbPath string) (*Store, error) {
 		return nil, fmt.Errorf("set WAL: %w", err)
 	}
 
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("set busy_timeout: %w", err)
+	}
+
+	db.SetMaxOpenConns(1)
+
 	s := &Store{db: db}
 	if err := s.migrate(); err != nil {
 		db.Close()
@@ -348,6 +355,124 @@ func (s *Store) ListHandoffs(ticketID string) ([]Handoff, error) {
 		handoffs = append(handoffs, h)
 	}
 	return handoffs, rows.Err()
+}
+
+type SprintSummary struct {
+	Sprint        Sprint                  `json:"sprint"`
+	TicketsByStatus map[TicketStatus]int   `json:"tickets_by_status"`
+	TotalTickets  int                     `json:"total_tickets"`
+}
+
+func (s *Store) UpdateSprint(id string, status SprintStatus) error {
+	res, err := s.db.Exec(`UPDATE sprints SET status = ? WHERE id = ?`, status, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("sprint %q not found", id)
+	}
+	return nil
+}
+
+func (s *Store) DeleteSprint(id string) error {
+	var ticketCount int
+	s.db.QueryRow(`SELECT COUNT(*) FROM tickets WHERE sprint_id = ?`, id).Scan(&ticketCount)
+	if ticketCount > 0 {
+		return fmt.Errorf("sprint %q has %d tickets; remove them first", id, ticketCount)
+	}
+
+	res, err := s.db.Exec(`DELETE FROM sprints WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("sprint %q not found", id)
+	}
+	return nil
+}
+
+func (s *Store) DeleteTicket(id string) error {
+	res, err := s.db.Exec(`DELETE FROM tickets WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return fmt.Errorf("ticket %q not found", id)
+	}
+	s.db.Exec(`DELETE FROM ticket_transitions WHERE ticket_id = ?`, id)
+	s.db.Exec(`DELETE FROM handoffs WHERE ticket_id = ?`, id)
+	return nil
+}
+
+func (s *Store) SprintSummary(id string) (SprintSummary, error) {
+	sp, err := s.GetSprint(id)
+	if err != nil {
+		return SprintSummary{}, err
+	}
+
+	rows, err := s.db.Query(`SELECT status, COUNT(*) FROM tickets WHERE sprint_id = ? GROUP BY status`, id)
+	if err != nil {
+		return SprintSummary{}, err
+	}
+	defer rows.Close()
+
+	summary := SprintSummary{
+		Sprint:          sp,
+		TicketsByStatus: make(map[TicketStatus]int),
+	}
+
+	for rows.Next() {
+		var status TicketStatus
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return SprintSummary{}, err
+		}
+		summary.TicketsByStatus[status] = count
+		summary.TotalTickets += count
+	}
+	return summary, rows.Err()
+}
+
+func (s *Store) ListTransitions(ticketID string) ([]Transition, error) {
+	rows, err := s.db.Query(
+		`SELECT id, ticket_id, from_status, to_status, agent_id, note, timestamp
+		 FROM ticket_transitions WHERE ticket_id = ? ORDER BY timestamp ASC`, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var transitions []Transition
+	for rows.Next() {
+		var t Transition
+		var ts string
+		if err := rows.Scan(&t.ID, &t.TicketID, &t.FromStatus, &t.ToStatus, &t.AgentID, &t.Note, &ts); err != nil {
+			return nil, err
+		}
+		t.Timestamp = parseTime(ts)
+		transitions = append(transitions, t)
+	}
+	return transitions, rows.Err()
+}
+
+func (s *Store) GetTicket(id string) (Ticket, error) {
+	var t Ticket
+	var createdAt, updatedAt string
+	err := s.db.QueryRow(
+		`SELECT id, sprint_id, title, description, status, owner_agent, priority, acceptance_criteria, handoff_doc_path, created_at, updated_at
+		 FROM tickets WHERE id = ?`, id,
+	).Scan(&t.ID, &t.SprintID, &t.Title, &t.Description, &t.Status,
+		&t.OwnerAgent, &t.Priority, &t.AcceptanceCriteria, &t.HandoffDocPath,
+		&createdAt, &updatedAt)
+	if err != nil {
+		return Ticket{}, fmt.Errorf("ticket %q not found: %w", id, err)
+	}
+	t.CreatedAt = parseTime(createdAt)
+	t.UpdatedAt = parseTime(updatedAt)
+	return t, nil
 }
 
 func formatTime(t time.Time) string {
