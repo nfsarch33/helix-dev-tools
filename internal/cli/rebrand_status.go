@@ -66,7 +66,36 @@ func runxAliasMigrationStatus(diffPath string) string {
 	return "DONE"
 }
 
-var rebrandStatusSOPPath string
+// buildRebrandDashboard constructs a Markdown dashboard table summarising all
+// rebrand milestones. sopPath is the rebranding SOP; diffPath is the runx
+// pending-change diff file; asOf is an ISO 8601 timestamp string.
+func buildRebrandDashboard(sopPath, diffPath, asOf string) string {
+	summary, _ := parseRebrandSOP(sopPath)
+	runxState := runxAliasMigrationStatus(diffPath)
+
+	var b strings.Builder
+	b.WriteString("# Helixon Rebranding Status Dashboard\n\n")
+	b.WriteString("**As of**: " + asOf + "\n\n")
+	b.WriteString("| Area | Done | Pending | Deferred |\n")
+	b.WriteString("|---|---|---|---|\n")
+	b.WriteString(fmt.Sprintf("| GitHub Renames | %d | %d | %d |\n",
+		summary.Done, summary.Pending, summary.Deferred))
+	b.WriteString(fmt.Sprintf("| runx Alias Migration | %s | | |\n",
+		runxState))
+	b.WriteString("\n")
+	if summary.Pending > 0 || runxState == "PENDING" {
+		b.WriteString("Items still PENDING. See SOP for details.\n")
+	} else {
+		b.WriteString("All tracked items DONE or DEFERRED.\n")
+	}
+	return b.String()
+}
+
+var (
+	rebrandStatusSOPPath       string
+	rebrandStatusDashboard     bool
+	rebrandStatusDiffPath      string
+)
 
 var rebrandStatusCmd = &cobra.Command{
 	Use:          "status",
@@ -76,8 +105,12 @@ var rebrandStatusCmd = &cobra.Command{
 }
 
 func init() {
-	defaultSOP := filepath.Join(os.Getenv("HOME"), "Code", "global-kb", "sop", "helixon-rebranding-coordination.md")
+	home := os.Getenv("HOME")
+	defaultSOP := filepath.Join(home, "Code", "global-kb", "sop", "helixon-rebranding-coordination.md")
+	defaultDiff := filepath.Join(home, "Code", "global-kb", "pending-changes", "runx-override-remote.yaml.diff")
 	rebrandStatusCmd.Flags().StringVar(&rebrandStatusSOPPath, "sop", defaultSOP, "Path to helixon-rebranding-coordination.md")
+	rebrandStatusCmd.Flags().BoolVar(&rebrandStatusDashboard, "dashboard", false, "Emit full Markdown dashboard")
+	rebrandStatusCmd.Flags().StringVar(&rebrandStatusDiffPath, "diff-path", defaultDiff, "Path to runx override_remote diff file")
 	rebrandCmd.AddCommand(rebrandStatusCmd)
 }
 
@@ -96,6 +129,11 @@ func newRebrandStatusCmd(sopPath string) *cobra.Command {
 }
 
 func runRebrandStatus(cmd *cobra.Command, _ []string) error {
+	if rebrandStatusDashboard {
+		w := cmd.OutOrStdout()
+		fmt.Fprint(w, buildRebrandDashboard(rebrandStatusSOPPath, rebrandStatusDiffPath, "now"))
+		return nil
+	}
 	return emitRebrandStatus(cmd, rebrandStatusSOPPath)
 }
 
