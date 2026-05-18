@@ -1,0 +1,18 @@
+id: sprintboard-crud
+name: "sprintboard CRUD regression"
+description: "sprintboard CRUD operations regression test"
+type: regression
+max_iterations: 3
+criteria:
+  - name: store_tests
+    grader_type: shell
+    command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C /Users/jason.lian/cursor-tools ./internal/platform/sprintboard/... -run TestCreate -count=1"
+  - name: claiming_tests
+    grader_type: shell
+    command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C /Users/jason.lian/cursor-tools ./internal/platform/sprintboard/... -run TestClaim -count=1"
+  - name: dag_tests
+    grader_type: shell
+    command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C /Users/jason.lian/cursor-tools ./internal/platform/sprintboard/... -run TestDAG -count=1"
+  - name: agent_tests
+    grader_type: shell
+    command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C /Users/jason.lian/cursor-tools ./internal/platform/sprintboard/... -run TestRegisterAgent -count=1"

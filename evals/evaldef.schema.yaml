@@ -1,0 +1,49 @@
+# Eval Definition Schema
+# All eval YAML files must conform to this structure.
+#
+# Fields:
+#   id:          unique identifier (auto-derived from filename if omitted)
+#   description: human-readable purpose
+#   type:        capability | regression | performance
+#   max_iterations: max run attempts for pass@k (default: 3)
+#   criteria:    list of criteria (at least 1 required)
+#     - name:    criterion label
+#       weight:  relative weight 0.0-1.0 (default: 1.0)
+#       grader:  code | shell (default: code)
+#       pattern: regex pattern for code grader
+#       command: shell command for shell grader (exit 0 = pass)
+#       threshold: minimum score to pass this criterion (default: 1.0)
+
+# Example capability eval:
+#
+# id: helix-build
+# description: "helix-dev-tools builds without errors"
+# type: capability
+# criteria:
+#   - name: binary_exists
+#     grader: shell
+#     command: "test -f /tmp/wt-test/cursor-tools"
+#   - name: tests_pass
+#     grader: shell
+#     command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C $REPO ./internal/eval/... -count=1"
+
+# Example regression eval:
+#
+# id: sprintboard-crud
+# description: "sprintboard CRUD operations pass"
+# type: regression
+# criteria:
+#   - name: store_tests_pass
+#     grader: shell
+#     command: "GOENV=off GOROOT= /opt/homebrew/bin/go test -C $REPO ./internal/platform/sprintboard/... -count=1"
+
+# Example performance eval:
+#
+# id: mem0-search-latency
+# description: "Mem0 search latency under 500ms"
+# type: performance
+# max_iterations: 1
+# criteria:
+#   - name: healthz_ok
+#     grader: shell
+#     command: "curl -sf --max-time 1 http://127.0.0.1:18888/healthz"

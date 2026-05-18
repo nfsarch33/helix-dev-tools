@@ -1,0 +1,9 @@
+id: mem0-health
+name: "Mem0 OSS health"
+description: "Mem0 OSS health check (performance gate)"
+type: performance
+max_iterations: 1
+criteria:
+  - name: healthz_reachable
+    grader_type: shell
+    command: "curl -sf --max-time 2 http://127.0.0.1:18888/healthz"

@@ -8,8 +8,9 @@ import (
 type EvalType string
 
 const (
-	EvalCapability EvalType = "capability"
-	EvalRegression EvalType = "regression"
+	EvalCapability  EvalType = "capability"
+	EvalRegression  EvalType = "regression"
+	EvalPerformance EvalType = "performance"
 )
 
 type GraderType string
@@ -69,6 +70,14 @@ func (d *EvalDef) Validate() error {
 	}
 	if len(d.Criteria) == 0 {
 		return errorf("at least one criterion is required")
+	}
+	switch d.Type {
+	case EvalCapability, EvalRegression, EvalPerformance:
+	default:
+		if d.Type != "" {
+			return errorf("unknown eval type %q: must be capability, regression, or performance", d.Type)
+		}
+		d.Type = EvalCapability
 	}
 	if d.MaxIterations <= 0 {
 		d.MaxIterations = 3
