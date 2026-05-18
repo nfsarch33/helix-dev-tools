@@ -11,7 +11,7 @@ import (
 )
 
 func TestEnqueue_AddsToPending(t *testing.T) {
-	b := New("http://localhost:18888", "")
+	b := New("http://localhost:19999", "")
 	s := Signal{ID: "s1", From: "agent1", To: "agent2", Ticket: "t1", Summary: "done"}
 	b.Enqueue(s)
 	if b.PendingCount() != 1 {
@@ -20,7 +20,7 @@ func TestEnqueue_AddsToPending(t *testing.T) {
 }
 
 func TestEnqueue_SetsCreatedAt(t *testing.T) {
-	b := New("http://localhost:18888", "")
+	b := New("http://localhost:19999", "")
 	before := time.Now()
 	b.Enqueue(Signal{ID: "s1"})
 	b.mu.Lock()
