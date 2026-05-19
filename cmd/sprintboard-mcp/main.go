@@ -82,6 +82,13 @@ func main() {
 
 	embedder := sprintboard.NewEmbedder(sprintboard.DefaultEmbedderConfig())
 
+	released, err := store.ReleaseStaleClaims(30 * time.Minute)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "stale claim cleanup (non-fatal): %v\n", err)
+	} else if released > 0 {
+		fmt.Fprintf(os.Stderr, "released %d stale claims at startup\n", released)
+	}
+
 	server := &Server{store: store, agentID: resolveAgentID(), telemetry: telemetry, embedder: embedder}
 	server.serve(os.Stdin, os.Stdout)
 }
@@ -167,6 +174,7 @@ func (s *Server) handleToolsList(req JSONRPCRequest) JSONRPCResponse {
 		{Name: "sprint_distribute", Description: "Auto-assign all sprint tickets to agents based on capabilities and load", InputSchema: sprintDistributeSchema()},
 		{Name: "sprint_kickoff_prompt", Description: "Generate an agent-specific kickoff prompt for a sprint (copy-paste into a fresh agent session)", InputSchema: kickoffPromptSchema()},
 		{Name: "sprint_handoff_template", Description: "Generate a structured handoff document from completed tickets", InputSchema: handoffTemplateSchema()},
+		{Name: "agent_list", Description: "List all registered agents with their last heartbeat time and current ticket", InputSchema: agentListSchema()},
 	}
 	return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{"tools": tools}}
 }
@@ -242,6 +250,8 @@ func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool)
 		return s.sprintKickoffPrompt(args)
 	case "sprint_handoff_template":
 		return s.sprintHandoffTemplate(args)
+	case "agent_list":
+		return s.agentList(args)
 	default:
 		return fmt.Sprintf("unknown tool: %s", tool), true
 	}
@@ -966,6 +976,38 @@ func handoffTemplateSchema() map[string]interface{} {
 			"agent_id":  map[string]string{"type": "string", "description": "Agent completing the work"},
 		},
 		"required": []string{"sprint_id"},
+	}
+}
+
+func (s *Server) agentList(args json.RawMessage) (string, bool) {
+	var p struct {
+		IncludeExpired bool `json:"include_expired"`
+	}
+	json.Unmarshal(args, &p)
+
+	var agents []sprintboard.Agent
+	var err error
+	if p.IncludeExpired {
+		agents, err = s.store.ListAllAgents()
+	} else {
+		agents, err = s.store.ListActiveAgents()
+	}
+	if err != nil {
+		return err.Error(), true
+	}
+	if agents == nil {
+		agents = []sprintboard.Agent{}
+	}
+	data, _ := json.MarshalIndent(agents, "", "  ")
+	return string(data), false
+}
+
+func agentListSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"include_expired": map[string]string{"type": "boolean", "description": "Include agents whose heartbeat has expired (default: false, only active agents)"},
+		},
 	}
 }
 

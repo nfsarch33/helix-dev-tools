@@ -1,0 +1,15 @@
+id: sprintboard-flow
+name: "sprintboard end-to-end flow"
+description: "Tests the sprint_create -> ticket_create -> task_claim -> task_complete lifecycle"
+type: capability
+max_iterations: 2
+criteria:
+  - name: full_lifecycle_tests
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go test ./internal/platform/sprintboard/... -run 'TestCreate|TestClaim|TestComplete' -count=1 -race"
+  - name: agent_registration_tests
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go test ./internal/platform/sprintboard/... -run 'TestRegisterAgent|TestListActive|TestExpire' -count=1"
+  - name: coordination_tests
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go test ./internal/platform/sprintboard/... -run 'TestPublish|TestSubscribe' -count=1"

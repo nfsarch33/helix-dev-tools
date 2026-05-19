@@ -95,6 +95,18 @@ func (s *Store) ListActiveAgents() ([]Agent, error) {
 	return scanAgents(rows)
 }
 
+func (s *Store) ListAllAgents() ([]Agent, error) {
+	rows, err := s.db.Query(
+		`SELECT id, surface, capabilities, last_seen, current_ticket_id, registered_at
+		 FROM agents ORDER BY last_seen DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanAgents(rows)
+}
+
 func (s *Store) ExpireStaleAgents() (int64, error) {
 	cutoff := time.Now().Add(-agentHeartbeatExpiry)
 	res, err := s.db.Exec(
