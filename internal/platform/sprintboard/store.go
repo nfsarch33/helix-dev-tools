@@ -13,21 +13,21 @@ import (
 type TicketStatus string
 
 const (
-	StatusBacklog       TicketStatus = "backlog"
-	StatusReady         TicketStatus = "ready"
-	StatusInProgress    TicketStatus = "in_progress"
-	StatusReview        TicketStatus = "review"
-	StatusDone          TicketStatus = "done"
-	StatusBlocked       TicketStatus = "blocked"
-	StatusReadyHandoff  TicketStatus = "ready_for_handoff"
+	StatusBacklog      TicketStatus = "backlog"
+	StatusReady        TicketStatus = "ready"
+	StatusInProgress   TicketStatus = "in_progress"
+	StatusReview       TicketStatus = "review"
+	StatusDone         TicketStatus = "done"
+	StatusBlocked      TicketStatus = "blocked"
+	StatusReadyHandoff TicketStatus = "ready_for_handoff"
 )
 
 type SprintStatus string
 
 const (
-	SprintPlanned  SprintStatus = "planned"
-	SprintActive   SprintStatus = "active"
-	SprintClosed   SprintStatus = "closed"
+	SprintPlanned SprintStatus = "planned"
+	SprintActive  SprintStatus = "active"
+	SprintClosed  SprintStatus = "closed"
 )
 
 type Sprint struct {
@@ -368,10 +368,34 @@ func (s *Store) ListHandoffs(ticketID string) ([]Handoff, error) {
 	return handoffs, rows.Err()
 }
 
+func (s *Store) ListHandoffsByAgent(agentID string) ([]Handoff, error) {
+	rows, err := s.db.Query(
+		`SELECT id, ticket_id, from_agent, to_agent, context_path, created_at FROM handoffs WHERE to_agent = ? OR from_agent = ? ORDER BY created_at DESC`,
+		agentID, agentID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var handoffs []Handoff
+	for rows.Next() {
+		var h Handoff
+		var createdAt string
+		err := rows.Scan(&h.ID, &h.TicketID, &h.FromAgent, &h.ToAgent, &h.ContextPath, &createdAt)
+		if err != nil {
+			return nil, err
+		}
+		h.CreatedAt = parseTime(createdAt)
+		handoffs = append(handoffs, h)
+	}
+	return handoffs, rows.Err()
+}
+
 type SprintSummary struct {
-	Sprint        Sprint                  `json:"sprint"`
-	TicketsByStatus map[TicketStatus]int   `json:"tickets_by_status"`
-	TotalTickets  int                     `json:"total_tickets"`
+	Sprint          Sprint               `json:"sprint"`
+	TicketsByStatus map[TicketStatus]int `json:"tickets_by_status"`
+	TotalTickets    int                  `json:"total_tickets"`
 }
 
 func (s *Store) UpdateSprint(id string, status SprintStatus) error {

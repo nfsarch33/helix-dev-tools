@@ -154,7 +154,7 @@ func (s *Server) handleToolsList(req JSONRPCRequest) JSONRPCResponse {
 		{Name: "ticket_update", Description: "Update ticket status with transition tracking", InputSchema: ticketUpdateSchema()},
 		{Name: "ticket_assign", Description: "Assign a ticket to an agent", InputSchema: ticketAssignSchema()},
 		{Name: "handoff_create", Description: "Create a handoff record for a ticket", InputSchema: handoffCreateSchema()},
-		{Name: "handoff_list", Description: "List handoffs for a ticket", InputSchema: idOnlySchema("ticket_id")},
+		{Name: "handoff_list", Description: "List handoffs by ticket_id or agent_id", InputSchema: handoffListSchema()},
 		{Name: "ticket_search", Description: "Semantic search across tickets by natural language query", InputSchema: searchSchema()},
 		{Name: "sprint_search", Description: "Semantic search across sprints by theme or description", InputSchema: searchSchema()},
 		{Name: "agent_register", Description: "Register an agent with its capabilities (auto-expires after 30min without heartbeat)", InputSchema: agentRegisterSchema()},
@@ -263,6 +263,14 @@ func (s *Server) sprintCreate(args json.RawMessage) (string, bool) {
 	if err != nil {
 		return err.Error(), true
 	}
+
+	go func() {
+		text := p.Name + " " + p.Theme
+		if vec, err := s.embedder.Embed(text); err == nil {
+			s.store.StoreEmbedding("sprint", p.ID, vec)
+		}
+	}()
+
 	return fmt.Sprintf("Sprint %q created (owner: %s)", p.ID, s.agentID), false
 }
 
@@ -420,13 +428,23 @@ func (s *Server) handoffCreate(args json.RawMessage) (string, bool) {
 func (s *Server) handoffList(args json.RawMessage) (string, bool) {
 	var p struct {
 		TicketID string `json:"ticket_id"`
+		AgentID  string `json:"agent_id"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
 		return err.Error(), true
 	}
-	handoffs, err := s.store.ListHandoffs(p.TicketID)
+	var handoffs []sprintboard.Handoff
+	var err error
+	if p.AgentID != "" {
+		handoffs, err = s.store.ListHandoffsByAgent(p.AgentID)
+	} else {
+		handoffs, err = s.store.ListHandoffs(p.TicketID)
+	}
 	if err != nil {
 		return err.Error(), true
+	}
+	if handoffs == nil {
+		handoffs = []sprintboard.Handoff{}
 	}
 	data, _ := json.MarshalIndent(handoffs, "", "  ")
 	return string(data), false
@@ -453,6 +471,16 @@ func sprintListSchema() map[string]interface{} {
 		"type": "object",
 		"properties": map[string]interface{}{
 			"status": map[string]string{"type": "string", "description": "Filter by status: planned, active, closed"},
+		},
+	}
+}
+
+func handoffListSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"ticket_id": map[string]string{"type": "string", "description": "Filter by ticket ID"},
+			"agent_id":  map[string]string{"type": "string", "description": "Filter by receiving agent ID"},
 		},
 	}
 }
