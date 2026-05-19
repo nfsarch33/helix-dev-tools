@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -31,8 +32,12 @@ type HealthStatus struct {
 }
 
 func DefaultConfig() Config {
+	baseURL := os.Getenv("MEM0_BASE_URL")
+	if baseURL == "" {
+		baseURL = "http://localhost:8888"
+	}
 	return Config{
-		BaseURL: "http://127.0.0.1:18888",
+		BaseURL: baseURL,
 		AppID:   "cursor-global-kb",
 		UserID:  "nfsarch33",
 		Timeout: 30 * time.Second,

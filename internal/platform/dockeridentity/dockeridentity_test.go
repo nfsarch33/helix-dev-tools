@@ -11,10 +11,12 @@ import (
 )
 
 func TestDefaultPersonalProfile(t *testing.T) {
+	t.Setenv("GIT_AUTHOR_EMAIL", "test@example.com")
+	t.Setenv("GH_SSH_ALIAS", "github.com")
 	p := dockeridentity.DefaultPersonalProfile()
 	assert.Equal(t, "nfsarch33", p.Name)
-	assert.Equal(t, "jaslian@gmail.com", p.Email)
-	assert.Equal(t, "github-agtc", p.SSHAlias)
+	assert.Equal(t, "test@example.com", p.Email)
+	assert.Equal(t, "github.com", p.SSHAlias)
 	assert.Contains(t, p.SSHKey, ".ssh/agtc")
 }
 

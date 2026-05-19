@@ -24,11 +24,19 @@ type PushConfig struct {
 
 func DefaultPersonalProfile() Profile {
 	home := os.Getenv("HOME")
+	email := os.Getenv("GIT_AUTHOR_EMAIL")
+	if email == "" {
+		email = "user@example.com"
+	}
+	sshAlias := os.Getenv("GH_SSH_ALIAS")
+	if sshAlias == "" {
+		sshAlias = "github.com"
+	}
 	return Profile{
 		Name:     "nfsarch33",
-		Email:    "jaslian@gmail.com",
+		Email:    email,
 		SSHKey:   filepath.Join(home, ".ssh", "agtc"),
-		SSHAlias: "github-agtc",
+		SSHAlias: sshAlias,
 	}
 }
 

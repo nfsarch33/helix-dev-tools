@@ -3,6 +3,8 @@ package tunnelkeep
 import (
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -21,9 +23,13 @@ type ProbeResult struct {
 }
 
 func DefaultMem0Config() TunnelConfig {
+	localURL := os.Getenv("MEM0_HEALTH_URL")
+	if localURL == "" {
+		localURL = "http://localhost:8888/healthz"
+	}
 	return TunnelConfig{
 		Name:     "mem0-oracle",
-		LocalURL: "http://127.0.0.1:18888/healthz",
+		LocalURL: localURL,
 		Interval: 5 * time.Minute,
 		Timeout:  10 * time.Second,
 	}
@@ -75,7 +81,7 @@ func GenerateLaunchdPlist(cfg TunnelConfig) string {
 	<string>com.user.tunnel-keepalive-%s</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/jason.lian/.local/bin/cursor-tools</string>
+		<string>%s</string>
 		<string>tunnel</string>
 		<string>keepalive</string>
 		<string>--name</string>
@@ -86,9 +92,23 @@ func GenerateLaunchdPlist(cfg TunnelConfig) string {
 	<key>RunAtLoad</key>
 	<true/>
 	<key>StandardOutPath</key>
-	<string>/Users/jason.lian/logs/runx/tunnel-keepalive.log</string>
+	<string>%s</string>
 	<key>StandardErrorPath</key>
-	<string>/Users/jason.lian/logs/runx/tunnel-keepalive.log</string>
+	<string>%s</string>
 </dict>
-</plist>`, cfg.Name, cfg.Name, int(cfg.Interval.Seconds()))
+</plist>`, cfg.Name, binaryPath(), cfg.Name, int(cfg.Interval.Seconds()), logPath(), logPath())
+}
+
+func binaryPath() string {
+	if p := os.Getenv("HELIX_TOOLS_BIN"); p != "" {
+		return p
+	}
+	return filepath.Join(os.Getenv("HOME"), ".local", "bin", "cursor-tools")
+}
+
+func logPath() string {
+	if p := os.Getenv("HELIX_TOOLS_LOG_DIR"); p != "" {
+		return filepath.Join(p, "tunnel-keepalive.log")
+	}
+	return filepath.Join(os.Getenv("HOME"), "logs", "runx", "tunnel-keepalive.log")
 }

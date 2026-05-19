@@ -7,13 +7,13 @@ import (
 
 func TestRegistry_RegisterAndGet(t *testing.T) {
 	r := NewRegistry()
-	r.Register(ServiceEntry{Name: "mem0", Endpoint: "localhost:18888", Status: StatusHealthy, TTL: 5 * time.Minute})
+	r.Register(ServiceEntry{Name: "mem0", Endpoint: "localhost:9999", Status: StatusHealthy, TTL: 5 * time.Minute})
 
 	e, ok := r.Get("mem0")
 	if !ok {
 		t.Fatal("expected to find registered service")
 	}
-	if e.Endpoint != "localhost:18888" {
+	if e.Endpoint != "localhost:9999" {
 		t.Errorf("unexpected endpoint: %s", e.Endpoint)
 	}
 }

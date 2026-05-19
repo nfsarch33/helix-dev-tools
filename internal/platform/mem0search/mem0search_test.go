@@ -9,8 +9,9 @@ import (
 )
 
 func TestDefaultConfig(t *testing.T) {
+	t.Setenv("MEM0_BASE_URL", "http://localhost:9999")
 	cfg := DefaultConfig()
-	if cfg.BaseURL != "http://127.0.0.1:18888" {
+	if cfg.BaseURL != "http://localhost:9999" {
 		t.Errorf("unexpected base URL: %s", cfg.BaseURL)
 	}
 	if cfg.AppID != "cursor-global-kb" {
