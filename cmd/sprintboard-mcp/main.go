@@ -165,6 +165,8 @@ func (s *Server) handleToolsList(req JSONRPCRequest) JSONRPCResponse {
 		{Name: "handoff_subscribe", Description: "Check for handoffs addressed to this agent", InputSchema: handoffSubscribeSchema()},
 		{Name: "task_recommend", Description: "Recommend next tasks for an agent based on capabilities and sprint backlog", InputSchema: taskRecommendSchema()},
 		{Name: "sprint_distribute", Description: "Auto-assign all sprint tickets to agents based on capabilities and load", InputSchema: sprintDistributeSchema()},
+		{Name: "sprint_kickoff_prompt", Description: "Generate an agent-specific kickoff prompt for a sprint (copy-paste into a fresh agent session)", InputSchema: kickoffPromptSchema()},
+		{Name: "sprint_handoff_template", Description: "Generate a structured handoff document from completed tickets", InputSchema: handoffTemplateSchema()},
 	}
 	return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{"tools": tools}}
 }
@@ -236,6 +238,10 @@ func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool)
 		return s.taskRecommend(args)
 	case "sprint_distribute":
 		return s.sprintDistribute(args)
+	case "sprint_kickoff_prompt":
+		return s.sprintKickoffPrompt(args)
+	case "sprint_handoff_template":
+		return s.sprintHandoffTemplate(args)
 	default:
 		return fmt.Sprintf("unknown tool: %s", tool), true
 	}
@@ -911,4 +917,170 @@ func sprintDistributeSchema() map[string]interface{} {
 		},
 		"required": []string{"sprint_id"},
 	}
+}
+
+func kickoffPromptSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"sprint_id": map[string]string{"type": "string", "description": "Sprint ID to generate prompt for"},
+			"agent_id":  map[string]string{"type": "string", "description": "Target agent (cursor-parent, claude-code, codex)"},
+		},
+		"required": []string{"sprint_id", "agent_id"},
+	}
+}
+
+func handoffTemplateSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"sprint_id": map[string]string{"type": "string", "description": "Sprint to generate handoff for"},
+			"agent_id":  map[string]string{"type": "string", "description": "Agent completing the work"},
+		},
+		"required": []string{"sprint_id"},
+	}
+}
+
+func (s *Server) sprintKickoffPrompt(args json.RawMessage) (string, bool) {
+	var p struct {
+		SprintID string `json:"sprint_id"`
+		AgentID  string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+
+	sprint, err := s.store.GetSprint(p.SprintID)
+	if err != nil {
+		return fmt.Sprintf("sprint not found: %s", p.SprintID), true
+	}
+
+	tickets, _ := s.store.ListTickets(p.SprintID)
+
+	var ticketLines string
+	for _, t := range tickets {
+		assignee := t.OwnerAgent
+		if assignee == "" {
+			assignee = "unassigned"
+		}
+		ticketLines += fmt.Sprintf("- %s: %s [%s] (owner: %s)\n", t.ID, t.Title, t.Status, assignee)
+	}
+
+	prompt := fmt.Sprintf(`# %s Coordination Prompt
+
+## Session Context
+
+You are %s, working on sprint %s (%s).
+Theme: %s
+
+## Your Tickets
+
+%s
+## Race Prevention Protocol
+
+Before starting ANY work:
+1. Check sprintboard: sprint_status(sprint_id="%s")
+2. Register: agent_register(surface="%s", capabilities="<your-caps>")
+3. Claim ticket: task_claim(ticket_id="<your-ticket>")
+4. If claim returns conflict, pick a different ticket
+
+## Repos You Own (single-owner-per-repo)
+
+Check ~/.config/runx/owners.yaml for current ownership.
+
+## Git Discipline
+
+- Feature branches: feat/%s-<scope>
+- Conventional commits: type(scope): message
+- Push via: runx env personal-shell --exec "runx git push --repo <alias>"
+- After merge: task_complete + handoff_publish
+
+## Handoff Back
+
+When done: handoff_publish(ticket_id="...", to_agent="cursor-parent", summary="...")
+`,
+		sprint.Name,
+		p.AgentID, p.SprintID, sprint.Name,
+		sprint.Theme,
+		ticketLines,
+		p.SprintID,
+		p.AgentID,
+		p.SprintID,
+	)
+
+	return prompt, false
+}
+
+func (s *Server) sprintHandoffTemplate(args json.RawMessage) (string, bool) {
+	var p struct {
+		SprintID string `json:"sprint_id"`
+		AgentID  string `json:"agent_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+
+	agentID := p.AgentID
+	if agentID == "" {
+		agentID = s.agentID
+	}
+
+	sprint, err := s.store.GetSprint(p.SprintID)
+	if err != nil {
+		return fmt.Sprintf("sprint not found: %s", p.SprintID), true
+	}
+
+	tickets, _ := s.store.ListTickets(p.SprintID)
+
+	var completed, inProgress, blocked string
+	for _, t := range tickets {
+		line := fmt.Sprintf("- %s: %s\n", t.ID, t.Title)
+		switch t.Status {
+		case "done":
+			completed += line
+		case "in_progress":
+			inProgress += line
+		case "blocked":
+			blocked += line
+		}
+	}
+
+	if completed == "" {
+		completed = "- (none)\n"
+	}
+	if inProgress == "" {
+		inProgress = "- (none)\n"
+	}
+	if blocked == "" {
+		blocked = "- (none)\n"
+	}
+
+	now := time.Now().Format("2006-01-02T15:04:05-07:00")
+	handoff := fmt.Sprintf(`# Session Handoff -- %s
+
+**Agent**: %s
+**Sprint**: %s (%s)
+**Timestamp**: %s
+
+## Completed
+
+%s
+## In Progress
+
+%s
+## Blocked
+
+%s
+## Operator Actions Required
+
+- [ ] Push pending commits: runx env personal-shell --exec "runx git push --repo <alias>"
+- [ ] Review PRs if any opened
+
+## Next Agent Assignment
+
+Pick up remaining in-progress or blocked tickets from sprint %s.
+Use sprintboard task_claim before starting work.
+`, sprint.Name, agentID, p.SprintID, sprint.Name, now, completed, inProgress, blocked, p.SprintID)
+
+	return handoff, false
 }
