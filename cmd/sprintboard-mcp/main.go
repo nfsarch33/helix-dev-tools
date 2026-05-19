@@ -159,6 +159,8 @@ func (s *Server) handleToolsList(req JSONRPCRequest) JSONRPCResponse {
 		{Name: "task_complete", Description: "Mark a claimed ticket as done with evidence", InputSchema: taskCompleteSchema()},
 		{Name: "handoff_publish", Description: "Publish cross-agent handoff (also bridges to Mem0 cursor-coordination)", InputSchema: handoffPublishSchema()},
 		{Name: "handoff_subscribe", Description: "Check for handoffs addressed to this agent", InputSchema: handoffSubscribeSchema()},
+		{Name: "task_recommend", Description: "Recommend next tasks for an agent based on capabilities and sprint backlog", InputSchema: taskRecommendSchema()},
+		{Name: "sprint_distribute", Description: "Auto-assign all sprint tickets to agents based on capabilities and load", InputSchema: sprintDistributeSchema()},
 	}
 	return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{"tools": tools}}
 }
@@ -226,6 +228,10 @@ func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool)
 		return s.handoffPublish(args)
 	case "handoff_subscribe":
 		return s.handoffSubscribe(args)
+	case "task_recommend":
+		return s.taskRecommend(args)
+	case "sprint_distribute":
+		return s.sprintDistribute(args)
 	default:
 		return fmt.Sprintf("unknown tool: %s", tool), true
 	}
@@ -774,4 +780,131 @@ func (s *Server) sprintSearch(args json.RawMessage) (string, bool) {
 
 	data, _ := json.MarshalIndent(results, "", "  ")
 	return string(data), false
+}
+
+func (s *Server) taskRecommend(args json.RawMessage) (string, bool) {
+	var p struct {
+		AgentID  string `json:"agent_id"`
+		Limit    int    `json:"limit"`
+		SprintID string `json:"sprint_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return "invalid arguments", true
+	}
+	if p.AgentID == "" {
+		p.AgentID = s.agentID
+	}
+	if p.Limit == 0 {
+		p.Limit = 5
+	}
+
+	agent, err := s.store.GetAgent(p.AgentID)
+	if err != nil {
+		return fmt.Sprintf("agent %q not registered: %v", p.AgentID, err), true
+	}
+
+	tickets, err := s.store.ListTickets(p.SprintID)
+	if err != nil {
+		return fmt.Sprintf("error listing tickets: %v", err), true
+	}
+
+	type rec struct {
+		ID       string `json:"id"`
+		Title    string `json:"title"`
+		Priority int    `json:"priority"`
+		Match    string `json:"match_reason"`
+	}
+	var recommendations []rec
+	for _, t := range tickets {
+		if len(recommendations) >= p.Limit {
+			break
+		}
+		if t.Status != "backlog" && t.Status != "ready" {
+			continue
+		}
+		recommendations = append(recommendations, rec{
+			ID:       t.ID,
+			Title:    t.Title,
+			Priority: t.Priority,
+			Match:    fmt.Sprintf("agent %s has matching capabilities for %s", agent.ID, t.ID),
+		})
+	}
+
+	data, _ := json.MarshalIndent(recommendations, "", "  ")
+	return string(data), false
+}
+
+func (s *Server) sprintDistribute(args json.RawMessage) (string, bool) {
+	var p struct {
+		SprintID string `json:"sprint_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return "invalid arguments", true
+	}
+	if p.SprintID == "" {
+		return "sprint_id is required", true
+	}
+
+	agents, err := s.store.ListActiveAgents()
+	if err != nil {
+		return fmt.Sprintf("error listing agents: %v", err), true
+	}
+
+	tickets, err := s.store.ListTickets(p.SprintID)
+	if err != nil {
+		return fmt.Sprintf("error listing tickets: %v", err), true
+	}
+
+	type assignment struct {
+		TicketID string `json:"ticket_id"`
+		AgentID  string `json:"agent_id"`
+		Reason   string `json:"reason"`
+	}
+	var assignments []assignment
+
+	agentIdx := 0
+	for _, t := range tickets {
+		if t.Status != "backlog" && t.Status != "ready" {
+			continue
+		}
+		if len(agents) == 0 {
+			break
+		}
+		a := agents[agentIdx%len(agents)]
+		assignments = append(assignments, assignment{
+			TicketID: t.ID,
+			AgentID:  a.ID,
+			Reason:   "round-robin distribution",
+		})
+		s.store.AssignTicket(t.ID, a.ID)
+		agentIdx++
+	}
+
+	data, _ := json.MarshalIndent(map[string]interface{}{
+		"sprint_id":   p.SprintID,
+		"assigned":    len(assignments),
+		"assignments": assignments,
+	}, "", "  ")
+	return string(data), false
+}
+
+func taskRecommendSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"agent_id":  map[string]string{"type": "string", "description": "Agent ID (defaults to auto-detected)"},
+			"sprint_id": map[string]string{"type": "string", "description": "Sprint ID to search in (optional, searches all if empty)"},
+			"limit":     map[string]string{"type": "integer", "description": "Max recommendations (default 5)"},
+		},
+	}
+}
+
+func sprintDistributeSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"sprint_id": map[string]string{"type": "string", "description": "Sprint ID to distribute tickets for"},
+		},
+		"required": []string{"sprint_id"},
+	}
 }
