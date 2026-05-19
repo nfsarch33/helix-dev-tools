@@ -23,7 +23,7 @@ func TestBenchmarkResult_Fields(t *testing.T) {
 }
 
 func TestBenchmarkSuite_AddResult(t *testing.T) {
-	suite := mem0perf.NewBenchmarkSuite("http://localhost:18888")
+	suite := mem0perf.NewBenchmarkSuite("http://localhost:9999")
 	suite.AddResult(mem0perf.BenchmarkResult{
 		Operation:  "add",
 		Duration:   200 * time.Millisecond,
@@ -40,7 +40,7 @@ func TestBenchmarkSuite_AddResult(t *testing.T) {
 }
 
 func TestBenchmarkSuite_Summary(t *testing.T) {
-	suite := mem0perf.NewBenchmarkSuite("http://localhost:18888")
+	suite := mem0perf.NewBenchmarkSuite("http://localhost:9999")
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "add", Duration: 100 * time.Millisecond, Success: true})
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "add", Duration: 200 * time.Millisecond, Success: true})
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "add", Duration: 300 * time.Millisecond, Success: false})
@@ -73,7 +73,7 @@ func TestBenchmarkSuite_Thresholds(t *testing.T) {
 }
 
 func TestBenchmarkSuite_CheckThresholds(t *testing.T) {
-	suite := mem0perf.NewBenchmarkSuite("http://localhost:18888")
+	suite := mem0perf.NewBenchmarkSuite("http://localhost:9999")
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "healthz", Duration: 100 * time.Millisecond, Success: true})
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "search", Duration: 5 * time.Second, Success: true})
 
@@ -85,20 +85,20 @@ func TestBenchmarkSuite_CheckThresholds(t *testing.T) {
 }
 
 func TestPerformanceReport_ToMarkdown(t *testing.T) {
-	suite := mem0perf.NewBenchmarkSuite("http://localhost:18888")
+	suite := mem0perf.NewBenchmarkSuite("http://localhost:9999")
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "healthz", Duration: 80 * time.Millisecond, Success: true})
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "search", Duration: 800 * time.Millisecond, Success: true})
 
 	report := suite.GenerateReport()
 	md := report.ToMarkdown()
 	assert.Contains(t, md, "# Mem0 OSS Performance Report")
-	assert.Contains(t, md, "http://localhost:18888")
+	assert.Contains(t, md, "http://localhost:9999")
 	assert.Contains(t, md, "healthz")
 	assert.Contains(t, md, "search")
 }
 
 func TestDiagnosis_BottleneckIdentification(t *testing.T) {
-	suite := mem0perf.NewBenchmarkSuite("http://localhost:18888")
+	suite := mem0perf.NewBenchmarkSuite("http://localhost:9999")
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "healthz", Duration: 80 * time.Millisecond, Success: true})
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "add_no_infer", Duration: 200 * time.Millisecond, Success: true})
 	suite.AddResult(mem0perf.BenchmarkResult{Operation: "add_infer", Duration: 35 * time.Second, Success: false})

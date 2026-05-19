@@ -11,7 +11,7 @@ var PoisonedTokenKeys = []string{
 	"GITHUB_ENTERPRISE_TOKEN",
 	"HOMEBREW_GITHUB_API_TOKEN",
 	"VENDIR_GITHUB_API_TOKEN",
-	"_SAVED_GITHUB_TOKEN",
+	"SAVED_GITHUB_TOKEN",
 }
 
 // Identity holds git author/committer identity for container operations.

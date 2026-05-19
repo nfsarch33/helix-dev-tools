@@ -19,13 +19,13 @@ func TestNewContainerConfig_Defaults(t *testing.T) {
 func TestContainerConfig_ScrubsTokens(t *testing.T) {
 	cfg := dockershell.NewContainerConfig("global-kb")
 	cfg.EnvVars = map[string]string{
-		"GH_TOKEN":                  "ghp_secret",
-		"GITHUB_TOKEN":              "ghp_secret2",
-		"GITHUB_API_TOKEN":          "ghp_secret3",
-		"GH_ENTERPRISE_TOKEN":       "ghp_secret4",
-		"HOMEBREW_GITHUB_API_TOKEN":  "ghp_secret5",
-		"GIT_AUTHOR_NAME":           "Jason Lian",
-		"GIT_AUTHOR_EMAIL":          "jaslian@gmail.com",
+		"GH_TOKEN":                 "ghp_secret",
+		"GITHUB_TOKEN":             "ghp_secret2",
+		"GITHUB_API_TOKEN":         "ghp_secret3",
+		"GH_ENTERPRISE_TOKEN":      "ghp_secret4",
+		"HOMEBREW_GITHUB_API_TOKEN": "ghp_secret5",
+		"GIT_AUTHOR_NAME":          "Test User",
+		"GIT_AUTHOR_EMAIL":         "test@example.com",
 	}
 
 	scrubbed := cfg.ScrubTokenEnv()
@@ -33,40 +33,40 @@ func TestContainerConfig_ScrubsTokens(t *testing.T) {
 		_, exists := scrubbed[key]
 		assert.False(t, exists, "token key %s should be scrubbed", key)
 	}
-	assert.Equal(t, "Jason Lian", scrubbed["GIT_AUTHOR_NAME"])
-	assert.Equal(t, "jaslian@gmail.com", scrubbed["GIT_AUTHOR_EMAIL"])
+	assert.Equal(t, "Test User", scrubbed["GIT_AUTHOR_NAME"])
+	assert.Equal(t, "test@example.com", scrubbed["GIT_AUTHOR_EMAIL"])
 }
 
 func TestContainerConfig_BuildMounts(t *testing.T) {
 	cfg := dockershell.NewContainerConfig("global-kb")
-	cfg.RepoPath = "/Users/test/Code/global-kb"
-	cfg.SSHKeyPath = "/Users/test/.ssh/agtc"
-	cfg.SSHConfigPath = "/Users/test/.ssh/config"
+	cfg.RepoPath = "/home/user/repos/global-kb"
+	cfg.SSHKeyPath = "/home/user/.ssh/id_ed25519"
+	cfg.SSHConfigPath = "/home/user/.ssh/config"
 
 	mounts := cfg.BuildMounts()
 	require.Len(t, mounts, 3)
 
-	assert.Equal(t, "/Users/test/Code/global-kb", mounts[0].Source)
+	assert.Equal(t, "/home/user/repos/global-kb", mounts[0].Source)
 	assert.Equal(t, "/work", mounts[0].Target)
 	assert.False(t, mounts[0].ReadOnly)
 
-	assert.Equal(t, "/Users/test/.ssh/agtc", mounts[1].Source)
+	assert.Equal(t, "/home/user/.ssh/id_ed25519", mounts[1].Source)
 	assert.Equal(t, "/root/.ssh/id_ed25519", mounts[1].Target)
 	assert.True(t, mounts[1].ReadOnly)
 
-	assert.Equal(t, "/Users/test/.ssh/config", mounts[2].Source)
+	assert.Equal(t, "/home/user/.ssh/config", mounts[2].Source)
 	assert.Equal(t, "/root/.ssh/config", mounts[2].Target)
 	assert.True(t, mounts[2].ReadOnly)
 }
 
 func TestContainerConfig_BuildRunArgs(t *testing.T) {
 	cfg := dockershell.NewContainerConfig("global-kb")
-	cfg.RepoPath = "/Users/test/Code/global-kb"
-	cfg.SSHKeyPath = "/Users/test/.ssh/agtc"
-	cfg.SSHConfigPath = "/Users/test/.ssh/config"
+	cfg.RepoPath = "/home/user/repos/global-kb"
+	cfg.SSHKeyPath = "/home/user/.ssh/id_ed25519"
+	cfg.SSHConfigPath = "/home/user/.ssh/config"
 	cfg.Identity = dockershell.Identity{
-		Name:  "Jason Lian",
-		Email: "jaslian@gmail.com",
+		Name:  "Test User",
+		Email: "test@example.com",
 	}
 
 	args := cfg.BuildRunArgs("git", "push", "origin", "main")
@@ -82,15 +82,15 @@ func TestContainerConfig_BuildRunArgs(t *testing.T) {
 func TestContainerConfig_IdentityEnv(t *testing.T) {
 	cfg := dockershell.NewContainerConfig("global-kb")
 	cfg.Identity = dockershell.Identity{
-		Name:  "Jason Lian",
-		Email: "jaslian@gmail.com",
+		Name:  "Test User",
+		Email: "test@example.com",
 	}
 
 	env := cfg.IdentityEnv()
-	assert.Equal(t, "Jason Lian", env["GIT_AUTHOR_NAME"])
-	assert.Equal(t, "Jason Lian", env["GIT_COMMITTER_NAME"])
-	assert.Equal(t, "jaslian@gmail.com", env["GIT_AUTHOR_EMAIL"])
-	assert.Equal(t, "jaslian@gmail.com", env["GIT_COMMITTER_EMAIL"])
+	assert.Equal(t, "Test User", env["GIT_AUTHOR_NAME"])
+	assert.Equal(t, "Test User", env["GIT_COMMITTER_NAME"])
+	assert.Equal(t, "test@example.com", env["GIT_AUTHOR_EMAIL"])
+	assert.Equal(t, "test@example.com", env["GIT_COMMITTER_EMAIL"])
 }
 
 func TestContainerConfig_NetworkDisabledByDefault(t *testing.T) {
@@ -121,7 +121,7 @@ func TestPoisonedTokenKeys_Complete(t *testing.T) {
 		"GITHUB_ENTERPRISE_TOKEN",
 		"HOMEBREW_GITHUB_API_TOKEN",
 		"VENDIR_GITHUB_API_TOKEN",
-		"_SAVED_GITHUB_TOKEN",
+		"SAVED_GITHUB_TOKEN",
 	}
 	assert.Equal(t, expected, dockershell.PoisonedTokenKeys)
 }
