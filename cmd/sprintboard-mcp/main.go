@@ -274,12 +274,10 @@ func (s *Server) sprintCreate(args json.RawMessage) (string, bool) {
 		return err.Error(), true
 	}
 
-	go func() {
-		text := p.Name + " " + p.Theme
-		if vec, err := s.embedder.Embed(text); err == nil {
-			s.store.StoreEmbedding("sprint", p.ID, vec)
-		}
-	}()
+	text := p.Name + " " + p.Theme
+	if vec, embedErr := s.embedder.Embed(text); embedErr == nil {
+		s.store.StoreEmbedding("sprint", p.ID, vec)
+	}
 
 	return fmt.Sprintf("Sprint %q created (owner: %s)", p.ID, s.agentID), false
 }

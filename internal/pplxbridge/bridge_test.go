@@ -148,6 +148,62 @@ func TestBridge_EmbeddingsEndpoint(t *testing.T) {
 	assert.Len(t, openaiResp.Data[0].Embedding, 8)
 }
 
+func TestBridge_EmbeddingsStringInput(t *testing.T) {
+	mockPplx := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var pplxReq pplxbridge.PerplexityRequest
+		json.NewDecoder(r.Body).Decode(&pplxReq)
+		assert.Equal(t, []string{"hello from mem0"}, pplxReq.Input)
+		raw := []byte{100, 206, 30, 0}
+		encoded := base64.StdEncoding.EncodeToString(raw)
+		resp := pplxbridge.PerplexityResponse{
+			Data:  []pplxbridge.PerplexityEmbedding{{Embedding: encoded, Index: 0}},
+			Model: "pplx-embed-v1-0.6b",
+			Usage: pplxbridge.Usage{PromptTokens: 4, TotalTokens: 4},
+		}
+		json.NewEncoder(w).Encode(resp)
+	}))
+	defer mockPplx.Close()
+
+	bridge := pplxbridge.NewBridge(pplxbridge.Config{
+		APIKey:           "test-key",
+		Model:            "pplx-embed-v1-0.6b",
+		Dimensions:       4,
+		OutputDimensions: 8,
+		UpstreamURL:      mockPplx.URL,
+	})
+
+	body := `{"input":"hello from mem0","model":"text-embedding-ada-002"}`
+	req := httptest.NewRequest("POST", "/v1/embeddings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	bridge.ServeHTTP(w, req)
+
+	assert.Equal(t, 200, w.Code)
+	respBody, _ := io.ReadAll(w.Result().Body)
+	var openaiResp pplxbridge.OpenAIEmbedResponse
+	err := json.Unmarshal(respBody, &openaiResp)
+	require.NoError(t, err)
+	assert.Len(t, openaiResp.Data, 1)
+	assert.Len(t, openaiResp.Data[0].Embedding, 8)
+}
+
+func TestUnmarshalOpenAIEmbedRequest_StringInput(t *testing.T) {
+	data := []byte(`{"input":"single string","model":"test"}`)
+	var req pplxbridge.OpenAIEmbedRequest
+	err := json.Unmarshal(data, &req)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"single string"}, req.Input)
+	assert.Equal(t, "test", req.Model)
+}
+
+func TestUnmarshalOpenAIEmbedRequest_ArrayInput(t *testing.T) {
+	data := []byte(`{"input":["a","b"],"model":"test"}`)
+	var req pplxbridge.OpenAIEmbedRequest
+	err := json.Unmarshal(data, &req)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"a", "b"}, req.Input)
+}
+
 func TestConfig_Defaults(t *testing.T) {
 	cfg := pplxbridge.DefaultConfig()
 	assert.Equal(t, "pplx-embed-v1-0.6b", cfg.Model)

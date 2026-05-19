@@ -39,6 +39,30 @@ type OpenAIEmbedRequest struct {
 	Model string   `json:"model"`
 }
 
+func (r *OpenAIEmbedRequest) UnmarshalJSON(data []byte) error {
+	type plain struct {
+		Input json.RawMessage `json:"input"`
+		Model string          `json:"model"`
+	}
+	var p plain
+	if err := json.Unmarshal(data, &p); err != nil {
+		return err
+	}
+	r.Model = p.Model
+	if len(p.Input) == 0 {
+		return nil
+	}
+	if p.Input[0] == '"' {
+		var s string
+		if err := json.Unmarshal(p.Input, &s); err != nil {
+			return err
+		}
+		r.Input = []string{s}
+		return nil
+	}
+	return json.Unmarshal(p.Input, &r.Input)
+}
+
 type OpenAIEmbedResponse struct {
 	Object string            `json:"object"`
 	Data   []OpenAIEmbedding `json:"data"`
