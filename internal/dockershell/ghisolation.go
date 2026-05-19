@@ -24,23 +24,31 @@ type GHProfile struct {
 }
 
 // DefaultProfiles returns the canonical personal/work profile set.
+// Identity values are resolved from environment or config at runtime.
 func DefaultProfiles() map[string]GHProfile {
 	return map[string]GHProfile{
 		ProfilePersonal: {
 			Name:       "personal",
-			Login:      "nfsarch33",
-			Email:      "jaslian@gmail.com",
+			Login:      envString("GH_PERSONAL_LOGIN", ""),
+			Email:      envString("GH_PERSONAL_EMAIL", ""),
 			TokenEnvID: "GH_PERSONAL_TOKEN",
-			SSHAlias:   "agtc",
+			SSHAlias:   envString("GH_PERSONAL_SSH_ALIAS", ""),
 		},
 		ProfileZendesk: {
 			Name:       "zendesk",
-			Login:      "jlianzendesk",
-			Email:      "jason.lian@zendesk.com",
+			Login:      envString("GH_ZENDESK_LOGIN", ""),
+			Email:      envString("GH_ZENDESK_EMAIL", ""),
 			TokenEnvID: "GH_ZENDESK_TOKEN",
 			SSHAlias:   "",
 		},
 	}
+}
+
+func envString(key, defaultVal string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return defaultVal
 }
 
 // GHIsolationConfig holds settings for a Docker-isolated gh CLI invocation.

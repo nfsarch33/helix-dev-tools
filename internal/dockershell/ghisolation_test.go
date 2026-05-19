@@ -1,11 +1,15 @@
 package dockershell
 
 import (
-	"os"
 	"testing"
 )
 
 func TestDefaultProfiles(t *testing.T) {
+	t.Setenv("GH_PERSONAL_LOGIN", "test-personal")
+	t.Setenv("GH_PERSONAL_EMAIL", "test@example.com")
+	t.Setenv("GH_ZENDESK_LOGIN", "test-work")
+	t.Setenv("GH_ZENDESK_EMAIL", "work@example.com")
+
 	profiles := DefaultProfiles()
 
 	if len(profiles) != 2 {
@@ -13,16 +17,16 @@ func TestDefaultProfiles(t *testing.T) {
 	}
 
 	personal := profiles[ProfilePersonal]
-	if personal.Login != "nfsarch33" {
-		t.Errorf("personal login = %q, want nfsarch33", personal.Login)
+	if personal.Login != "test-personal" {
+		t.Errorf("personal login = %q, want test-personal", personal.Login)
 	}
-	if personal.Email != "jaslian@gmail.com" {
-		t.Errorf("personal email = %q, want jaslian@gmail.com", personal.Email)
+	if personal.Email != "test@example.com" {
+		t.Errorf("personal email = %q, want test@example.com", personal.Email)
 	}
 
 	zd := profiles[ProfileZendesk]
-	if zd.Login != "jlianzendesk" {
-		t.Errorf("zendesk login = %q, want jlianzendesk", zd.Login)
+	if zd.Login != "test-work" {
+		t.Errorf("zendesk login = %q, want test-work", zd.Login)
 	}
 }
 
@@ -50,8 +54,8 @@ func TestBuildGHRunArgs_PersonalProfile(t *testing.T) {
 	cfg := &GHIsolationConfig{
 		Profile: GHProfile{
 			Name:  "personal",
-			Login: "nfsarch33",
-			Email: "jaslian@gmail.com",
+			Login: "test-user",
+			Email: "test@example.com",
 		},
 		RepoPath:  "/tmp/test-repo",
 		Token:     "ghp_test_token_12345",
@@ -99,14 +103,13 @@ func TestBuildGHRunArgs_PersonalProfile(t *testing.T) {
 }
 
 func TestBuildGHRunArgs_NoHostEnvInheritance(t *testing.T) {
-	os.Setenv("GITHUB_TOKEN", "poisoned_value")
-	defer os.Unsetenv("GITHUB_TOKEN")
+	t.Setenv("GITHUB_TOKEN", "poisoned_value")
 
 	cfg := &GHIsolationConfig{
 		Profile: GHProfile{
 			Name:  "personal",
-			Login: "nfsarch33",
-			Email: "jaslian@gmail.com",
+			Login: "test-user",
+			Email: "test@example.com",
 		},
 		RepoPath:  "/tmp/test-repo",
 		Token:     "ghp_clean_personal_token",
