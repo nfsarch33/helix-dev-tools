@@ -283,9 +283,27 @@ func (s *Server) sprintCreate(args json.RawMessage) (string, bool) {
 }
 
 func (s *Server) sprintList(args json.RawMessage) (string, bool) {
+	var p struct {
+		Status string `json:"status"`
+	}
+	if len(args) > 0 {
+		json.Unmarshal(args, &p)
+	}
 	sprints, err := s.store.ListSprints()
 	if err != nil {
 		return err.Error(), true
+	}
+	if p.Status != "" {
+		filtered := make([]sprintboard.Sprint, 0, len(sprints))
+		for _, sp := range sprints {
+			if string(sp.Status) == p.Status {
+				filtered = append(filtered, sp)
+			}
+		}
+		sprints = filtered
+	}
+	if sprints == nil {
+		sprints = []sprintboard.Sprint{}
 	}
 	data, _ := json.MarshalIndent(sprints, "", "  ")
 	return string(data), false
@@ -441,18 +459,25 @@ func (s *Server) handoffList(args json.RawMessage) (string, bool) {
 	if err := json.Unmarshal(args, &p); err != nil {
 		return err.Error(), true
 	}
-	var handoffs []sprintboard.Handoff
+	handoffs := make([]sprintboard.Handoff, 0)
 	var err error
 	if p.AgentID != "" {
-		handoffs, err = s.store.ListHandoffsByAgent(p.AgentID)
+		result, e := s.store.ListHandoffsByAgent(p.AgentID)
+		if e != nil {
+			err = e
+		} else if result != nil {
+			handoffs = result
+		}
 	} else {
-		handoffs, err = s.store.ListHandoffs(p.TicketID)
+		result, e := s.store.ListHandoffs(p.TicketID)
+		if e != nil {
+			err = e
+		} else if result != nil {
+			handoffs = result
+		}
 	}
 	if err != nil {
 		return err.Error(), true
-	}
-	if handoffs == nil {
-		handoffs = []sprintboard.Handoff{}
 	}
 	data, _ := json.MarshalIndent(handoffs, "", "  ")
 	return string(data), false
