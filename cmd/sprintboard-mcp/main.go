@@ -108,6 +108,10 @@ func (s *Server) serve(in io.Reader, out io.Writer) {
 			continue
 		}
 
+		if req.ID == nil {
+			continue
+		}
+
 		resp := s.handleRequest(req)
 		data, _ := json.Marshal(resp)
 		fmt.Fprintf(out, "%s\n", data)
