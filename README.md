@@ -33,6 +33,27 @@ cursor-tools version
 | `cursor-tools bootstrap [--dry-run]` | Create all symlinks on a fresh machine |
 | `cursor-tools safe` | Launch Cursor with --disable-gpu |
 | `cursor-tools version` | Print version, commit, build date |
+| `cursor-tools sprint-dispatch` | Build headless Claude/Codex dispatch from a kickoff handoff (logs `~/logs/runx/agent-dispatch.ndjson`) |
+| `cursor-tools sprint-scaffold` | Emit 7-story sprint Markdown (5 themed + hygiene + capsule) per `sprint-scaffold-7-stories` rule |
+
+### Overnight agent dispatch (v7100+)
+
+`~/.cursor/hooks.json` wires **IDE lifecycle** hooks (`hook guard-shell`, `hook post-edit`, etc.).
+It does **not** launch external agents. For copy-paste-free overnight runs, use
+`sprint-dispatch` after writing a kickoff under `~/Code/global-kb/session-handoffs/`:
+
+```bash
+cursor-tools sprint-dispatch --agent codex \
+  --kickoff ~/Code/global-kb/session-handoffs/2026-05-21-codex-v7100-kickoff.md \
+  --sprint v7100
+
+cursor-tools sprint-dispatch --agent claude-code \
+  --kickoff ~/Code/global-kb/session-handoffs/2026-05-21-claude-code-v7100-overnight-kickoff.md \
+  --sprint v7100
+```
+
+Canonical SOP: `~/Code/global-kb/sop/agent-dispatch-automation.md` (Sprintboard MCP:
+`agent_register` → `task_claim` → `task_complete`).
 
 ## Development
 
