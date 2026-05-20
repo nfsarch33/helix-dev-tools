@@ -216,14 +216,14 @@ func (s *Store) ListSprints() ([]Sprint, error) {
 	var sprints []Sprint
 	for rows.Next() {
 		var sp Sprint
-		var startAt, endAt, createdAt string
+		var startAt, endAt, createdAt sql.NullString
 		err := rows.Scan(&sp.ID, &sp.Name, &sp.Status, &sp.OwnerAgent, &sp.Theme, &startAt, &endAt, &createdAt)
 		if err != nil {
 			return nil, err
 		}
-		sp.StartAt = parseTime(startAt)
-		sp.EndAt = parseTime(endAt)
-		sp.CreatedAt = parseTime(createdAt)
+		sp.StartAt = parseTime(startAt.String)
+		sp.EndAt = parseTime(endAt.String)
+		sp.CreatedAt = parseTime(createdAt.String)
 		sprints = append(sprints, sp)
 	}
 	return sprints, rows.Err()
@@ -231,16 +231,16 @@ func (s *Store) ListSprints() ([]Sprint, error) {
 
 func (s *Store) GetSprint(id string) (Sprint, error) {
 	var sp Sprint
-	var startAt, endAt, createdAt string
+	var startAt, endAt, createdAt sql.NullString
 	err := s.db.QueryRow(
 		`SELECT id, name, status, owner_agent, theme, start_at, end_at, created_at FROM sprints WHERE id = ?`, id,
 	).Scan(&sp.ID, &sp.Name, &sp.Status, &sp.OwnerAgent, &sp.Theme, &startAt, &endAt, &createdAt)
 	if err != nil {
 		return Sprint{}, fmt.Errorf("sprint %q not found: %w", id, err)
 	}
-	sp.StartAt = parseTime(startAt)
-	sp.EndAt = parseTime(endAt)
-	sp.CreatedAt = parseTime(createdAt)
+	sp.StartAt = parseTime(startAt.String)
+	sp.EndAt = parseTime(endAt.String)
+	sp.CreatedAt = parseTime(createdAt.String)
 	return sp, nil
 }
 

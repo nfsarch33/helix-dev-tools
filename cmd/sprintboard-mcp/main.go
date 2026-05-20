@@ -281,12 +281,19 @@ func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool)
 
 func (s *Server) sprintCreate(args json.RawMessage) (string, bool) {
 	var p struct {
-		ID    string `json:"id"`
-		Name  string `json:"name"`
-		Theme string `json:"theme"`
+		ID       string `json:"id"`
+		SprintID string `json:"sprint_id"`
+		Name     string `json:"name"`
+		Theme    string `json:"theme"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
 		return err.Error(), true
+	}
+	if p.ID == "" {
+		p.ID = p.SprintID
+	}
+	if p.ID == "" {
+		return "id or sprint_id is required", true
 	}
 	err := s.store.CreateSprint(sprintboard.Sprint{
 		ID: p.ID, Name: p.Name, Theme: p.Theme,
@@ -362,6 +369,7 @@ func (s *Server) sprintClose(args json.RawMessage) (string, bool) {
 func (s *Server) ticketCreate(args json.RawMessage) (string, bool) {
 	var p struct {
 		ID                 string `json:"id"`
+		TicketID           string `json:"ticket_id"`
 		SprintID           string `json:"sprint_id"`
 		Title              string `json:"title"`
 		Description        string `json:"description"`
@@ -370,6 +378,12 @@ func (s *Server) ticketCreate(args json.RawMessage) (string, bool) {
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
 		return err.Error(), true
+	}
+	if p.ID == "" {
+		p.ID = p.TicketID
+	}
+	if p.ID == "" {
+		return "id or ticket_id is required", true
 	}
 	err := s.store.CreateTicket(sprintboard.Ticket{
 		ID: p.ID, SprintID: p.SprintID, Title: p.Title,
