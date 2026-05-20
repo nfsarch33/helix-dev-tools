@@ -34,6 +34,7 @@ cursor-tools version
 | `cursor-tools safe` | Launch Cursor with --disable-gpu |
 | `cursor-tools version` | Print version, commit, build date |
 | `cursor-tools sprint-dispatch` | Build headless Claude/Codex dispatch from a kickoff handoff (logs `~/logs/runx/agent-dispatch.ndjson`) |
+| `cursor-tools sprintboard-monitor` | Append Sprintboard status snapshot to `~/logs/runx/sprintboard-monitor.ndjson` |
 | `cursor-tools sprint-scaffold` | Emit 7-story sprint Markdown (5 themed + hygiene + capsule) per `sprint-scaffold-7-stories` rule |
 
 ### Overnight agent dispatch (v7100+)
