@@ -138,3 +138,17 @@ func (s *Store) ReleaseStaleClaims(expiry time.Duration) (int64, error) {
 	}
 	return res.RowsAffected()
 }
+
+// ReleaseNullClaims resets tickets that are stuck in in_progress with no claimed_by.
+// This handles corruption from direct DB writes or race conditions that bypass ClaimTicket.
+func (s *Store) ReleaseNullClaims() (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE tickets SET status = ?, updated_at = datetime('now')
+		 WHERE status = ? AND (claimed_by IS NULL OR claimed_by = '')`,
+		StatusBacklog, StatusInProgress,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}

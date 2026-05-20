@@ -117,3 +117,32 @@ func TestReleaseStaleClaims(t *testing.T) {
 		t.Errorf("status = %q, want ready after release", ticket.Status)
 	}
 }
+
+func TestReleaseNullClaims(t *testing.T) {
+	s := testStore(t)
+
+	s.CreateSprint(Sprint{ID: "S1", Name: "test"})
+	// Ticket with in_progress status but no claimed_by (stale/corrupt state)
+	s.CreateTicket(Ticket{ID: "T1", SprintID: "S1", Title: "task", Status: StatusInProgress})
+	// Ticket with in_progress and valid claimed_by -- must NOT be released
+	s.CreateTicket(Ticket{ID: "T2", SprintID: "S1", Title: "task2", Status: StatusInProgress})
+	s.ClaimTicket("T2", "cursor-parent")
+
+	released, err := s.ReleaseNullClaims()
+	if err != nil {
+		t.Fatalf("ReleaseNullClaims: %v", err)
+	}
+	if released != 1 {
+		t.Errorf("released = %d, want 1 (only T1)", released)
+	}
+
+	t1, _ := s.GetTicket("T1")
+	if t1.Status != StatusBacklog {
+		t.Errorf("T1 status = %q, want backlog", t1.Status)
+	}
+
+	t2, _ := s.GetTicket("T2")
+	if t2.Status != StatusInProgress {
+		t.Errorf("T2 status = %q, want in_progress (claimed by cursor-parent)", t2.Status)
+	}
+}

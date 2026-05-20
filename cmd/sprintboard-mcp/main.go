@@ -102,6 +102,13 @@ func main() {
 		fmt.Fprintf(os.Stderr, "released %d stale claims at startup\n", released)
 	}
 
+	nullReleased, err := store.ReleaseNullClaims()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "null-claim cleanup (non-fatal): %v\n", err)
+	} else if nullReleased > 0 {
+		fmt.Fprintf(os.Stderr, "released %d null-owner in_progress tickets at startup\n", nullReleased)
+	}
+
 	agentID := resolveAgentID()
 
 	if err := store.RegisterAgent(sprintboard.Agent{
@@ -197,6 +204,11 @@ func (s *Server) handleToolsList(req JSONRPCRequest) JSONRPCResponse {
 		{Name: "sprint_kickoff_prompt", Description: "Generate an agent-specific kickoff prompt for a sprint (copy-paste into a fresh agent session)", InputSchema: kickoffPromptSchema()},
 		{Name: "sprint_handoff_template", Description: "Generate a structured handoff document from completed tickets", InputSchema: handoffTemplateSchema()},
 		{Name: "agent_list", Description: "List all registered agents with their last heartbeat time and current ticket", InputSchema: agentListSchema()},
+		{Name: "ticket_depend_add", Description: "Add a dependency: ticket_id blocks on depends_on (DAG, cycle-safe)", InputSchema: ticketDependSchema()},
+		{Name: "ticket_depend_remove", Description: "Remove a dependency between two tickets", InputSchema: ticketDependSchema()},
+		{Name: "ticket_blocked_by", Description: "List tickets that are blocking the given ticket (non-done blockers only)", InputSchema: idOnlySchema("ticket_id")},
+		{Name: "ticket_ready_list", Description: "List tickets that have no unresolved blockers (DAG-aware ready queue)", InputSchema: idOnlySchema("sprint_id")},
+		{Name: "sprint_topo_sort", Description: "Return tickets in topological order (dependency-first) for a sprint", InputSchema: idOnlySchema("sprint_id")},
 	}
 	return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{"tools": tools}}
 }
@@ -274,6 +286,16 @@ func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool)
 		return s.sprintHandoffTemplate(args)
 	case "agent_list":
 		return s.agentList(args)
+	case "ticket_depend_add":
+		return s.ticketDependAdd(args)
+	case "ticket_depend_remove":
+		return s.ticketDependRemove(args)
+	case "ticket_blocked_by":
+		return s.ticketBlockedBy(args)
+	case "ticket_ready_list":
+		return s.ticketReadyList(args)
+	case "sprint_topo_sort":
+		return s.sprintTopoSort(args)
 	default:
 		return fmt.Sprintf("unknown tool: %s", tool), true
 	}
@@ -1138,6 +1160,99 @@ When done: handoff_publish(ticket_id="...", to_agent="cursor-parent", summary=".
 	)
 
 	return prompt, false
+}
+
+func ticketDependSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"ticket_id":  map[string]string{"type": "string", "description": "The ticket that depends on another"},
+			"depends_on": map[string]string{"type": "string", "description": "The ticket that must be done first"},
+		},
+		"required": []string{"ticket_id", "depends_on"},
+	}
+}
+
+func (s *Server) ticketDependAdd(args json.RawMessage) (string, bool) {
+	var p struct {
+		TicketID  string `json:"ticket_id"`
+		DependsOn string `json:"depends_on"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if err := s.store.AddDependency(p.TicketID, p.DependsOn); err != nil {
+		return err.Error(), true
+	}
+	return fmt.Sprintf("Dependency added: %s depends on %s", p.TicketID, p.DependsOn), false
+}
+
+func (s *Server) ticketDependRemove(args json.RawMessage) (string, bool) {
+	var p struct {
+		TicketID  string `json:"ticket_id"`
+		DependsOn string `json:"depends_on"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if err := s.store.RemoveDependency(p.TicketID, p.DependsOn); err != nil {
+		return err.Error(), true
+	}
+	return fmt.Sprintf("Dependency removed: %s no longer depends on %s", p.TicketID, p.DependsOn), false
+}
+
+func (s *Server) ticketBlockedBy(args json.RawMessage) (string, bool) {
+	var p struct {
+		TicketID string `json:"ticket_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	blockers, err := s.store.BlockedBy(p.TicketID)
+	if err != nil {
+		return err.Error(), true
+	}
+	if blockers == nil {
+		blockers = []string{}
+	}
+	data, _ := json.MarshalIndent(blockers, "", "  ")
+	return string(data), false
+}
+
+func (s *Server) ticketReadyList(args json.RawMessage) (string, bool) {
+	var p struct {
+		SprintID string `json:"sprint_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	tickets, err := s.store.ReadyTickets(p.SprintID)
+	if err != nil {
+		return err.Error(), true
+	}
+	if tickets == nil {
+		tickets = []sprintboard.Ticket{}
+	}
+	data, _ := json.MarshalIndent(tickets, "", "  ")
+	return string(data), false
+}
+
+func (s *Server) sprintTopoSort(args json.RawMessage) (string, bool) {
+	var p struct {
+		SprintID string `json:"sprint_id"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	sorted, err := s.store.TopologicalSort(p.SprintID)
+	if err != nil {
+		return err.Error(), true
+	}
+	if sorted == nil {
+		sorted = []string{}
+	}
+	data, _ := json.MarshalIndent(sorted, "", "  ")
+	return string(data), false
 }
 
 func (s *Server) sprintHandoffTemplate(args json.RawMessage) (string, bool) {
