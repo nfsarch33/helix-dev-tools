@@ -75,6 +75,7 @@ func init() {
 	rootCmd.AddCommand(onboardCmd)
 	rootCmd.AddCommand(importMigrateCmd)
 	rootCmd.AddCommand(sprintFanoutCmd)
+	rootCmd.AddCommand(sprintDispatchCmd)
 }
 
 var versionCmd = &cobra.Command{

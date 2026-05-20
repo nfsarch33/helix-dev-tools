@@ -53,6 +53,32 @@ func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hoo
 		return hookio.Allow(), nil
 	}
 
+	if d := sembleDisciplineAdvisory(input.Command); d != nil && (d.Permission == "ask" || d.Permission == "deny") {
+		cmdShort := input.Command
+		if len(cmdShort) > 120 {
+			cmdShort = cmdShort[:120]
+		}
+		latencyMs := time.Since(start).Milliseconds()
+		_ = metrics.Record(h.metricsPath, metrics.Event{
+			Hook:      "guard-shell",
+			Action:    "ask",
+			Category:  "shell",
+			LatencyMs: latencyMs,
+			Detail:    "semble-discipline: " + cmdShort,
+			BytesIn:   int64(len(input.Command)),
+		})
+		recordHookOutcome(h.outcomeEmitter, hookOutcomeParams{
+			hookName:  "guard-shell",
+			action:    "ask",
+			category:  "shell",
+			latencyMs: latencyMs,
+			detail:    "semble-discipline: " + cmdShort,
+			bytesIn:   int64(len(input.Command)),
+			extraMeta: map[string]string{"reason": "semble-discipline"},
+		})
+		return d, nil
+	}
+
 	if d := identityStrictShellDeny(input.Command); d != nil {
 		cmdShort := input.Command
 		if len(cmdShort) > 120 {
@@ -234,7 +260,7 @@ func runGuardShell(stdin *os.File, stdout *os.File) error {
 	}
 
 	_ = hookio.WriteResponse(stdout, resp)
-	if resp.Permission == "deny" {
+	if resp != nil && resp.Permission == "deny" {
 		guardShellExit(2)
 	}
 	return nil
