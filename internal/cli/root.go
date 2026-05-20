@@ -74,7 +74,7 @@ func init() {
 	rootCmd.AddCommand(agentraceReportCmd)
 	rootCmd.AddCommand(onboardCmd)
 	rootCmd.AddCommand(importMigrateCmd)
-	rootCmd.AddCommand(evalCmd)
+	rootCmd.AddCommand(sprintFanoutCmd)
 }
 
 var versionCmd = &cobra.Command{

@@ -65,6 +65,19 @@ func resolveAgentID() string {
 	return "cursor-parent"
 }
 
+func resolveAgentSurface() string {
+	if os.Getenv("CURSOR_AGENT_ID") != "" || os.Getenv("CURSOR") != "" {
+		return "cursor"
+	}
+	if os.Getenv("CODEX_SESSION") != "" {
+		return "codex"
+	}
+	if os.Getenv("CLAUDE_CODE") != "" {
+		return "claude-code"
+	}
+	return "cursor"
+}
+
 func main() {
 	store, err := sprintboard.Open(sprintboard.DefaultDBPath())
 	if err != nil {
@@ -89,7 +102,16 @@ func main() {
 		fmt.Fprintf(os.Stderr, "released %d stale claims at startup\n", released)
 	}
 
-	server := &Server{store: store, agentID: resolveAgentID(), telemetry: telemetry, embedder: embedder}
+	agentID := resolveAgentID()
+
+	if err := store.RegisterAgent(sprintboard.Agent{
+		ID:      agentID,
+		Surface: resolveAgentSurface(),
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "auto-register agent %q (non-fatal): %v\n", agentID, err)
+	}
+
+	server := &Server{store: store, agentID: agentID, telemetry: telemetry, embedder: embedder}
 	server.serve(os.Stdin, os.Stdout)
 }
 

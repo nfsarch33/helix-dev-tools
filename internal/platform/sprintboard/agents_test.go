@@ -147,6 +147,50 @@ func TestGetPreferences_Empty(t *testing.T) {
 	}
 }
 
+func TestAutoRegisterThenList(t *testing.T) {
+	s := testStore(t)
+	defer s.Close()
+
+	err := s.RegisterAgent(Agent{ID: "cursor-parent", Surface: "cursor"})
+	if err != nil {
+		t.Fatalf("auto-register: %v", err)
+	}
+
+	agents, err := s.ListActiveAgents()
+	if err != nil {
+		t.Fatalf("ListActiveAgents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Fatalf("expected 1 agent after auto-register, got %d", len(agents))
+	}
+	if agents[0].ID != "cursor-parent" {
+		t.Errorf("agent id = %q, want cursor-parent", agents[0].ID)
+	}
+	if agents[0].Surface != "cursor" {
+		t.Errorf("surface = %q, want cursor", agents[0].Surface)
+	}
+}
+
+func TestAutoRegisterIdempotent(t *testing.T) {
+	s := testStore(t)
+	defer s.Close()
+
+	for i := 0; i < 5; i++ {
+		err := s.RegisterAgent(Agent{ID: "cursor-parent", Surface: "cursor"})
+		if err != nil {
+			t.Fatalf("register attempt %d: %v", i, err)
+		}
+	}
+
+	agents, err := s.ListActiveAgents()
+	if err != nil {
+		t.Fatalf("ListActiveAgents: %v", err)
+	}
+	if len(agents) != 1 {
+		t.Errorf("expected 1 agent after 5 registers, got %d", len(agents))
+	}
+}
+
 func TestExpireStaleAgents_30MinWindow(t *testing.T) {
 	s := testStore(t)
 	defer s.Close()

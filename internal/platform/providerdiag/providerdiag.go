@@ -18,12 +18,12 @@ const (
 )
 
 type Diagnosis struct {
-	Provider    ProviderType `json:"provider"`
-	BaseURL     string       `json:"base_url"`
-	Model       string       `json:"model"`
-	Issues      []Issue      `json:"issues"`
-	Healthy     bool         `json:"healthy"`
-	DiagnosedAt time.Time    `json:"diagnosed_at"`
+	Provider     ProviderType `json:"provider"`
+	BaseURL      string       `json:"base_url"`
+	Model        string       `json:"model"`
+	Issues       []Issue      `json:"issues"`
+	Healthy      bool         `json:"healthy"`
+	DiagnosedAt  time.Time    `json:"diagnosed_at"`
 }
 
 type Issue struct {
@@ -34,13 +34,13 @@ type Issue struct {
 }
 
 type EnvConfig struct {
-	LLMBaseURL       string
-	LLMModel         string
-	LLMAPIKey        string
-	EmbeddingBaseURL string
-	EmbeddingModel   string
-	EmbeddingAPIKey  string
-	Timeout          string
+	LLMBaseURL        string
+	LLMModel          string
+	LLMAPIKey         string
+	EmbeddingBaseURL  string
+	EmbeddingModel    string
+	EmbeddingAPIKey   string
+	Timeout           string
 }
 
 func DetectProvider(baseURL string) ProviderType {

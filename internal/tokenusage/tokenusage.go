@@ -32,7 +32,24 @@ type Record struct {
 	Cost         float64   `json:"cost,omitempty"`
 	TurnID       string    `json:"turn_id,omitempty"`
 	RunID        string    `json:"run_id,omitempty"`
+	Provider     string    `json:"provider,omitempty"`
+	Agent        string    `json:"agent,omitempty"`
+	Server       string    `json:"server,omitempty"`
+	Tool         string    `json:"tool,omitempty"`
+	SessionID    string    `json:"session_id,omitempty"`
+	Success      bool      `json:"success,omitempty"`
+	Error        string    `json:"error,omitempty"`
 }
+
+// GroupBy controls the aggregation dimension.
+type GroupBy string
+
+const (
+	GroupByTool     GroupBy = "tool"
+	GroupByProvider GroupBy = "provider"
+	GroupByModel    GroupBy = "model"
+	GroupByAgent    GroupBy = "agent"
+)
 
 // ToolBreakdown aggregates token usage for a single tool/hook/category key.
 type ToolBreakdown struct {
@@ -223,6 +240,153 @@ func FormatTable(s *Summary) string {
 	}
 
 	return b.String()
+}
+
+// groupKeyFunc returns the field extractor for a given GroupBy dimension.
+func groupKeyFunc(g GroupBy) func(Record) string {
+	switch g {
+	case GroupByProvider:
+		return func(r Record) string {
+			if r.Provider != "" {
+				return r.Provider
+			}
+			return "unknown"
+		}
+	case GroupByModel:
+		return func(r Record) string {
+			if r.Model != "" {
+				return r.Model
+			}
+			return "unknown"
+		}
+	case GroupByAgent:
+		return func(r Record) string {
+			if r.Agent != "" {
+				return r.Agent
+			}
+			return "unknown"
+		}
+	default:
+		return recordKey
+	}
+}
+
+// AggregateBy computes a Summary grouped by the specified dimension.
+func AggregateBy(records []Record, since, until time.Time, group GroupBy) *Summary {
+	if until.IsZero() {
+		until = time.Now().UTC()
+	}
+
+	s := &Summary{Since: since, Until: until}
+	acc := make(map[string]*ToolBreakdown)
+	keyFn := groupKeyFunc(group)
+
+	for _, r := range records {
+		if !since.IsZero() && r.Timestamp.Before(since) {
+			continue
+		}
+		if r.Timestamp.After(until) {
+			continue
+		}
+		if !hasTokenData(r) {
+			continue
+		}
+
+		key := keyFn(r)
+		tb, ok := acc[key]
+		if !ok {
+			tb = &ToolBreakdown{Key: key}
+			acc[key] = tb
+		}
+
+		tb.Calls++
+		tb.InputTokens += r.InputTokens
+		tb.OutputTokens += r.OutputTokens
+		tb.TotalTokens += r.InputTokens + r.OutputTokens
+		tb.BytesIn += r.BytesIn
+		tb.BytesOut += r.BytesOut
+		tb.CacheRead += r.CacheRead
+		tb.CacheWrite += r.CacheWrite
+		tb.TotalCost += r.Cost
+
+		s.TotalCalls++
+		s.TotalInput += r.InputTokens
+		s.TotalOutput += r.OutputTokens
+		s.TotalTokens += r.InputTokens + r.OutputTokens
+		s.TotalBytesIn += r.BytesIn
+		s.TotalBytesOut += r.BytesOut
+		s.TotalCost += r.Cost
+	}
+
+	breakdown := make([]ToolBreakdown, 0, len(acc))
+	for _, tb := range acc {
+		breakdown = append(breakdown, *tb)
+	}
+	sort.Slice(breakdown, func(i, j int) bool {
+		return breakdown[i].TotalTokens > breakdown[j].TotalTokens
+	})
+	s.Breakdown = breakdown
+	return s
+}
+
+// ProviderSummary is a per-provider aggregate for the daily report.
+type ProviderSummary struct {
+	Provider     string  `json:"provider"`
+	Model        string  `json:"model,omitempty"`
+	InputTokens  int     `json:"input_tokens"`
+	OutputTokens int     `json:"output_tokens"`
+	TotalTokens  int     `json:"total_tokens"`
+	Requests     int     `json:"requests"`
+	CostUSD      float64 `json:"cost_usd,omitempty"`
+}
+
+// AggregateForDailyReport produces per-provider summaries from agentrace
+// NDJSON records within the given window. Designed for consumption by
+// the fleet-daily-report collector.
+func AggregateForDailyReport(records []Record, since, until time.Time) []ProviderSummary {
+	if until.IsZero() {
+		until = time.Now().UTC()
+	}
+
+	type provKey struct{ provider, model string }
+	acc := make(map[provKey]*ProviderSummary)
+
+	for _, r := range records {
+		if !since.IsZero() && r.Timestamp.Before(since) {
+			continue
+		}
+		if r.Timestamp.After(until) {
+			continue
+		}
+		if !hasTokenData(r) {
+			continue
+		}
+
+		prov := r.Provider
+		if prov == "" {
+			prov = "unknown"
+		}
+		k := provKey{provider: prov, model: r.Model}
+		ps, ok := acc[k]
+		if !ok {
+			ps = &ProviderSummary{Provider: prov, Model: r.Model}
+			acc[k] = ps
+		}
+		ps.InputTokens += r.InputTokens
+		ps.OutputTokens += r.OutputTokens
+		ps.TotalTokens += r.InputTokens + r.OutputTokens
+		ps.Requests++
+		ps.CostUSD += r.Cost
+	}
+
+	out := make([]ProviderSummary, 0, len(acc))
+	for _, ps := range acc {
+		out = append(out, *ps)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].TotalTokens > out[j].TotalTokens
+	})
+	return out
 }
 
 // DefaultLogPattern returns the default glob pattern for agentrace NDJSON files.

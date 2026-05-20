@@ -214,6 +214,140 @@ func TestFormatTable_TruncatesLongKeys(t *testing.T) {
 	assert.Contains(t, output, "...")
 }
 
+func TestAggregateBy_Provider(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	records := []tokenusage.Record{
+		{Timestamp: now, Provider: "minimax", Model: "M2.7", InputTokens: 100, OutputTokens: 50, Cost: 0.001},
+		{Timestamp: now, Provider: "minimax", Model: "M2.7", InputTokens: 200, OutputTokens: 80, Cost: 0.002},
+		{Timestamp: now, Provider: "anthropic", Model: "claude-4", InputTokens: 500, OutputTokens: 300, Cost: 0.01},
+		{Timestamp: now, Provider: "openai", Model: "gpt-4o", InputTokens: 300, OutputTokens: 100, Cost: 0.005},
+	}
+
+	summary := tokenusage.AggregateBy(records, time.Time{}, time.Time{}, tokenusage.GroupByProvider)
+	assert.Equal(t, 4, summary.TotalCalls)
+	assert.Len(t, summary.Breakdown, 3)
+	assert.Equal(t, "anthropic", summary.Breakdown[0].Key)
+	assert.Equal(t, 800, summary.Breakdown[0].TotalTokens)
+}
+
+func TestAggregateBy_Model(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	records := []tokenusage.Record{
+		{Timestamp: now, Model: "claude-4", InputTokens: 100, OutputTokens: 50},
+		{Timestamp: now, Model: "claude-4", InputTokens: 200, OutputTokens: 80},
+		{Timestamp: now, Model: "gpt-4o", InputTokens: 300, OutputTokens: 100},
+	}
+
+	summary := tokenusage.AggregateBy(records, time.Time{}, time.Time{}, tokenusage.GroupByModel)
+	assert.Equal(t, 3, summary.TotalCalls)
+	assert.Len(t, summary.Breakdown, 2)
+	assert.Equal(t, "claude-4", summary.Breakdown[0].Key)
+	assert.Equal(t, 430, summary.Breakdown[0].TotalTokens)
+}
+
+func TestAggregateBy_Agent(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	records := []tokenusage.Record{
+		{Timestamp: now, Agent: "cursor-parent", InputTokens: 500, OutputTokens: 200},
+		{Timestamp: now, Agent: "claude-code", InputTokens: 300, OutputTokens: 100},
+		{Timestamp: now, Agent: "codex", InputTokens: 200, OutputTokens: 80},
+		{Timestamp: now, Agent: "cursor-parent", InputTokens: 100, OutputTokens: 50},
+	}
+
+	summary := tokenusage.AggregateBy(records, time.Time{}, time.Time{}, tokenusage.GroupByAgent)
+	assert.Equal(t, 4, summary.TotalCalls)
+	assert.Len(t, summary.Breakdown, 3)
+	assert.Equal(t, "cursor-parent", summary.Breakdown[0].Key)
+	assert.Equal(t, 850, summary.Breakdown[0].TotalTokens)
+	assert.Equal(t, 2, summary.Breakdown[0].Calls)
+}
+
+func TestAggregateBy_UnknownGroupFallsBackToTool(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	records := []tokenusage.Record{
+		{Timestamp: now, Category: "mcp", Detail: "mem0:search", InputTokens: 100},
+	}
+
+	summary := tokenusage.AggregateBy(records, time.Time{}, time.Time{}, "invalid")
+	assert.Len(t, summary.Breakdown, 1)
+	assert.Equal(t, "mcp:mem0:search", summary.Breakdown[0].Key)
+}
+
+func TestAggregateBy_MissingFieldsDefault(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	records := []tokenusage.Record{
+		{Timestamp: now, InputTokens: 100},
+		{Timestamp: now, Provider: "minimax", InputTokens: 200},
+	}
+
+	summary := tokenusage.AggregateBy(records, time.Time{}, time.Time{}, tokenusage.GroupByProvider)
+	assert.Len(t, summary.Breakdown, 2)
+
+	keys := make(map[string]bool)
+	for _, b := range summary.Breakdown {
+		keys[b.Key] = true
+	}
+	assert.True(t, keys["unknown"])
+	assert.True(t, keys["minimax"])
+}
+
+func TestAggregateForDailyReport(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	records := []tokenusage.Record{
+		{Timestamp: now, Provider: "minimax", Model: "M2.7", InputTokens: 100, OutputTokens: 50, Cost: 0.001},
+		{Timestamp: now, Provider: "minimax", Model: "M2.7", InputTokens: 200, OutputTokens: 80, Cost: 0.002},
+		{Timestamp: now, Provider: "anthropic", Model: "claude-4", InputTokens: 500, OutputTokens: 300, Cost: 0.01},
+	}
+
+	summaries := tokenusage.AggregateForDailyReport(records, time.Time{}, time.Time{})
+	assert.Len(t, summaries, 2)
+	assert.Equal(t, "anthropic", summaries[0].Provider)
+	assert.Equal(t, 800, summaries[0].TotalTokens)
+	assert.Equal(t, 1, summaries[0].Requests)
+	assert.Equal(t, "minimax", summaries[1].Provider)
+	assert.Equal(t, 430, summaries[1].TotalTokens)
+	assert.Equal(t, 2, summaries[1].Requests)
+}
+
+func TestAggregateForDailyReport_TimeFilter(t *testing.T) {
+	base := time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC)
+	records := []tokenusage.Record{
+		{Timestamp: base.Add(-25 * time.Hour), Provider: "old", InputTokens: 100},
+		{Timestamp: base, Provider: "current", InputTokens: 200},
+	}
+
+	summaries := tokenusage.AggregateForDailyReport(records, base.Add(-1*time.Hour), base.Add(time.Hour))
+	assert.Len(t, summaries, 1)
+	assert.Equal(t, "current", summaries[0].Provider)
+}
+
+func TestNewRecordFields_RoundTrip(t *testing.T) {
+	r := tokenusage.Record{
+		Timestamp:    time.Now().UTC().Truncate(time.Second),
+		Provider:     "minimax",
+		Agent:        "cursor-parent",
+		Server:       "sprintboard",
+		Tool:         "ticket_create",
+		SessionID:    "sess-123",
+		InputTokens:  100,
+		OutputTokens: 50,
+		Success:      true,
+	}
+
+	data, err := json.Marshal(r)
+	require.NoError(t, err)
+
+	var parsed tokenusage.Record
+	require.NoError(t, json.Unmarshal(data, &parsed))
+
+	assert.Equal(t, r.Provider, parsed.Provider)
+	assert.Equal(t, r.Agent, parsed.Agent)
+	assert.Equal(t, r.Server, parsed.Server)
+	assert.Equal(t, r.Tool, parsed.Tool)
+	assert.Equal(t, r.SessionID, parsed.SessionID)
+	assert.True(t, parsed.Success)
+}
+
 func TestDefaultLogPattern(t *testing.T) {
 	pattern := tokenusage.DefaultLogPattern()
 	assert.Contains(t, pattern, "agentrace")

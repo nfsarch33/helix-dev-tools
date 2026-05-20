@@ -12,10 +12,11 @@ import (
 )
 
 var tokenUsageFlags struct {
-	last   int
-	since  string
-	json   bool
-	source string
+	last    int
+	since   string
+	json    bool
+	source  string
+	groupBy string
 }
 
 var tokenUsageCmd = &cobra.Command{
@@ -24,10 +25,13 @@ var tokenUsageCmd = &cobra.Command{
 	Long: `Reads agentrace NDJSON files and aggregates per-tool-call token counts
 (input/output/total), with optional cost tracking.
 
-  cursor-tools token-usage              # All available data
-  cursor-tools token-usage --last 24    # Last 24 hours
-  cursor-tools token-usage --json       # JSON output
-  cursor-tools token-usage --source <path>  # Custom NDJSON file`,
+  cursor-tools token-usage                        # All available data
+  cursor-tools token-usage --last 24              # Last 24 hours
+  cursor-tools token-usage --json                 # JSON output
+  cursor-tools token-usage --group-by provider    # Group by provider
+  cursor-tools token-usage --group-by model       # Group by model
+  cursor-tools token-usage --group-by agent       # Group by agent
+  cursor-tools token-usage --source <path>        # Custom NDJSON file`,
 	RunE: runTokenUsage,
 }
 
@@ -36,6 +40,7 @@ func init() {
 	tokenUsageCmd.Flags().StringVar(&tokenUsageFlags.since, "since", "", "Start time (RFC3339 or YYYY-MM-DD)")
 	tokenUsageCmd.Flags().BoolVar(&tokenUsageFlags.json, "json", false, "Output as JSON")
 	tokenUsageCmd.Flags().StringVar(&tokenUsageFlags.source, "source", "", "Custom NDJSON file path (default: ~/logs/runx/agentrace*.ndjson)")
+	tokenUsageCmd.Flags().StringVar(&tokenUsageFlags.groupBy, "group-by", "", "Group results by: tool, provider, model, agent")
 }
 
 func runTokenUsage(cmd *cobra.Command, args []string) error {
@@ -71,7 +76,13 @@ func runTokenUsage(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	summary := tokenusage.Aggregate(records, since, time.Time{})
+	var summary *tokenusage.Summary
+	if tokenUsageFlags.groupBy != "" {
+		group := tokenusage.GroupBy(tokenUsageFlags.groupBy)
+		summary = tokenusage.AggregateBy(records, since, time.Time{}, group)
+	} else {
+		summary = tokenusage.Aggregate(records, since, time.Time{})
+	}
 
 	if tokenUsageFlags.json {
 		enc := json.NewEncoder(os.Stdout)
