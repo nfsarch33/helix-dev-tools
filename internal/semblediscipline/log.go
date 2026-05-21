@@ -120,8 +120,17 @@ func detectAgentID() string {
 
 // StrictModeEnabled returns true when CURSOR_TOOLS_SEMBLE_STRICT is set.
 func StrictModeEnabled() bool {
-	v := os.Getenv("CURSOR_TOOLS_SEMBLE_STRICT")
-	switch v {
+	return envBool("CURSOR_TOOLS_SEMBLE_STRICT")
+}
+
+// WarnModeEnabled returns true when CURSOR_TOOLS_SEMBLE_WARN is set.
+// Warn mode shows an advisory prompt (Ask) but does not block.
+func WarnModeEnabled() bool {
+	return envBool("CURSOR_TOOLS_SEMBLE_WARN")
+}
+
+func envBool(key string) bool {
+	switch os.Getenv(key) {
 	case "1", "true", "TRUE", "yes", "YES", "on", "ON":
 		return true
 	default:

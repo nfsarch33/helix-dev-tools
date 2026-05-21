@@ -78,6 +78,9 @@ func evaluateSembleDiscipline(command, hookName string) *hookio.Response {
 			agentMsg+" Re-run with semble search, or use rg/grep -F against a single known file path.",
 		)
 	}
+	if semblediscipline.WarnModeEnabled() {
+		return hookio.Ask(userMsg, agentMsg)
+	}
 	return hookio.Allow()
 }
 
