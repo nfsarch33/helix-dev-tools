@@ -78,6 +78,7 @@ func init() {
 	rootCmd.AddCommand(sprintFanoutCmd)
 	rootCmd.AddCommand(sprintDispatchCmd)
 	rootCmd.AddCommand(sprintboardMonitorCmd)
+	rootCmd.AddCommand(fleetReportCmd)
 }
 
 var versionCmd = &cobra.Command{
