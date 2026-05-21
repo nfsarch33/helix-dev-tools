@@ -20,6 +20,7 @@ import (
 	"github.com/nfsarch33/helix-dev-tools/internal/logger"
 	"github.com/nfsarch33/helix-dev-tools/internal/metrics"
 	"github.com/nfsarch33/helix-dev-tools/internal/outcomes"
+	"github.com/nfsarch33/helix-dev-tools/internal/tokenusage"
 )
 
 var housekeepingCmd = &cobra.Command{
@@ -95,6 +96,7 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 		h.runSessionHandoff()
 		h.runSyncCounts()
 		h.runPromoteLearnings()
+		h.writeTokenSummary()
 		h.cleanCoordinationSignals()
 		h.syncRepo()
 	} else {
@@ -103,6 +105,22 @@ func (h *housekeepingHandler) Handle(_ context.Context, input *hookio.Input) (*h
 	}
 
 	return hookio.Empty(), nil
+}
+
+func (h *housekeepingHandler) writeTokenSummary() {
+	logsDir := filepath.Join(h.paths.Home, "logs", "runx")
+	since := time.Now().Add(-8 * time.Hour)
+	summary := tokenusage.EstimateSessionTokens(logsDir, since)
+	summary.Agent = "cursor-parent"
+	if err := tokenusage.WriteSessionSummary("", summary); err != nil {
+		h.log.LogEntry(logger.Entry{
+			Level:   "warn",
+			Message: "token summary write failed",
+			Hook:    "housekeeping",
+			Result:  "error",
+			Fields:  map[string]any{"error": err.Error()},
+		})
+	}
 }
 
 // fleetPreflightHTTPGet is replaceable for tests (e.g. stub that never hits the network).

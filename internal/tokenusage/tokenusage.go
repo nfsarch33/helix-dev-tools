@@ -406,3 +406,110 @@ func DefaultMetricsPath() string {
 	}
 	return filepath.Join(home, "logs", "cursor-tools-metrics.jsonl")
 }
+
+// DefaultDailyPath returns the path to the token-usage-daily NDJSON file.
+func DefaultDailyPath() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "token-usage-daily.ndjson"
+	}
+	return filepath.Join(home, "logs", "runx", "token-usage-daily.ndjson")
+}
+
+// SessionSummary is a single NDJSON line written at session end.
+type SessionSummary struct {
+	TS             string  `json:"ts"`
+	Agent          string  `json:"agent"`
+	SessionID      string  `json:"session_id,omitempty"`
+	MCPCalls       int     `json:"mcp_calls"`
+	GrepFallbacks  int     `json:"grep_fallbacks"`
+	InputTokensEst int     `json:"input_tokens_estimate"`
+	OutputTokensEst int    `json:"output_tokens_estimate"`
+	TotalTokensEst int     `json:"total_tokens_estimate"`
+	CostUSDEst     float64 `json:"cost_usd_estimate"`
+	Model          string  `json:"model,omitempty"`
+	TaskSummary    string  `json:"task_summary,omitempty"`
+}
+
+// EstimateSessionTokens reads agentrace events since the given time and
+// produces a rough token estimate. Heuristics: each MCP tool call ~1000
+// input + 500 output tokens; each grep fallback ~2000 input (file reads).
+func EstimateSessionTokens(agentraceDir string, since time.Time) SessionSummary {
+	pattern := filepath.Join(agentraceDir, "agentrace*.ndjson")
+	matches, _ := filepath.Glob(pattern)
+
+	var mcpCalls, grepFallbacks int
+	for _, path := range matches {
+		f, err := os.Open(path)
+		if err != nil {
+			continue
+		}
+		scanner := bufio.NewScanner(f)
+		scanner.Buffer(make([]byte, 1<<16), 1<<16)
+		for scanner.Scan() {
+			var ev struct {
+				TS        string `json:"ts"`
+				EventType string `json:"event_type"`
+				Event     string `json:"event"`
+				Tool      string `json:"tool"`
+			}
+			if json.Unmarshal(scanner.Bytes(), &ev) != nil {
+				continue
+			}
+			ts, err := time.Parse(time.RFC3339, ev.TS)
+			if err != nil {
+				continue
+			}
+			if ts.Before(since) {
+				continue
+			}
+			eventKey := ev.EventType
+			if eventKey == "" {
+				eventKey = ev.Event
+			}
+			switch {
+			case eventKey == "grep_fallback" || eventKey == "semble_discipline":
+				grepFallbacks++
+			case ev.Tool != "":
+				mcpCalls++
+			}
+		}
+		f.Close()
+	}
+
+	inputEst := mcpCalls*1000 + grepFallbacks*2000
+	outputEst := mcpCalls * 500
+	totalEst := inputEst + outputEst
+	costEst := float64(inputEst)*3.0/1e6 + float64(outputEst)*15.0/1e6
+
+	return SessionSummary{
+		TS:              time.Now().Format(time.RFC3339),
+		MCPCalls:        mcpCalls,
+		GrepFallbacks:   grepFallbacks,
+		InputTokensEst:  inputEst,
+		OutputTokensEst: outputEst,
+		TotalTokensEst:  totalEst,
+		CostUSDEst:      costEst,
+	}
+}
+
+// WriteSessionSummary appends a session summary to the daily NDJSON file.
+func WriteSessionSummary(path string, s SessionSummary) error {
+	if path == "" {
+		path = DefaultDailyPath()
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("tokenusage: mkdir: %w", err)
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		return fmt.Errorf("tokenusage: marshal: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("tokenusage: open: %w", err)
+	}
+	defer f.Close()
+	_, err = f.Write(append(data, '\n'))
+	return err
+}
