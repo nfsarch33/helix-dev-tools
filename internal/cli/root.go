@@ -72,6 +72,7 @@ func init() {
 	rootCmd.AddCommand(sprintCmd)
 	rootCmd.AddCommand(handoffCmd)
 	rootCmd.AddCommand(agentraceReportCmd)
+	rootCmd.AddCommand(sembleCoverageCmd)
 	rootCmd.AddCommand(onboardCmd)
 	rootCmd.AddCommand(importMigrateCmd)
 	rootCmd.AddCommand(sprintFanoutCmd)
