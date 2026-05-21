@@ -15,7 +15,7 @@ var sembleDisciplineCmd = &cobra.Command{
 	Short: "beforeShellExecution: advisory Semble-first check for exploratory rg/grep/find",
 	Long: `Reads hook JSON from stdin (same contract as guard-shell).
 Logs exploratory search commands to ~/logs/runx/semble-discipline.ndjson.
-When CURSOR_TOOLS_SEMBLE_STRICT=1, returns permission=ask for exploratory matches.
+When CURSOR_TOOLS_SEMBLE_STRICT=1, returns permission=deny for exploratory matches.
 
 Typically chained from guard-shell or invoked directly from hooks.json.`,
 	RunE: func(cmd *cobra.Command, _ []string) error {
@@ -78,7 +78,7 @@ func evaluateSembleDiscipline(command, hookName string) *hookio.Response {
 			agentMsg+" Re-run with semble search, or use rg/grep -F against a single known file path.",
 		)
 	}
-	return hookio.Ask(userMsg, agentMsg)
+	return hookio.Allow()
 }
 
 // sembleDisciplineAdvisory is invoked from guard-shell before pattern matching.

@@ -4,11 +4,11 @@ import (
 	"testing"
 )
 
-func TestEvaluateSembleDiscipline_ExploratoryAsk(t *testing.T) {
+func TestEvaluateSembleDiscipline_ExploratoryAllow(t *testing.T) {
 	t.Setenv("CURSOR_TOOLS_SEMBLE_STRICT", "")
 	resp := evaluateSembleDiscipline(`rg "foo" .`, "test")
-	if resp.Permission != "ask" {
-		t.Fatalf("got permission %q, want ask", resp.Permission)
+	if resp.Permission != "allow" {
+		t.Fatalf("got permission %q, want allow", resp.Permission)
 	}
 }
 

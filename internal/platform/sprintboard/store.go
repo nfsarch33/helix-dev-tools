@@ -78,7 +78,8 @@ type Store struct {
 	db *sql.DB
 }
 
-func DefaultDBPath() string {
+// DefaultDBPath returns the default database path. It is a variable so tests can override it.
+var DefaultDBPath = func() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".config", "helix-dev-tools", "sprintboard.db")
 }

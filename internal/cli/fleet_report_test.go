@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nfsarch33/helix-dev-tools/internal/platform/sprintboard"
 )
 
 func TestFleetReport_Registered(t *testing.T) {
@@ -139,6 +141,74 @@ func TestFormatFleetReport(t *testing.T) {
 		if !strings.Contains(output, want) {
 			t.Errorf("output missing %q", want)
 		}
+	}
+}
+
+func TestCollectSprintSection_WithTempDB(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "test-sprint.db")
+
+	store, err := sprintboard.Open(dbPath)
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+
+	if err := store.CreateSprint(sprintboard.Sprint{
+		ID:     "v7400-test",
+		Name:   "Test Sprint",
+		Status: sprintboard.SprintActive,
+	}); err != nil {
+		t.Fatalf("create sprint: %v", err)
+	}
+
+	tickets := []struct {
+		id     string
+		status sprintboard.TicketStatus
+	}{
+		{"T-1", sprintboard.StatusDone},
+		{"T-2", sprintboard.StatusDone},
+		{"T-3", sprintboard.StatusInProgress},
+		{"T-4", sprintboard.StatusBlocked},
+		{"T-5", sprintboard.StatusBacklog},
+	}
+	for _, tc := range tickets {
+		if err := store.CreateTicket(sprintboard.Ticket{
+			ID:       tc.id,
+			SprintID: "v7400-test",
+			Title:    "Ticket " + tc.id,
+			Status:   tc.status,
+		}); err != nil {
+			t.Fatalf("create ticket %s: %v", tc.id, err)
+		}
+	}
+	store.Close()
+
+	origFn := sprintboard.DefaultDBPath
+	sprintboard.DefaultDBPath = func() string { return dbPath }
+	defer func() { sprintboard.DefaultDBPath = origFn }()
+
+	sect := collectSprintSection("v7400-test")
+	if !sect.Available {
+		t.Fatal("section should be available")
+	}
+	if sect.SprintID != "v7400-test" {
+		t.Fatalf("sprint ID = %q, want v7400-test", sect.SprintID)
+	}
+	if sect.Total != 5 {
+		t.Fatalf("total = %d, want 5", sect.Total)
+	}
+	if sect.Done != 2 {
+		t.Fatalf("done = %d, want 2", sect.Done)
+	}
+	if sect.InProgress != 1 {
+		t.Fatalf("in_progress = %d, want 1", sect.InProgress)
+	}
+	if sect.Blocked != 1 {
+		t.Fatalf("blocked = %d, want 1", sect.Blocked)
+	}
+	wantPct := 40.0
+	if sect.ProgressPct < wantPct-0.1 || sect.ProgressPct > wantPct+0.1 {
+		t.Fatalf("progress = %.1f%%, want %.1f%%", sect.ProgressPct, wantPct)
 	}
 }
 
