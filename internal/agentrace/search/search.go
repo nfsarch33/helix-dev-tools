@@ -28,6 +28,8 @@ type Result struct {
 	Score float64
 }
 
+var searchNow = time.Now
+
 // Search loads events from the NDJSON file, filters by time window,
 // builds a BM25 index, and returns ranked results for the query.
 func Search(path string, query string, since time.Duration, maxResults int) ([]Result, error) {
@@ -53,7 +55,7 @@ func loadEvents(path string, since time.Duration) ([]Event, error) {
 		return nil, err
 	}
 	defer func() { _ = f.Close() }()
-	cutoff := time.Now().Add(-since)
+	cutoff := searchNow().Add(-since)
 	var events []Event
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)

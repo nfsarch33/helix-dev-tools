@@ -21,6 +21,8 @@ var observabilityReportFlags struct {
 	since   string
 }
 
+var observabilityNow = time.Now
+
 var observabilityReportCmd = &cobra.Command{
 	Use:   "observability-report",
 	Short: "Unified NDJSON observability report across all runx streams",
@@ -63,7 +65,7 @@ func runObservabilityReport(w io.Writer, logsDir, since string) error {
 	if err != nil {
 		return fmt.Errorf("invalid --since: %w", err)
 	}
-	cutoff := time.Now().Add(-sinceD)
+	cutoff := observabilityNow().Add(-sinceD)
 
 	pattern := filepath.Join(logsDir, "*.ndjson")
 	files, err := filepath.Glob(pattern)
@@ -184,7 +186,7 @@ func parseNDJSONTime(raw string) time.Time {
 
 func formatObservabilityReport(w io.Writer, summaries []streamSummary, hourlyMap map[string]map[string]int, since string) {
 	_, _ = fmt.Fprintf(w, "# Observability Report (--since %s)\n\n", since)
-	_, _ = fmt.Fprintf(w, "Generated: %s\n\n", time.Now().UTC().Format(time.RFC3339))
+	_, _ = fmt.Fprintf(w, "Generated: %s\n\n", observabilityNow().UTC().Format(time.RFC3339))
 
 	_, _ = fmt.Fprintln(w, "## Per-Stream Summary")
 	_, _ = fmt.Fprintln(w)

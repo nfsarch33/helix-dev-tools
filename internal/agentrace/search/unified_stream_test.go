@@ -8,6 +8,7 @@ import (
 )
 
 func TestSearch_UnifiedStreamFromMultipleServers(t *testing.T) {
+	withSearchNow(t, "2026-05-20T11:00:00+10:00")
 	dir := t.TempDir()
 	path := filepath.Join(dir, "agentrace-mcp.ndjson")
 
@@ -54,6 +55,17 @@ func TestSearch_UnifiedStreamFromMultipleServers(t *testing.T) {
 	if len(allResults) < 3 {
 		t.Fatalf("expected at least 3 results for 'cursor' query across both servers, got %d", len(allResults))
 	}
+}
+
+func withSearchNow(t *testing.T, raw string) {
+	t.Helper()
+	fixed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := searchNow
+	searchNow = func() time.Time { return fixed }
+	t.Cleanup(func() { searchNow = previous })
 }
 
 func TestSearch_ReadsLiveUnifiedStream(t *testing.T) {

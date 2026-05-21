@@ -6,9 +6,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestObservabilityReport_ReadsAllStreams(t *testing.T) {
+	withObservabilityNow(t, "2026-05-15T12:00:00+10:00")
 	tmp := t.TempDir()
 
 	writeFixture(t, tmp, "git.ndjson", []string{
@@ -46,6 +48,7 @@ func TestObservabilityReport_ReadsAllStreams(t *testing.T) {
 }
 
 func TestObservabilityReport_TimeRangeComputed(t *testing.T) {
+	withObservabilityNow(t, "2026-05-15T12:00:00+10:00")
 	tmp := t.TempDir()
 
 	writeFixture(t, tmp, "tunnel.ndjson", []string{
@@ -69,6 +72,7 @@ func TestObservabilityReport_TimeRangeComputed(t *testing.T) {
 }
 
 func TestObservabilityReport_HourlyTimeline(t *testing.T) {
+	withObservabilityNow(t, "2026-05-15T12:00:00+10:00")
 	tmp := t.TempDir()
 
 	writeFixture(t, tmp, "git.ndjson", []string{
@@ -106,6 +110,7 @@ func TestObservabilityReport_EmptyDirectory(t *testing.T) {
 }
 
 func TestObservabilityReport_MarkdownOutput(t *testing.T) {
+	withObservabilityNow(t, "2026-05-15T12:00:00+10:00")
 	tmp := t.TempDir()
 
 	writeFixture(t, tmp, "git.ndjson", []string{
@@ -136,4 +141,15 @@ func writeFixture(t *testing.T, dir, name string, lines []string) {
 	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func withObservabilityNow(t *testing.T, raw string) {
+	t.Helper()
+	fixed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previous := observabilityNow
+	observabilityNow = func() time.Time { return fixed }
+	t.Cleanup(func() { observabilityNow = previous })
 }
