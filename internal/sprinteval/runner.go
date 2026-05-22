@@ -357,3 +357,114 @@ func gradeScore(score float64) string {
 		return "RED"
 	}
 }
+
+// ParseAgentrace reads an NDJSON agentrace log file and returns all
+// parsed events. Lines that fail to decode are skipped silently.
+// Default path: ~/logs/runx/agentrace-mcp.ndjson
+func ParseAgentrace(path string) ([]AgentraceEvent, error) {
+	if path == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("agentrace: resolve home: %w", err)
+		}
+		path = filepath.Join(home, "logs", "runx", "agentrace-mcp.ndjson")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("agentrace: open %s: %w", path, err)
+	}
+	defer f.Close()
+
+	var events []AgentraceEvent
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 256*1024), 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		var ev AgentraceEvent
+		if err := json.Unmarshal(line, &ev); err != nil {
+			continue
+		}
+		events = append(events, ev)
+	}
+
+	if err := scanner.Err(); err != nil {
+		return events, fmt.Errorf("agentrace: scan: %w", err)
+	}
+	return events, nil
+}
+
+// GenerateReport produces a Markdown report from agentrace events and
+// optional sprintboard data. The report includes tool call statistics,
+// error breakdown, and sprint metrics when available.
+func GenerateReport(events []AgentraceEvent, sprint *SprintData) string {
+	var sb strings.Builder
+
+	sb.WriteString("# Sprint Evaluation Report\n\n")
+	sb.WriteString(fmt.Sprintf("**Generated**: %s\n\n", time.Now().Format(time.RFC3339)))
+
+	if sprint != nil {
+		sb.WriteString("## Sprint Overview\n\n")
+		sb.WriteString(fmt.Sprintf("- **Sprint**: %s\n", sprint.SprintID))
+		sb.WriteString(fmt.Sprintf("- **Total Tickets**: %d\n", sprint.TotalTickets))
+		sb.WriteString(fmt.Sprintf("- **Completed**: %d\n", sprint.CompletedTickets))
+		sb.WriteString(fmt.Sprintf("- **Completion Rate**: %.1f%%\n", sprint.CompletionRate*100))
+		if sprint.AvgTimeToClaim > 0 {
+			sb.WriteString(fmt.Sprintf("- **Avg Time-to-Claim**: %s\n", time.Duration(sprint.AvgTimeToClaim)*time.Second))
+		}
+		sb.WriteString("\n")
+	}
+
+	if len(events) == 0 {
+		sb.WriteString("## Agentrace\n\nNo events found.\n")
+		return sb.String()
+	}
+
+	// Compute tool call stats
+	toolCounts := make(map[string]int)
+	toolErrors := make(map[string]int)
+	var totalDuration int64
+	errorCount := 0
+
+	for _, ev := range events {
+		if ev.Tool != "" {
+			toolCounts[ev.Tool]++
+			totalDuration += ev.DurationMS
+		}
+		if ev.Error != "" {
+			errorCount++
+			if ev.Tool != "" {
+				toolErrors[ev.Tool]++
+			}
+		}
+	}
+
+	sb.WriteString("## Agentrace Summary\n\n")
+	sb.WriteString(fmt.Sprintf("- **Total Events**: %d\n", len(events)))
+	sb.WriteString(fmt.Sprintf("- **Tool Calls**: %d\n", len(toolCounts)))
+	sb.WriteString(fmt.Sprintf("- **Errors**: %d (%.1f%%)\n", errorCount, float64(errorCount)/float64(len(events))*100))
+	if len(toolCounts) > 0 {
+		avgDur := totalDuration / int64(len(events))
+		sb.WriteString(fmt.Sprintf("- **Avg Duration**: %dms\n", avgDur))
+	}
+	sb.WriteString("\n")
+
+	// Tool breakdown table
+	if len(toolCounts) > 0 {
+		sb.WriteString("## Tool Call Breakdown\n\n")
+		sb.WriteString("| Tool | Calls | Errors | Error Rate |\n")
+		sb.WriteString("|------|-------|--------|------------|\n")
+		for tool, count := range toolCounts {
+			errs := toolErrors[tool]
+			rate := float64(errs) / float64(count) * 100
+			sb.WriteString(fmt.Sprintf("| %s | %d | %d | %.1f%% |\n", tool, count, errs, rate))
+		}
+		sb.WriteString("\n")
+	}
+
+	return sb.String()
+}

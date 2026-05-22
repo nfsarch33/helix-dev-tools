@@ -1,7 +1,11 @@
 package sprinteval
 
 import (
+	"encoding/json"
+	"fmt"
+	"io"
 	"math"
+	"net/http"
 	"time"
 )
 
@@ -236,4 +240,66 @@ func QualityTrend(history []float64) string {
 	default:
 		return "stable"
 	}
+}
+
+// SprintData holds metrics fetched from the Sprintboard REST API.
+type SprintData struct {
+	SprintID         string  `json:"sprint_id"`
+	SprintName       string  `json:"name"`
+	TotalTickets     int     `json:"total_tickets"`
+	CompletedTickets int     `json:"completed_tickets"`
+	InProgress       int     `json:"in_progress"`
+	Blocked          int     `json:"blocked"`
+	CompletionRate   float64 `json:"completion_rate"`
+	AvgTimeToClaim   float64 `json:"avg_time_to_claim_seconds"`
+}
+
+// sprintAPIResponse wraps the Sprintboard REST response envelope.
+type sprintAPIResponse struct {
+	Data SprintData `json:"data"`
+}
+
+const defaultSprintboardBaseURL = "http://localhost:9400"
+
+// FetchSprintMetrics retrieves sprint-level metrics from the Sprintboard
+// REST API. If baseURL is empty, defaults to http://localhost:9400.
+func FetchSprintMetrics(baseURL, sprintID string) (*SprintData, error) {
+	if baseURL == "" {
+		baseURL = defaultSprintboardBaseURL
+	}
+	if sprintID == "" {
+		return nil, fmt.Errorf("sprinteval: sprint_id is required")
+	}
+
+	url := fmt.Sprintf("%s/api/v1/sprints/%s", baseURL, sprintID)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("sprinteval: fetch sprint %s: %w", sprintID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("sprinteval: sprint %s not found", sprintID)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("sprinteval: sprint %s: status %d: %s", sprintID, resp.StatusCode, string(body))
+	}
+
+	var envelope sprintAPIResponse
+	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+		return nil, fmt.Errorf("sprinteval: decode sprint %s: %w", sprintID, err)
+	}
+
+	data := envelope.Data
+	if data.SprintID == "" {
+		data.SprintID = sprintID
+	}
+	if data.TotalTickets > 0 && data.CompletionRate == 0 {
+		data.CompletionRate = float64(data.CompletedTickets) / float64(data.TotalTickets)
+	}
+
+	return &data, nil
 }
