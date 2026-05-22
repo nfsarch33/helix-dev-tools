@@ -127,15 +127,17 @@ func (e *AgentraceEvent) normalise() {
 
 // SprintReport is the complete evaluation output for a sprint.
 type SprintReport struct {
-	SprintID     string         `json:"sprint_id"`
-	SprintName   string         `json:"sprint_name"`
-	EvaluatedAt  time.Time      `json:"evaluated_at"`
-	QualityScore float64        `json:"quality_score"`
-	QualityGrade string         `json:"quality_grade"`
-	Metrics      SprintMetrics  `json:"metrics"`
-	Breakdown    []MetricDetail `json:"breakdown"`
-	Trends       []TrendPoint   `json:"trends,omitempty"`
-	Findings     []string       `json:"findings,omitempty"`
+	SprintID     string             `json:"sprint_id"`
+	SprintName   string             `json:"sprint_name"`
+	EvaluatedAt  time.Time          `json:"evaluated_at"`
+	QualityScore float64            `json:"quality_score"`
+	QualityGrade string             `json:"quality_grade"`
+	Metrics      SprintMetrics      `json:"metrics"`
+	Breakdown    []MetricDetail     `json:"breakdown"`
+	Latency      LatencyStats       `json:"latency"`
+	ToolStats    []ToolLatencyEntry `json:"tool_stats,omitempty"`
+	Trends       []TrendPoint       `json:"trends,omitempty"`
+	Findings     []string           `json:"findings,omitempty"`
 }
 
 // MetricDetail provides per-metric breakdown in the report.
@@ -191,6 +193,8 @@ func (se *SprintEval) Run(input SprintInput) (*SprintReport, error) {
 		QualityGrade: gradeScore(qualityScore),
 		Metrics:      metrics,
 		Breakdown:    breakdown,
+		Latency:      ComputeLatencyStats(events),
+		ToolStats:    ComputeToolHistogram(events),
 		Findings:     se.generateFindings(metrics, input),
 	}
 
@@ -364,6 +368,30 @@ func (se *SprintEval) renderMarkdown(report *SprintReport) string {
 	sb.WriteString(fmt.Sprintf("- **Total Tokens**: %d\n", report.Metrics.TotalTokens))
 	if report.Metrics.AvgTokensPerTask > 0 {
 		sb.WriteString(fmt.Sprintf("- **Avg Tokens/Task**: %d\n", report.Metrics.AvgTokensPerTask))
+	}
+
+	if report.Latency.Count > 0 {
+		sb.WriteString("\n## Latency (ms)\n\n")
+		sb.WriteString("| Count | Min | P50 | P95 | Max |\n")
+		sb.WriteString("|-------|-----|-----|-----|-----|\n")
+		sb.WriteString(fmt.Sprintf("| %d | %d | %d | %d | %d |\n",
+			report.Latency.Count,
+			report.Latency.MinMs,
+			report.Latency.P50Ms,
+			report.Latency.P95Ms,
+			report.Latency.MaxMs,
+		))
+	}
+
+	if len(report.ToolStats) > 0 {
+		sb.WriteString("\n## Tool Histogram\n\n")
+		sb.WriteString("| Tool | Calls | Failures | P50 (ms) | P95 (ms) | Max (ms) |\n")
+		sb.WriteString("|------|-------|----------|----------|----------|----------|\n")
+		for _, t := range report.ToolStats {
+			sb.WriteString(fmt.Sprintf("| %s | %d | %d | %d | %d | %d |\n",
+				t.Tool, t.Calls, t.Failures, t.P50Ms, t.P95Ms, t.MaxMs,
+			))
+		}
 	}
 
 	if len(report.Findings) > 0 {
