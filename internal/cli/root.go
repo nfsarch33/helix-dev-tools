@@ -1,6 +1,10 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/nfsarch33/helix-dev-tools/internal/sprinteval"
+)
 
 var version = "dev"
 
@@ -79,6 +83,8 @@ func init() {
 	rootCmd.AddCommand(sprintDispatchCmd)
 	rootCmd.AddCommand(sprintboardMonitorCmd)
 	rootCmd.AddCommand(fleetReportCmd)
+	rootCmd.AddCommand(mem0WatchdogCmd)
+	rootCmd.AddCommand(sprinteval.NewSprintEvalCmd())
 }
 
 var versionCmd = &cobra.Command{
