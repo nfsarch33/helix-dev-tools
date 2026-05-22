@@ -29,6 +29,7 @@ var guardMcpCmd = &cobra.Command{
 type guardMcpHandler struct {
 	log            *logger.Logger
 	metricsPath    string
+	agentracePath  string
 	outcomeEmitter outcomes.Emitter
 }
 
@@ -113,6 +114,21 @@ func (h *guardMcpHandler) Handle(_ context.Context, input *hookio.Input) (*hooki
 		extraMeta:   extraMeta,
 	})
 
+	// T-8800-B23: agentrace NDJSON emit on every MCP call.
+	if h.agentracePath != "" {
+		_ = appendAgentraceEvent(h.agentracePath, guardMcpAgentraceEvent{
+			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			Source:    "guard-mcp",
+			Tool:      input.ToolName,
+			Server:    serverName,
+			Action:    actionStr,
+			LatencyMs: latencyMs,
+			BytesIn:   bytesIn,
+			Memory:    memoryLayer,
+			MemoryOp:  memoryOp,
+		})
+	}
+
 	return resp, nil
 }
 
@@ -121,6 +137,7 @@ func runGuardMcp(stdin *os.File, stdout *os.File) error {
 	handler := &guardMcpHandler{
 		log:            logger.New(paths.LogFile("mcp-audit")),
 		metricsPath:    paths.MetricsFile(),
+		agentracePath:  defaultAgentracePath(),
 		outcomeEmitter: hookOutcomeEmitter(paths),
 	}
 
