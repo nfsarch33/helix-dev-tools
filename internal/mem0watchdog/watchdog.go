@@ -1,3 +1,5 @@
+// runx-public-repo-gate: allow-file network_topology
+// Mem0 OSS canonical local port is 18888 — watchdog default; not a private host.
 package mem0watchdog
 
 import (
