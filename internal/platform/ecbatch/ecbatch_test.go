@@ -156,3 +156,55 @@ func TestBatchNumberExtraction(t *testing.T) {
 		t.Errorf("Batch number incorrect: got %d, want 42", batches[0].BatchNum)
 	}
 }
+
+func TestScanBatchStatus_PackageScanning(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	scanner := NewScanner(WithWorktreeRoot(tmpDir), WithMaxBatches(5))
+
+	createTestBatchWorktree(t, tmpDir, "ec-batch1", "feat/test")
+
+	batchPath := filepath.Join(tmpDir, "ec-batch1")
+	for _, pkg := range []string{"internal/alpha", "internal/beta"} {
+		pkgDir := filepath.Join(batchPath, pkg)
+		if err := os.MkdirAll(pkgDir, 0755); err != nil {
+			t.Fatalf("mkdir: %v", err)
+		}
+		goFile := filepath.Join(pkgDir, filepath.Base(pkg)+".go")
+		if err := os.WriteFile(goFile, []byte("package "+filepath.Base(pkg)+"\n"), 0644); err != nil {
+			t.Fatalf("write go file: %v", err)
+		}
+	}
+
+	batches, err := scanner.Scan()
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	if len(batches) != 1 {
+		t.Fatalf("Expected 1 batch, got %d", len(batches))
+	}
+
+	if len(batches[0].Packages) != 2 {
+		t.Errorf("Expected 2 packages, got %d: %v", len(batches[0].Packages), batches[0].Packages)
+	}
+}
+
+func TestScanBatchStatus_NoPackages(t *testing.T) {
+	t.Parallel()
+	tmpDir := t.TempDir()
+	scanner := NewScanner(WithWorktreeRoot(tmpDir), WithMaxBatches(5))
+
+	createTestBatchWorktree(t, tmpDir, "ec-batch1", "main")
+
+	batches, err := scanner.Scan()
+	if err != nil {
+		t.Fatalf("Scan failed: %v", err)
+	}
+	if len(batches) != 1 {
+		t.Fatalf("Expected 1 batch, got %d", len(batches))
+	}
+
+	if len(batches[0].Packages) != 0 {
+		t.Errorf("Expected 0 packages for empty worktree, got %d", len(batches[0].Packages))
+	}
+}

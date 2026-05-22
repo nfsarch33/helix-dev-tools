@@ -121,7 +121,7 @@ func (s *Scanner) scanBatchStatus(batchPath string) (BatchStatus, error) {
 		status.CommitSHA = strings.TrimSpace(headContent)
 	}
 
-	// TODO: Add package scanning and other status checks
+	status.Packages = scanGoPackages(batchPath)
 	return status, nil
 }
 
@@ -142,6 +142,38 @@ func Summarize(batches []BatchStatus) Summary {
 	}
 
 	return summary
+}
+
+// scanGoPackages walks batchPath/internal/ looking for directories
+// that contain at least one .go file and returns their relative paths.
+func scanGoPackages(batchPath string) []string {
+	internalDir := filepath.Join(batchPath, "internal")
+	info, err := os.Stat(internalDir)
+	if err != nil || !info.IsDir() {
+		return nil
+	}
+
+	var packages []string
+	filepath.WalkDir(internalDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || !d.IsDir() {
+			return nil
+		}
+		entries, readErr := os.ReadDir(path)
+		if readErr != nil {
+			return nil
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".go") {
+				rel, relErr := filepath.Rel(batchPath, path)
+				if relErr == nil {
+					packages = append(packages, rel)
+				}
+				break
+			}
+		}
+		return nil
+	})
+	return packages
 }
 
 // Summary provides aggregate statistics about batch statuses
