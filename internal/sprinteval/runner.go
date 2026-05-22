@@ -72,17 +72,57 @@ type Estimate struct {
 }
 
 // AgentraceEvent represents a single NDJSON event from the agentrace log.
+//
+// Two schemas are accepted at decode time:
+//   - Legacy sprinteval: {ts, event, tool, error, session, sprint_id, tokens_in, tokens_out, model}
+//   - Helixon TracedExecutor: {ts, event_type, tool, server, agent_id, duration_ms, success, error_message}
+//
+// UnmarshalJSON normalises both onto the same field surface so downstream
+// metrics (computeErrorRate, computeToolReliability) work unchanged.
 type AgentraceEvent struct {
 	Timestamp  time.Time `json:"ts"`
 	Event      string    `json:"event"`
+	EventType  string    `json:"event_type,omitempty"`
 	Tool       string    `json:"tool,omitempty"`
+	Server     string    `json:"server,omitempty"`
+	AgentID    string    `json:"agent_id,omitempty"`
 	DurationMS int64     `json:"duration_ms,omitempty"`
+	Success    *bool     `json:"success,omitempty"`
+	ErrorMsg   string    `json:"error_message,omitempty"`
 	TokensIn   int       `json:"tokens_in,omitempty"`
 	TokensOut  int       `json:"tokens_out,omitempty"`
 	Model      string    `json:"model,omitempty"`
 	SessionID  string    `json:"session,omitempty"`
 	Error      string    `json:"error,omitempty"`
 	SprintID   string    `json:"sprint_id,omitempty"`
+}
+
+// UnmarshalJSON decodes into the raw schema then normalises the helixon
+// fields onto the legacy ones so existing metric code keeps working.
+func (e *AgentraceEvent) UnmarshalJSON(data []byte) error {
+	type rawEvent AgentraceEvent
+	var raw rawEvent
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*e = AgentraceEvent(raw)
+	e.normalise()
+	return nil
+}
+
+// normalise maps helixon-schema fields onto the legacy fields when the
+// legacy ones are empty. Helixon's success=false is treated as an error
+// when no error_message is supplied so reliability metrics still count it.
+func (e *AgentraceEvent) normalise() {
+	if e.Event == "" && e.EventType != "" {
+		e.Event = e.EventType
+	}
+	if e.Error == "" && e.ErrorMsg != "" {
+		e.Error = e.ErrorMsg
+	}
+	if e.Success != nil && !*e.Success && e.Error == "" {
+		e.Error = "tool failed"
+	}
 }
 
 // SprintReport is the complete evaluation output for a sprint.

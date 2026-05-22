@@ -242,27 +242,63 @@ func QualityTrend(history []float64) string {
 	}
 }
 
-// SprintData holds metrics fetched from the Sprintboard REST API.
+// SprintData holds metrics derived from the Sprintboard REST API.
+//
+// SprintBoard's GET /api/v1/sprints/{id} returns:
+//
+//	{"sprint":{"id":"v8000","name":"...","status":"planned",...},
+//	 "tickets_by_status":{"done":3,"in_progress":1,"backlog":2},
+//	 "total_tickets":6}
+//
+// SprintData is the flattened/derived shape consumed by sprinteval.
 type SprintData struct {
-	SprintID         string  `json:"sprint_id"`
-	SprintName       string  `json:"name"`
-	TotalTickets     int     `json:"total_tickets"`
-	CompletedTickets int     `json:"completed_tickets"`
-	InProgress       int     `json:"in_progress"`
-	Blocked          int     `json:"blocked"`
-	CompletionRate   float64 `json:"completion_rate"`
-	AvgTimeToClaim   float64 `json:"avg_time_to_claim_seconds"`
+	SprintID         string         `json:"sprint_id"`
+	SprintName       string         `json:"name"`
+	TotalTickets     int            `json:"total_tickets"`
+	CompletedTickets int            `json:"completed_tickets"`
+	InProgress       int            `json:"in_progress"`
+	Blocked          int            `json:"blocked"`
+	TicketsByStatus  map[string]int `json:"tickets_by_status,omitempty"`
+	CompletionRate   float64        `json:"completion_rate"`
+	AvgTimeToClaim   float64        `json:"avg_time_to_claim_seconds,omitempty"`
 }
 
-// sprintAPIResponse wraps the Sprintboard REST response envelope.
-type sprintAPIResponse struct {
-	Data SprintData `json:"data"`
+// sprintSummaryResponse mirrors the real /api/v1/sprints/{id} envelope.
+type sprintSummaryResponse struct {
+	Sprint struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Status string `json:"status"`
+	} `json:"sprint"`
+	TicketsByStatus map[string]int `json:"tickets_by_status"`
+	TotalTickets    int            `json:"total_tickets"`
 }
 
-const defaultSprintboardBaseURL = "http://localhost:9400"
+// sprintTicketListResponse mirrors GET /api/v1/sprints/{id}/tickets.
+type sprintTicketListResponse struct {
+	SprintID string                 `json:"sprint_id"`
+	Tickets  []sprintTicketResponse `json:"tickets"`
+}
+
+// sprintTicketResponse is the subset of ticket fields sprinteval consumes.
+// We accept extras silently — sprintboard schema evolves (B16/B17/B18).
+type sprintTicketResponse struct {
+	ID          string    `json:"id"`
+	Title       string    `json:"title"`
+	Status      string    `json:"status"`
+	Assignee    string    `json:"assignee,omitempty"`
+	Priority    int       `json:"priority,omitempty"`
+	CreatedAt   time.Time `json:"created_at,omitempty"`
+	CompletedAt time.Time `json:"completed_at,omitempty"`
+}
+
+const defaultSprintboardBaseURL = "http://127.0.0.1:9400"
 
 // FetchSprintMetrics retrieves sprint-level metrics from the Sprintboard
-// REST API. If baseURL is empty, defaults to http://localhost:9400.
+// REST API and derives completion rate / completed counts from the raw
+// tickets_by_status histogram.
+//
+// If baseURL is empty, defaults to http://127.0.0.1:9400.
 func FetchSprintMetrics(baseURL, sprintID string) (*SprintData, error) {
 	if baseURL == "" {
 		baseURL = defaultSprintboardBaseURL
@@ -272,7 +308,6 @@ func FetchSprintMetrics(baseURL, sprintID string) (*SprintData, error) {
 	}
 
 	url := fmt.Sprintf("%s/api/v1/sprints/%s", baseURL, sprintID)
-
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
@@ -288,18 +323,105 @@ func FetchSprintMetrics(baseURL, sprintID string) (*SprintData, error) {
 		return nil, fmt.Errorf("sprinteval: sprint %s: status %d: %s", sprintID, resp.StatusCode, string(body))
 	}
 
-	var envelope sprintAPIResponse
-	if err := json.NewDecoder(resp.Body).Decode(&envelope); err != nil {
+	var raw sprintSummaryResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
 		return nil, fmt.Errorf("sprinteval: decode sprint %s: %w", sprintID, err)
 	}
 
-	data := envelope.Data
+	data := &SprintData{
+		SprintID:        raw.Sprint.ID,
+		SprintName:      raw.Sprint.Name,
+		TotalTickets:    raw.TotalTickets,
+		TicketsByStatus: raw.TicketsByStatus,
+	}
 	if data.SprintID == "" {
 		data.SprintID = sprintID
 	}
-	if data.TotalTickets > 0 && data.CompletionRate == 0 {
+
+	for status, n := range raw.TicketsByStatus {
+		switch status {
+		case "done", "completed":
+			data.CompletedTickets += n
+		case "in_progress":
+			data.InProgress += n
+		case "blocked":
+			data.Blocked += n
+		}
+	}
+	if data.TotalTickets > 0 {
 		data.CompletionRate = float64(data.CompletedTickets) / float64(data.TotalTickets)
 	}
 
-	return &data, nil
+	return data, nil
+}
+
+// FetchSprintTickets retrieves the full ticket list for a sprint via
+// GET /api/v1/sprints/{id}/tickets and flattens it into the
+// TicketSnapshot shape consumed by ComputeMetrics. The /tickets endpoint
+// requires the sprintboard server rebuilt at v8000 B19 or later — older
+// binaries return 404 and the caller should fall back to the histogram
+// from FetchSprintMetrics.
+func FetchSprintTickets(baseURL, sprintID string) ([]TicketSnapshot, error) {
+	if baseURL == "" {
+		baseURL = defaultSprintboardBaseURL
+	}
+	if sprintID == "" {
+		return nil, fmt.Errorf("sprinteval: sprint_id is required")
+	}
+
+	url := fmt.Sprintf("%s/api/v1/sprints/%s/tickets", baseURL, sprintID)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get(url)
+	if err != nil {
+		return nil, fmt.Errorf("sprinteval: fetch tickets %s: %w", sprintID, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, fmt.Errorf("sprinteval: tickets endpoint not found (older sprintboard?): %s", url)
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("sprinteval: tickets %s: status %d: %s", sprintID, resp.StatusCode, string(body))
+	}
+
+	var raw sprintTicketListResponse
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		return nil, fmt.Errorf("sprinteval: decode tickets %s: %w", sprintID, err)
+	}
+
+	out := make([]TicketSnapshot, 0, len(raw.Tickets))
+	for _, t := range raw.Tickets {
+		out = append(out, TicketSnapshot{
+			ID:          t.ID,
+			Title:       t.Title,
+			Status:      t.Status,
+			Assignee:    t.Assignee,
+			Priority:    t.Priority,
+			CreatedAt:   t.CreatedAt,
+			CompletedAt: t.CompletedAt,
+		})
+	}
+	return out, nil
+}
+
+// SnapshotsFromHistogram fabricates synthetic ticket snapshots from a
+// tickets_by_status histogram so ComputeMetrics still produces a valid
+// completion-rate breakdown when the /tickets endpoint is unavailable.
+// IDs and titles are placeholders; they only feed the count-based
+// metrics.
+func SnapshotsFromHistogram(hist map[string]int) []TicketSnapshot {
+	if len(hist) == 0 {
+		return nil
+	}
+	var out []TicketSnapshot
+	for status, n := range hist {
+		for i := 0; i < n; i++ {
+			out = append(out, TicketSnapshot{
+				ID:     fmt.Sprintf("%s-%d", status, i),
+				Status: status,
+			})
+		}
+	}
+	return out
 }
