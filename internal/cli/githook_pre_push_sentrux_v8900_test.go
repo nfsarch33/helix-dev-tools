@@ -24,8 +24,8 @@ func withFakeSentruxGate(t *testing.T, enabled bool, findings []string) {
 func TestPrePush_SentruxGate_DisabledByDefault_v8900(t *testing.T) {
 	withFakeAllowMainPush(t, true)
 	withFakeIdentityGate(t, func(_ identityGateState) []string { return nil }, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-tools.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-tools.git",
+		GitEmail:  "user@example.com",
 	})
 	withFakePublicRepoGate(t, func(_ string) []string { return nil })
 	withFakeRebrandGate(t, func(_ string) []string { return nil })
@@ -46,7 +46,7 @@ func TestPrePush_SentruxGate_DisabledByDefault_v8900(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/x abc refs/heads/feature/x def\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-tools.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/cursor-tools.git"})
 	if *code != 0 {
 		t.Fatalf("expected exit 0 when sentrux gate disabled, got %d", *code)
 	}
@@ -60,8 +60,8 @@ func TestPrePush_SentruxGate_DisabledByDefault_v8900(t *testing.T) {
 func TestPrePush_SentruxGate_EnabledFails_v8900(t *testing.T) {
 	withFakeAllowMainPush(t, true)
 	withFakeIdentityGate(t, func(_ identityGateState) []string { return nil }, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-tools.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-tools.git",
+		GitEmail:  "user@example.com",
 	})
 	withFakePublicRepoGate(t, func(_ string) []string { return nil })
 	withFakeRebrandGate(t, func(_ string) []string { return nil })
@@ -74,7 +74,7 @@ func TestPrePush_SentruxGate_EnabledFails_v8900(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/x abc refs/heads/feature/x def\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-tools.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/cursor-tools.git"})
 	if *code != 1 {
 		t.Fatalf("expected exit 1 on sentrux gate failure, got %d", *code)
 	}
@@ -91,8 +91,8 @@ func TestPrePush_SentruxGate_EnabledFails_v8900(t *testing.T) {
 func TestPrePush_SentruxGate_EnabledPasses_v8900(t *testing.T) {
 	withFakeAllowMainPush(t, true)
 	withFakeIdentityGate(t, func(_ identityGateState) []string { return nil }, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-tools.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-tools.git",
+		GitEmail:  "user@example.com",
 	})
 	withFakePublicRepoGate(t, func(_ string) []string { return nil })
 	withFakeRebrandGate(t, func(_ string) []string { return nil })
@@ -102,7 +102,7 @@ func TestPrePush_SentruxGate_EnabledPasses_v8900(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/x abc refs/heads/feature/x def\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-tools.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/cursor-tools.git"})
 	if *code != 0 {
 		t.Fatalf("expected exit 0 when sentrux gate passes, got %d", *code)
 	}
