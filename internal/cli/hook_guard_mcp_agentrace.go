@@ -1,11 +1,15 @@
 // T-8800-B23: agentrace NDJSON emission for guard-mcp.
+//
+// The append path is delegated to internal/ndjson (T-8800-B19/B22) so every
+// new NDJSON sink in this binary shares the same race-safe writer contract
+// with helixon-ec/internal/ndjson and sprintboard-mcp.
 package cli
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
-	"sync"
+
+	"github.com/nfsarch33/helix-dev-tools/internal/ndjson"
 )
 
 // guardMcpAgentraceEvent is the structured row emitted to the agentrace NDJSON
@@ -21,12 +25,6 @@ type guardMcpAgentraceEvent struct {
 	Memory    string `json:"memory_layer,omitempty"`
 	MemoryOp  string `json:"memory_op,omitempty"`
 }
-
-// agentraceMu serialises writes across concurrent guard-mcp invocations
-// in the same process (tests in particular). Cross-process safety relies
-// on append-mode semantics of os.OpenFile + the kernel's atomic write
-// guarantee for small NDJSON rows.
-var agentraceMu sync.Mutex
 
 // defaultAgentracePath returns the canonical NDJSON sink for guard-mcp.
 // Honours the AGENTRACE_LOG_PATH env override; otherwise falls back to
@@ -44,24 +42,8 @@ func defaultAgentracePath() string {
 }
 
 // appendAgentraceEvent appends a single NDJSON row to path. Errors during
-// directory creation or write are swallowed so guard-mcp never fails the
-// MCP call because of telemetry trouble.
+// directory creation or write are swallowed by the caller so guard-mcp never
+// fails the MCP call because of telemetry trouble.
 func appendAgentraceEvent(path string, ev guardMcpAgentraceEvent) error {
-	if path == "" {
-		return nil
-	}
-	agentraceMu.Lock()
-	defer agentraceMu.Unlock()
-
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	enc := json.NewEncoder(f)
-	return enc.Encode(ev)
+	return ndjson.AppendOne(path, ev)
 }
