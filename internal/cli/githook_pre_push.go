@@ -58,6 +58,8 @@ var (
 	publicRepoNameFromURLFn = publicRepoNameFromURLDefault
 	isAncestorChecker       = gitIsAncestor
 	rebrandGateEvaluator    = evaluateRebrandGateDefault
+	sentruxGateEvaluator    = evaluateSentruxGateDefault
+	sentruxGateEnabledGetter = readSentruxGateEnabled
 )
 
 // isZendeskGitHubRemote reports whether the push URL targets the
@@ -248,6 +250,46 @@ func isHelixonRemote(remoteURL string) bool {
 	return strings.Contains(r, "helixon-") || strings.Contains(r, "helix-dev-tools")
 }
 
+// readSentruxGateEnabled returns true if the local repo opts in to the
+// pre-push sentrux gate via `git config hooks.sentruxGate true`. Defaults
+// to false so the gate stays opt-in until baselines are saved everywhere.
+// Added in v8900-B5.
+func readSentruxGateEnabled() bool {
+	cmd := exec.Command("git", "config", "--bool", "hooks.sentruxGate")
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "true"
+}
+
+// evaluateSentruxGateDefault runs `sentrux gate` against the working
+// directory. Returns nil when the gate is disabled, when no baseline
+// exists, or when the gate passes; returns one or more failure lines
+// when the structural gate fails. Added in v8900-B5.
+func evaluateSentruxGateDefault() []string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return []string{fmt.Sprintf("sentrux-gate: cannot determine working directory: %v", err)}
+	}
+	if _, err := os.Stat(cwd + "/.sentrux/baseline.json"); err != nil {
+		return nil
+	}
+	cmd := exec.Command("sentrux", "gate", ".")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	body := strings.TrimSpace(string(out))
+	if body == "" {
+		body = err.Error()
+	}
+	return []string{
+		"sentrux structural gate failed:",
+		body,
+	}
+}
+
 // evaluateRebrandGateDefault scans the repo working directory for legacy
 // brand terms when pushing to a helixon-* remote. Returns nil if the
 // remote is not a helixon repo or no findings exist.
@@ -364,6 +406,27 @@ func runPrePush(_ *cobra.Command, args []string) error {
 				"  git push --no-verify  # NOTE: this also disables the identity gate")
 		prePushExit(1)
 		return nil
+	}
+
+	if sentruxGateEnabledGetter() {
+		if findings := sentruxGateEvaluator(); len(findings) > 0 {
+			fmt.Fprintln(prePushStderr, "ERROR: cursor-tools sentrux-gate FAILED for personal repo push:")
+			for _, f := range findings {
+				fmt.Fprintln(prePushStderr, "  - "+f)
+			}
+			fmt.Fprintln(prePushStderr,
+				"\nRemediation:\n"+
+					"  sentrux gate .                 # rerun the gate locally\n"+
+					"  Restructure or refactor to clear the regression.\n"+
+					"  If the regression is intentional and accepted, save a new baseline\n"+
+					"  with `sentrux gate --save .` and commit `.sentrux/baseline.json`.\n"+
+					"To bypass for one push (rare; document in commit body):\n"+
+					"  git push --no-verify  # NOTE: this also disables all pre-push layers\n"+
+					"To disable permanently for this repo:\n"+
+					"  git config hooks.sentruxGate false")
+			prePushExit(1)
+			return nil
+		}
 	}
 
 	if findings := rebrandGateEvaluator(remoteURL); len(findings) > 0 {
