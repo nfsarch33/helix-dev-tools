@@ -82,13 +82,13 @@ func (r ScanResult) HasFindings() bool { return r.FindingCount > 0 }
 // DefaultLegacyTerms returns the canonical list of terms that must be rebranded.
 func DefaultLegacyTerms() []string {
 	return []string{
-		"ironclaw",
+		"helixon",
 		"cursor-tools",
 		"cursor-global-kb",
 		"cursor_tools",
 		"cylrl",
-		"IronClaw",
-		"IRONCLAW",
+		"Helixon",
+		"HELIXON",
 	}
 }
 

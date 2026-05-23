@@ -215,14 +215,14 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 	}
 	mcpServerSet := make(map[string]bool)
 	mcpUses := 0
-	ironclawUses := 0
+	helixonUses := 0
 	for _, m := range summary.MCPServers {
 		if m.Server != "" {
 			mcpServerSet[metrics.CanonicalMCPServerName(m.Server)] = true
 		}
 		mcpUses += m.Uses
-		if metrics.CanonicalMCPServerName(m.Server) == "ironclaw" {
-			ironclawUses += m.Uses
+		if metrics.CanonicalMCPServerName(m.Server) == "helixon" {
+			helixonUses += m.Uses
 		}
 	}
 	subCount := len(summary.Subagents)
@@ -235,7 +235,7 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 		if summary.Tasks.Total > 0 {
 			fmt.Printf("    Skill task coverage:    %d of %d tasks (%.1f%%)\n", summary.Tasks.SkillTasks, summary.Tasks.Total, percentage(summary.Tasks.SkillTasks, summary.Tasks.Total))
 			fmt.Printf("    MCP task coverage:      %d of %d tasks (%.1f%%)\n", summary.Tasks.MCPTasks, summary.Tasks.Total, percentage(summary.Tasks.MCPTasks, summary.Tasks.Total))
-			fmt.Printf("    IronClaw task coverage: %d of %d tasks (%.1f%%)\n", summary.Tasks.IronclawTasks, summary.Tasks.Total, percentage(summary.Tasks.IronclawTasks, summary.Tasks.Total))
+			fmt.Printf("    Helixon task coverage: %d of %d tasks (%.1f%%)\n", summary.Tasks.IronclawTasks, summary.Tasks.Total, percentage(summary.Tasks.IronclawTasks, summary.Tasks.Total))
 			fmt.Printf("    Subagent task coverage: %d of %d tasks (%.1f%%)\n", summary.Tasks.SubagentTasks, summary.Tasks.Total, percentage(summary.Tasks.SubagentTasks, summary.Tasks.Total))
 			fmt.Printf("    Task grouping confidence: exact=%d turn=%d heuristic=%d\n", summary.Tasks.ExactTasks, summary.Tasks.TurnTasks, summary.Tasks.HeuristicTasks)
 		}
@@ -243,7 +243,7 @@ func runMetrics(_ *cobra.Command, _ []string) error {
 		fmt.Printf("    Skill hit rate:         %d of %d events (%.1f%%)\n", skillUses, summary.TotalEvents, percentage(skillUses, summary.TotalEvents))
 		fmt.Printf("    MCP servers used:       %d of %d always-on (%.1f%%)\n", len(mcpServerSet), len(alwaysOnMCP), percentage(len(mcpServerSet), len(alwaysOnMCP)))
 		fmt.Printf("    MCP hit rate:           %d of %d events (%.1f%%)\n", mcpUses, summary.TotalEvents, percentage(mcpUses, summary.TotalEvents))
-		fmt.Printf("    IronClaw MCP share:     %d of %d MCP events (%.1f%%)\n", ironclawUses, mcpUses, percentage(ironclawUses, mcpUses))
+		fmt.Printf("    Helixon MCP share:     %d of %d MCP events (%.1f%%)\n", helixonUses, mcpUses, percentage(helixonUses, mcpUses))
 		fmt.Printf("    Subagents invoked:      %d of %d available (%.1f%%)\n", subCount, installedSubagents, percentage(subCount, installedSubagents))
 		fmt.Printf("    Subagent hit rate:      %d of %d events (%.1f%%)\n", subUses, summary.TotalEvents, percentage(subUses, summary.TotalEvents))
 	}

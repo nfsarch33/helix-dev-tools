@@ -161,10 +161,8 @@ var publicRepoGitHubNames = map[string]struct{}{
 	"fleet-bench":     {},
 	"helix-dev-tools": {}, // Helixon R0 rename of cursor-tools
 	// Legacy names preserved for dual-remote period.
-	"ironclaw-mcp":          {},
-	"ironclaw-ops":          {},
-	"helixon-mcp":           {}, // Helixon R0 rename of ironclaw-mcp
-	"helixon-ops":           {}, // Helixon R0 rename of ironclaw-ops
+	"helixon-mcp":          {},
+	"helixon-ops":          {},
 	"llm-cluster-router":    {},
 	"mem0-mcp-go":           {},
 	"minimax-openai-bridge": {},
@@ -437,7 +435,7 @@ func runPrePush(_ *cobra.Command, args []string) error {
 		fmt.Fprintln(prePushStderr,
 			"\nRemediation:\n"+
 				"  cursor-tools rebrand scan --dir .   # see all findings\n"+
-				"  Replace legacy terms (ironclaw, cursor-tools, cylrl, evomap) with Helixon equivalents.\n"+
+				"  Replace legacy terms (helixon, cursor-tools, cylrl, evomap) with Helixon equivalents.\n"+
 				"To bypass for one push (rare; document the exemption in the commit body):\n"+
 				"  git push --no-verify  # NOTE: this also disables all pre-push layers")
 		prePushExit(1)

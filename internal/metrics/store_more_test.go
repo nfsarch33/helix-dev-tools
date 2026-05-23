@@ -33,7 +33,7 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 20, TurnID: "task-1", TaskSource: "exact"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "skill", Detail: "skill-a", DurationMs: 40, TurnID: "task-1", TaskSource: "exact"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "skill-activate", Action: "read", Category: "skill", Detail: "skill-read-only", DurationMs: 1, TurnID: "task-3", TaskSource: "exact"},
-		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "ironclaw:ironclaw_health", LatencyMs: 15, TurnID: "task-1", TaskSource: "exact"},
+		{Timestamp: now.Add(-1 * time.Hour), Hook: "guard-mcp", Action: "allow", Category: "mcp", Detail: "helixon:helixon_health", LatencyMs: 15, TurnID: "task-1", TaskSource: "exact"},
 		{Timestamp: now.Add(-1 * time.Hour), Hook: "track", Action: "record", Category: "subagent", Detail: "go-architect", DurationMs: 5, TurnID: "task-2", TaskSource: "turn"},
 	}
 
@@ -41,7 +41,7 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 	if len(skills) != 2 {
 		t.Fatalf("unexpected skills count: got %d, want 2: %+v", len(skills), skills)
 	}
-	if len(mcpServers) != 1 || mcpServers[0].Server != "ironclaw" || mcpServers[0].Tool != "ironclaw_health" {
+	if len(mcpServers) != 1 || mcpServers[0].Server != "helixon" || mcpServers[0].Tool != "helixon_health" {
 		t.Fatalf("unexpected mcp servers: %+v", mcpServers)
 	}
 	if len(subagents) != 1 || subagents[0].Detail != "go-architect" {
@@ -56,7 +56,7 @@ func TestAdoptionAndRenderingHelpers(t *testing.T) {
 		t.Fatalf("unexpected task confidence coverage: %+v", summary.Tasks)
 	}
 	md := summary.Markdown()
-	if !strings.Contains(md, "System Performance Report") || !strings.Contains(md, "Operation Timing by Category") || !strings.Contains(md, "IronClaw MCP task coverage") {
+	if !strings.Contains(md, "System Performance Report") || !strings.Contains(md, "Operation Timing by Category") || !strings.Contains(md, "Helixon MCP task coverage") {
 		t.Fatalf("Markdown() output missing sections: %q", md)
 	}
 	compact := summary.Compact(7)

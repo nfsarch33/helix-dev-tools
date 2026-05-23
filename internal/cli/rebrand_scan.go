@@ -35,22 +35,22 @@ type rebrandRule struct {
 
 var rebrandRules = []rebrandRule{
 	// Go module paths (checked first — longest match wins)
-	{"github.com/nfsarch33/ironclaw-ops", catGoModule, "github.com/nfsarch33/helixon-ops"},
-	{"github.com/nfsarch33/ironclaw-mcp", catGoModule, "github.com/nfsarch33/helixon-mcp"},
-	{"github.com/nfsarch33/ironclaw-", catGoModule, "github.com/nfsarch33/helixon-"},
+	{"github.com/nfsarch33/helixon-ops", catGoModule, "github.com/nfsarch33/helixon-ops"},
+	{"github.com/nfsarch33/helixon-mcp", catGoModule, "github.com/nfsarch33/helixon-mcp"},
+	{"github.com/nfsarch33/helixon-", catGoModule, "github.com/nfsarch33/helixon-"},
 	{"github.com/nfsarch33/cylrl-", catGoModule, "github.com/nfsarch33/helixon-"},
 	{"github.com/nfsarch33/cursor-global-kb", catGoModule, "github.com/nfsarch33/helixon-kb"},
 
 	// Docker image names
-	{"ironclaw/", catDockerImage, "helixon/"},
+	{"helixon/", catDockerImage, "helixon/"},
 	{"cylrl/", catDockerImage, "helixon/"},
 
 	// K8s labels
-	{"ironclaw-system", catK8sLabel, "helixon-system"},
+	{"helixon-system", catK8sLabel, "helixon-system"},
 	{"cylrl-system", catK8sLabel, "helixon-system"},
 
 	// Env var prefixes
-	{"IRONCLAW_", catEnvVar, "HELIXON_"},
+	{"HELIXON_", catEnvVar, "HELIXON_"},
 	{"CYLRL_", catEnvVar, "HELIXON_"},
 
 	// Deprecated names
@@ -63,9 +63,9 @@ var rebrandRules = []rebrandRule{
 	{"cursor-global-kb", catToolName, "helixon-kb"},
 
 	// Brand names — case variations
-	{"IRONCLAW", catBrandName, "HELIXON"},
-	{"IronClaw", catBrandName, "Helixon"},
-	{"ironclaw", catBrandName, "helixon"},
+	{"HELIXON", catBrandName, "HELIXON"},
+	{"Helixon", catBrandName, "Helixon"},
+	{"helixon", catBrandName, "helixon"},
 }
 
 type rebrandFinding struct {
@@ -150,7 +150,7 @@ var rebrandCmd = &cobra.Command{
 var rebrandScanCmd = &cobra.Command{
 	Use:   "scan",
 	Short: "Scan repository for legacy brand terms that need rebranding",
-	Long: "Scans tracked files for legacy terms (ironclaw, cursor-tools, cylrl, evomap)\n" +
+	Long: "Scans tracked files for legacy terms (helixon, cursor-tools, cylrl, evomap)\n" +
 		"and reports findings with suggested Helixon replacements.",
 	SilenceUsage: true,
 	RunE:         runRebrandScan,

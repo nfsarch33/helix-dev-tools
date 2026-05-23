@@ -21,7 +21,7 @@ var KnownMCPBinaries = []string{
 	"mem0-mcp-go",
 	"sentrux",
 	"pdf-mcp-server",
-	"ironclaw-mcp",
+	"helixon-mcp",
 	"cursor-tools",
 }
 

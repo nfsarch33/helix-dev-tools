@@ -149,10 +149,10 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- If the task is memory/rules: Mem0 is canonical for hot shared memory; Git-backed Pepper files remain the durable index/archive.\n\n")
 
 	b.WriteString("## Local agent-path default\n")
-	b.WriteString("- For local agent execution on this workstation, prefer the loopback-only IronClaw path first: `Cursor -> ironclaw-mcp -> IronClaw gateway -> llm-cluster-router -> local vLLM`.\n")
-	b.WriteString("- Treat `ironclaw-mcp` as the canonical MCP bridge when a task needs the local secured runtime, tool execution, or local Qwen routing.\n")
-	b.WriteString("- Before relying on the local path, verify `~/bin/cursor-tools doctor mcp`, `~/bin/cursor-tools health-check`, `~/bin/cursor-tools selftest`, and the `ironclaw-mcp` smoke harness.\n")
-	b.WriteString("- Keep the local router as the only OpenAI-compatible endpoint IronClaw talks to. Do not bypass it from IronClaw directly to ad hoc vLLM ports.\n")
+	b.WriteString("- For local agent execution on this workstation, prefer the loopback-only Helixon path first: `Cursor -> helixon-mcp -> Helixon gateway -> llm-cluster-router -> local vLLM`.\n")
+	b.WriteString("- Treat `helixon-mcp` as the canonical MCP bridge when a task needs the local secured runtime, tool execution, or local Qwen routing.\n")
+	b.WriteString("- Before relying on the local path, verify `~/bin/cursor-tools doctor mcp`, `~/bin/cursor-tools health-check`, `~/bin/cursor-tools selftest`, and the `helixon-mcp` smoke harness.\n")
+	b.WriteString("- Keep the local router as the only OpenAI-compatible endpoint Helixon talks to. Do not bypass it from Helixon directly to ad hoc vLLM ports.\n")
 	b.WriteString("- Keep Gemini CLI as a secondary operator path, not the default local runtime path.\n\n")
 
 	b.WriteString("## Freelancing / job board MCP safety\n")
@@ -180,7 +180,7 @@ func renderMCPIndex(servers map[string]mcpServerSpec) string {
 	b.WriteString("- `wolfram-alpha` -> `skill-routing` math/calculation route\n")
 	b.WriteString("- `google-scholar` -> `persona-researcher`, `research-pipeline`, and `academic-essay-writer` for citation-driven flows\n")
 	b.WriteString("- `word-document-server` -> `pptx-mastery` / `academic-essay-writer` for long-form writing deliverables\n")
-	b.WriteString("- `ironclaw` -> `ironclaw-mcp` bridge repo, `daily-startup-prompt.md`, `ironclaw/docs/LLM_PROVIDERS.md`, and the `llm-cluster-router` / `openclaw-vllm` skills\n")
+	b.WriteString("- `helixon` -> `helixon-mcp` bridge repo, `daily-startup-prompt.md`, `helixon/docs/LLM_PROVIDERS.md`, and the `llm-cluster-router` / `openclaw-vllm` skills\n")
 	b.WriteString("- `linkedin-mcp` -> `linkedin-job-hunt`; browser profile login required; write actions need human confirmation\n")
 	b.WriteString("- `upwork-mcp` -> `upwork-job-hunt`; Chrome CDP login required; proposal/message actions need human confirmation\n\n")
 

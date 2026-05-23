@@ -28,12 +28,12 @@ func TestScanFile_DetectsLegacyTerms(t *testing.T) {
 	dir := t.TempDir()
 	content := `package main
 
-import "github.com/nfsarch33/ironclaw-mcp/pkg/server"
+import "github.com/nfsarch33/helixon-mcp/pkg/server"
 
-const ns = "ironclaw-system"
-var img = "ironclaw/agent:latest"
+const ns = "helixon-system"
+var img = "helixon/agent:latest"
 var old = "cylrl-system"
-var prefix = "IRONCLAW_API_KEY"
+var prefix = "HELIXON_API_KEY"
 `
 	path := filepath.Join(dir, "main.go")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
@@ -89,7 +89,7 @@ var prefix = "HELIXON_API_KEY"
 func TestScanFile_SkipsBinaryExtensions(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "image.png")
-	if err := os.WriteFile(path, []byte("ironclaw binary content"), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("helixon binary content"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -104,7 +104,7 @@ func TestScanFile_SkipsBinaryExtensions(t *testing.T) {
 
 func TestScanFile_DetectsCaseVariations(t *testing.T) {
 	dir := t.TempDir()
-	content := "IronClaw is the old name\nIRONCLAW_MODE=true\nironclaw-ops deploys here\n"
+	content := "Helixon is the old name\nHELIXON_MODE=true\nhelixon-ops deploys here\n"
 	path := filepath.Join(dir, "readme.md")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
@@ -165,7 +165,7 @@ func TestScanDirectory_Walk(t *testing.T) {
 	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("import ironclaw\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("import helixon\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(sub, "lib.go"), []byte("cursor-global-kb reference\n"), 0o644); err != nil {
@@ -177,7 +177,7 @@ func TestScanDirectory_Walk(t *testing.T) {
 	if err := os.MkdirAll(gitDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte("ironclaw ref\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(gitDir, "config"), []byte("helixon ref\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -205,7 +205,7 @@ func TestWriteRebrandHuman_NoFindings(t *testing.T) {
 
 func TestWriteRebrandHuman_WithFindings(t *testing.T) {
 	findings := []rebrandFinding{
-		{File: "main.go", Line: 5, Category: catBrandName, Match: "ironclaw", Replacement: "helixon"},
+		{File: "main.go", Line: 5, Category: catBrandName, Match: "helixon", Replacement: "helixon"},
 	}
 	var buf strings.Builder
 	writeRebrandHuman(&buf, findings)
@@ -220,7 +220,7 @@ func TestWriteRebrandHuman_WithFindings(t *testing.T) {
 
 func TestWriteRebrandJSON(t *testing.T) {
 	findings := []rebrandFinding{
-		{File: "main.go", Line: 3, Category: catGoModule, Match: "github.com/nfsarch33/ironclaw-mcp", Replacement: "github.com/nfsarch33/helixon-mcp"},
+		{File: "main.go", Line: 3, Category: catGoModule, Match: "github.com/nfsarch33/helixon-mcp", Replacement: "github.com/nfsarch33/helixon-mcp"},
 	}
 	var buf strings.Builder
 	if err := writeRebrandJSON(&buf, findings); err != nil {
@@ -247,9 +247,9 @@ func TestWriteRebrandJSON(t *testing.T) {
 // and env-var categories are enforced.
 func TestRebrandScan_DocRepoFlag(t *testing.T) {
 	// brand-name/tool-name/deprecated-name: must be suppressed with --doc-repo.
-	brandOnlyContent := "IronClaw is the old brand name.\ncursor-global-kb was renamed.\ncylrl is deprecated.\n"
+	brandOnlyContent := "Helixon is the old brand name.\ncursor-global-kb was renamed.\ncylrl is deprecated.\n"
 	// go-module-path: must still fire even with --doc-repo.
-	moduleContent := "module github.com/nfsarch33/ironclaw-mcp\n"
+	moduleContent := "module github.com/nfsarch33/helixon-mcp\n"
 
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "history.md"), []byte(brandOnlyContent), 0o644); err != nil {
@@ -298,13 +298,13 @@ func TestDocRepoCategoriesEnforced(t *testing.T) {
 		category rebrandCategory
 		wantHit  bool
 	}{
-		{"brand-name", "IronClaw here\n", catBrandName, false},
+		{"brand-name", "Helixon here\n", catBrandName, false},
 		{"tool-name", "cursor-global-kb here\n", catToolName, false},
 		{"deprecated-name", "evomap here\n", catDeprecated, false},
-		{"env-var", "IRONCLAW_TOKEN=x\n", catEnvVar, true},
-		{"k8s-label", "namespace: ironclaw-system\n", catK8sLabel, true},
-		{"docker-image", "image: ironclaw/agent\n", catDockerImage, true},
-		{"go-module-path", "module github.com/nfsarch33/ironclaw-mcp\n", catGoModule, true},
+		{"env-var", "HELIXON_TOKEN=x\n", catEnvVar, true},
+		{"k8s-label", "namespace: helixon-system\n", catK8sLabel, true},
+		{"docker-image", "image: helixon/agent\n", catDockerImage, true},
+		{"go-module-path", "module github.com/nfsarch33/helixon-mcp\n", catGoModule, true},
 	}
 
 	for _, tc := range cases {
@@ -332,8 +332,8 @@ func TestDocRepoCategoriesEnforced(t *testing.T) {
 func TestScanDirectory_LoadsAllowlistYAML(t *testing.T) {
 	dir := t.TempDir()
 
-	// A file with a legacy term that IS in rebrandRules (ironclaw -> brand-name).
-	if err := os.WriteFile(filepath.Join(dir, "history.md"), []byte("ironclaw was the old name\n"), 0o644); err != nil {
+	// A file with a legacy term that IS in rebrandRules (helixon -> brand-name).
+	if err := os.WriteFile(filepath.Join(dir, "history.md"), []byte("helixon was the old name\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -343,11 +343,11 @@ func TestScanDirectory_LoadsAllowlistYAML(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(findingsBefore) == 0 {
-		t.Fatal("ironclaw must fire without allowlist")
+		t.Fatal("helixon must fire without allowlist")
 	}
 
-	// Allowlist that suppresses ironclaw in *.md files.
-	allowlistContent := "entries:\n  - file: \"*.md\"\n    term: \"ironclaw\"\n"
+	// Allowlist that suppresses helixon in *.md files.
+	allowlistContent := "entries:\n  - file: \"*.md\"\n    term: \"helixon\"\n"
 	if err := os.WriteFile(filepath.Join(dir, ".rebrand-allowlist.yaml"), []byte(allowlistContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -364,7 +364,7 @@ func TestScanDirectory_LoadsAllowlistYAML(t *testing.T) {
 		}
 	}
 	if len(nonAllowlistFindings) != 0 {
-		t.Fatalf("allowlist should suppress ironclaw in .md; got %d findings: %+v", len(nonAllowlistFindings), nonAllowlistFindings)
+		t.Fatalf("allowlist should suppress helixon in .md; got %d findings: %+v", len(nonAllowlistFindings), nonAllowlistFindings)
 	}
 }
 
@@ -418,13 +418,13 @@ func TestRebrandStatusCmd_EmitsStructuredSummary(t *testing.T) {
 | Repository | Status |
 |---|---|
 | cursor-tools | DONE |
-| ironclaw-ops | DONE |
+| helixon-ops | DONE |
 
 ## Section 2.2 Go Module Path Migrations
 
 | Module | Status |
 |---|---|
-| ironclaw-mcp | DONE |
+| helixon-mcp | DONE |
 | ai-agent-business-stack/go | PENDING |
 `
 	sopPath := filepath.Join(dir, "helixon-rebranding-coordination.md")
@@ -526,16 +526,16 @@ func TestRebrandStatusDashboard_RunxStatePropagates(t *testing.T) {
 
 func TestRebrandRules_ReplacementMap(t *testing.T) {
 	wantMappings := map[string]string{
-		"ironclaw":                          "helixon",
-		"IronClaw":                          "Helixon",
-		"IRONCLAW":                          "HELIXON",
+		"helixon":                          "helixon",
+		"Helixon":                          "Helixon",
+		"HELIXON":                          "HELIXON",
 		"cursor-global-kb":                  "helixon-kb",
 		"cylrl":                             "helixon",
 		"CYLRL":                             "HELIXON",
 		"evomap":                            "evospine",
 		"EvoMap":                            "EvoSpine",
-		"github.com/nfsarch33/ironclaw-mcp": "github.com/nfsarch33/helixon-mcp",
-		"github.com/nfsarch33/ironclaw-ops": "github.com/nfsarch33/helixon-ops",
+		"github.com/nfsarch33/helixon-mcp": "github.com/nfsarch33/helixon-mcp",
+		"github.com/nfsarch33/helixon-ops": "github.com/nfsarch33/helixon-ops",
 	}
 	ruleMap := map[string]string{}
 	for _, r := range rebrandRules {

@@ -91,7 +91,7 @@ func containsFinding(values []FindingCode, want FindingCode) bool {
 
 // TestIsKnownVendorMirror_CanonicalList pins the vendor classification
 // against the canonical list documented in
-// global-memories/daily-startup-prompt.md: ironclaw, openclaw,
+// global-memories/daily-startup-prompt.md: helixon, openclaw,
 // temporal, gstack, hermes are vendor mirrors and stay analysis-only
 // unless their repo rules say otherwise. The Workspace Doctor uses
 // this list to demote `behind_default` findings on these repos to
@@ -102,7 +102,7 @@ func TestIsKnownVendorMirror_CanonicalList(t *testing.T) {
 		alias string
 		want  bool
 	}{
-		{"ironclaw", true},
+		{"helixon", true},
 		{"openclaw", true},
 		{"hermes", true},
 		{"gstack", true},
@@ -111,8 +111,8 @@ func TestIsKnownVendorMirror_CanonicalList(t *testing.T) {
 		{"global-kb", false},
 		{"runx", false},
 		{"business", false},
-		{"ironclaw-mcp", false},
-		{"ironclaw-ops", false},
+		{"helixon-mcp", false},
+		{"helixon-ops", false},
 		{"openclaw-mission-control", false},
 		{"mission-control", false},
 	}

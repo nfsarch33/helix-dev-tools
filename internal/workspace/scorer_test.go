@@ -80,9 +80,9 @@ func TestScoreReport_WeightsFindings(t *testing.T) {
 func TestScorer_StableUnderVendorMirrorLag(t *testing.T) {
 	report := AuditReport{Repos: []RepoStatus{
 		// 6 vendor-mirror-behind findings spread across the canonical
-		// vendor-mirror set (ironclaw, openclaw, hermes, gstack,
+		// vendor-mirror set (helixon, openclaw, hermes, gstack,
 		// temporal, windows-mcp).
-		{Alias: "ironclaw", Findings: []Finding{{Code: FindingVendorBehind, Severity: SeverityInfo}}},
+		{Alias: "helixon", Findings: []Finding{{Code: FindingVendorBehind, Severity: SeverityInfo}}},
 		{Alias: "openclaw", Findings: []Finding{{Code: FindingVendorBehind, Severity: SeverityInfo}}},
 		{Alias: "hermes", Findings: []Finding{{Code: FindingVendorBehind, Severity: SeverityInfo}}},
 		{Alias: "gstack", Findings: []Finding{{Code: FindingVendorBehind, Severity: SeverityInfo}}},

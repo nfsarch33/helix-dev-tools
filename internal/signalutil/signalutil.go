@@ -4,7 +4,7 @@
 //
 // Surveyed in v8200 T-B12 audit; instances live in cursor-tools/cmd/mcp-proxy,
 // ai-agent-business-stack/go/cmd/fleet-slo-watcher, and
-// ironclaw-mcp/cmd/ironclaw-mcp. This package is the canonical home.
+// helixon-mcp/cmd/helixon-mcp. This package is the canonical home.
 package signalutil
 
 import (

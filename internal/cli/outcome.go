@@ -59,7 +59,7 @@ func init() {
 	outcomeCmd.AddCommand(outcomeEmitCmd)
 	outcomeCmd.AddCommand(outcomeRecentCmd)
 
-	outcomeEmitCmd.Flags().StringVar(&outcomeFlags.actor, "actor", outcomes.ActorCursorTools, "Actor label (cursor-hook|cursor-tools|fleet-cli|mc-bridge|fallback-bridge|ironclaw-daemon|evoloop-daemon)")
+	outcomeEmitCmd.Flags().StringVar(&outcomeFlags.actor, "actor", outcomes.ActorCursorTools, "Actor label (cursor-hook|cursor-tools|fleet-cli|mc-bridge|fallback-bridge|helixon-daemon|evoloop-daemon)")
 	outcomeEmitCmd.Flags().StringVar(&outcomeFlags.machine, "machine", "", "Machine label (defaults to hostname)")
 	outcomeEmitCmd.Flags().StringVar(&outcomeFlags.event, "event", "", "Event name (required, e.g. 'guard-shell:deny' or 'fleet-cli:apply')")
 	outcomeEmitCmd.Flags().StringVar(&outcomeFlags.detail, "detail", "", "Short detail string (<= 240 chars)")

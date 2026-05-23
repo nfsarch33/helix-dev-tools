@@ -145,8 +145,8 @@ type RecentOptions struct {
 // surfaces "cycle-like" rows that were not written under the canonical
 // metadata.kind="evoloop_cycle" shape:
 //
-//   - kind=agent_outcome + actor=ironclaw-daemon + event has prefix
-//     "ironclaw-daemon:cycle:" (current daemon's per-cycle hook, includes
+//   - kind=agent_outcome + actor=helixon-daemon + event has prefix
+//     "helixon-daemon:cycle:" (current daemon's per-cycle hook, includes
 //     gated cycles that never reach the canonical writer).
 //   - kind=capsule + source=evoloop-daemon (legacy daemon binaries; kept
 //     so a partially-upgraded fleet doesn't blind the reader).
@@ -361,8 +361,8 @@ func applyLegacyCycleFallbacks(c *Capsule) {
 //
 // Two shapes are recognised:
 //
-//  1. agent_outcome capsule emitted by the IronClaw/EvoLoop daemon's
-//     per-cycle hook (event has prefix "ironclaw-daemon:cycle:"). This is
+//  1. agent_outcome capsule emitted by the Helixon/EvoLoop daemon's
+//     per-cycle hook (event has prefix "helixon-daemon:cycle:"). This is
 //     the canonical shape after v253 d5 because it captures gated cycles
 //     too -- the canonical evoloop_cycle writer is gated and only fires
 //     when KPI delta exceeds the threshold.
@@ -378,8 +378,8 @@ func cycleLikeRow(meta map[string]string) bool {
 		return false
 	}
 	if meta["kind"] == "agent_outcome" &&
-		meta["actor"] == "ironclaw-daemon" &&
-		strings.HasPrefix(meta["event"], "ironclaw-daemon:cycle:") {
+		meta["actor"] == "helixon-daemon" &&
+		strings.HasPrefix(meta["event"], "helixon-daemon:cycle:") {
 		return true
 	}
 	if meta["kind"] == "capsule" && meta["source"] == "evoloop-daemon" {

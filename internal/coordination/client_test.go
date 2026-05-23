@@ -608,14 +608,14 @@ func TestClientMetrics_Snapshot(t *testing.T) {
 	m.SignalsAdded.Add(3)
 	m.Errors.Add(1)
 	snap := m.Snapshot()
-	if snap["ironclaw_coordination_signals_added_total"] != 3 {
-		t.Errorf("added = %d, want 3", snap["ironclaw_coordination_signals_added_total"])
+	if snap["helixon_coordination_signals_added_total"] != 3 {
+		t.Errorf("added = %d, want 3", snap["helixon_coordination_signals_added_total"])
 	}
-	if snap["ironclaw_coordination_errors_total"] != 1 {
-		t.Errorf("errors = %d, want 1", snap["ironclaw_coordination_errors_total"])
+	if snap["helixon_coordination_errors_total"] != 1 {
+		t.Errorf("errors = %d, want 1", snap["helixon_coordination_errors_total"])
 	}
-	if snap["ironclaw_coordination_signals_listed_total"] != 0 {
-		t.Errorf("listed = %d, want 0", snap["ironclaw_coordination_signals_listed_total"])
+	if snap["helixon_coordination_signals_listed_total"] != 0 {
+		t.Errorf("listed = %d, want 0", snap["helixon_coordination_signals_listed_total"])
 	}
 }
 
@@ -789,8 +789,8 @@ func TestRetry_CounterIncrement(t *testing.T) {
 		t.Errorf("Retries = %d, want 2", c.Stats.Retries.Load())
 	}
 	snap := c.Stats.Snapshot()
-	if snap["ironclaw_coordination_retries_total"] != 2 {
-		t.Errorf("snapshot retries = %d, want 2", snap["ironclaw_coordination_retries_total"])
+	if snap["helixon_coordination_retries_total"] != 2 {
+		t.Errorf("snapshot retries = %d, want 2", snap["helixon_coordination_retries_total"])
 	}
 }
 

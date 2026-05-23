@@ -31,14 +31,14 @@ type ClientMetrics struct {
 // Snapshot returns a point-in-time copy of all counters.
 func (m *ClientMetrics) Snapshot() map[string]int64 {
 	return map[string]int64{
-		"ironclaw_coordination_signals_added_total":    m.SignalsAdded.Load(),
-		"ironclaw_coordination_signals_listed_total":   m.SignalsListed.Load(),
-		"ironclaw_coordination_signals_deleted_total":  m.SignalsDeleted.Load(),
-		"ironclaw_coordination_signals_searched_total": m.SignalsSearched.Load(),
-		"ironclaw_coordination_cleanup_runs_total":     m.CleanupRuns.Load(),
-		"ironclaw_coordination_cleanup_deleted_total":  m.CleanupDeleted.Load(),
-		"ironclaw_coordination_errors_total":           m.Errors.Load(),
-		"ironclaw_coordination_retries_total":          m.Retries.Load(),
+		"helixon_coordination_signals_added_total":    m.SignalsAdded.Load(),
+		"helixon_coordination_signals_listed_total":   m.SignalsListed.Load(),
+		"helixon_coordination_signals_deleted_total":  m.SignalsDeleted.Load(),
+		"helixon_coordination_signals_searched_total": m.SignalsSearched.Load(),
+		"helixon_coordination_cleanup_runs_total":     m.CleanupRuns.Load(),
+		"helixon_coordination_cleanup_deleted_total":  m.CleanupDeleted.Load(),
+		"helixon_coordination_errors_total":           m.Errors.Load(),
+		"helixon_coordination_retries_total":          m.Retries.Load(),
 	}
 }
 

@@ -1,7 +1,7 @@
 // runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop client filters Mem0 capsules by the canonical evoloop-daemon source label and wsl1 producer-machine name
 
 // Package outcomes implements the agent_outcome capsule format used by every
-// Cursor hook, fleet worker, and IronClaw daemon to feed the EvoLoop daemon.
+// Cursor hook, fleet worker, and Helixon daemon to feed the EvoLoop daemon.
 //
 // Sprint v253 day 3: introduce the unified Outcome schema and Emitter
 // interfaces. Outcomes land in Mem0 under app_id=cursor-global-kb with
@@ -29,7 +29,7 @@ const (
 	ActorFleetCLI       = "fleet-cli"
 	ActorMCBridge       = "mc-bridge"
 	ActorFallbackBridge = "fallback-bridge"
-	ActorIronclawDaemon = "ironclaw-daemon"
+	ActorIronclawDaemon = "helixon-daemon"
 	ActorEvoloopDaemon  = "evoloop-daemon"
 )
 
@@ -46,7 +46,7 @@ var (
 	ErrMissingEvent   = errors.New("outcomes: event is required")
 )
 
-// Outcome is the canonical capsule emitted by every IronClaw/Cursor worker.
+// Outcome is the canonical capsule emitted by every Helixon/Cursor worker.
 //
 // JSON keys are stable: changes here require a golden-file update and an ADR.
 type Outcome struct {

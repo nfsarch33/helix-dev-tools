@@ -410,7 +410,7 @@ func runDailyRefreshVerification(d *dailyRefresher) error {
 	d.out.Info("step 3/8: verification")
 
 	if d.dryRun {
-		d.out.Info("[dry-run] would run: doctor identity --strict, doctor resume, memory-routine, IronClaw smoke")
+		d.out.Info("[dry-run] would run: doctor identity --strict, doctor resume, memory-routine, Helixon smoke")
 		return nil
 	}
 
@@ -429,16 +429,16 @@ func runDailyRefreshVerification(d *dailyRefresher) error {
 		}
 	}
 
-	smokeScript := os.Getenv("IRONCLAW_MCP_SMOKE_SCRIPT")
+	smokeScript := os.Getenv("HELIXON_MCP_SMOKE_SCRIPT")
 	if smokeScript == "" {
-		smokeScript = "/mnt/f/onedrive/repo/biz-stack/ironclaw-mcp/scripts/smoke-test.sh"
+		smokeScript = "/mnt/f/onedrive/repo/biz-stack/helixon-mcp/scripts/smoke-test.sh"
 	}
 	if _, err := os.Stat(smokeScript); err == nil {
 		if err := dailyRefreshRunSmoke(smokeScript); err != nil {
 			return err
 		}
 	} else {
-		d.out.Warn("IronClaw smoke script not found: %s", smokeScript)
+		d.out.Warn("Helixon smoke script not found: %s", smokeScript)
 	}
 	return nil
 }
@@ -450,7 +450,7 @@ func dailyRefreshRunSelfCommand(paths config.Paths, args ...string) error {
 func dailyRefreshRunSmoke(scriptPath string) error {
 	ctxEnv := append(os.Environ(),
 		"SMOKE_REQUIRE_ROUTER=true",
-		"SMOKE_STATEFUL_TOOL=ironclaw_chat",
+		"SMOKE_STATEFUL_TOOL=helixon_chat",
 	)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()

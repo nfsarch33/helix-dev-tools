@@ -2,8 +2,8 @@
 //
 // This hook scans staged content for forbidden Zendesk-AI gateway URLs
 // in fleet code paths. The gateway boundary is "MacBook only"; fleet
-// code (cylrl orchestrator, MC delegator, router, ironclaw engine,
-// ironclaw-ops overlays) must never embed the URL or its subdomains.
+// code (cylrl orchestrator, MC delegator, router, helixon engine,
+// helixon-ops overlays) must never embed the URL or its subdomains.
 // Documentation, research notes, and changelogs are not scanned —
 // references in prose are legitimate and the human review there is
 // sufficient.
@@ -35,8 +35,8 @@ func fleetCodePathPrefixes() []string {
 		"go/internal/cylrl/",
 		"go/internal/mc/",
 		"go/internal/router/",
-		"ironclaw-ops/",
-		"ironclaw/",
+		"helixon-ops/",
+		"helixon/",
 	}
 }
 

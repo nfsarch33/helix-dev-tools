@@ -150,7 +150,7 @@ func TestGenerateHandoffDoc(t *testing.T) {
 		TicketID:    "v6505-1",
 		AgentID:     "claude-code",
 		TicketTitle: "Helixon platform migration",
-		TicketDesc:  "Migrate 813 files from IronClaw to Helixon module paths",
+		TicketDesc:  "Migrate 813 files from Helixon to Helixon module paths",
 		Priority:    3,
 	}
 

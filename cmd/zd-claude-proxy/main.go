@@ -12,7 +12,7 @@
 //
 // This binary is MacBook-only by repo-owner directive (v256 D28). It must
 // never be deployed to the home fleet (llm-cluster-router, gstack
-// research-agent, pdf-mcp-server, IronClaw runtime, mission-control, member
+// research-agent, pdf-mcp-server, Helixon runtime, mission-control, member
 // DevOps/SysAdmin agents, Hermes, OpenClaw, or any Tailscale/OCI-attached
 // node).
 package main
@@ -156,7 +156,7 @@ func parseFlags() (zdproxy.Config, runtimeOptions) {
 	fs.StringVar(&cfg.OpOpenAIItem, "op-openai-item", "zd api gateway openai models", "1Password item title carrying the OpenAI bearer in notesPlain")
 	fs.StringVar(&cfg.OpOpenAIField, "op-openai-field", "OPENAI_API_KEY", "shell env-var name in the openai notesPlain snippet (empty = treat whole notesPlain as bearer)")
 	fs.StringVar(&cfg.LocalTokenPath, "local-token-path", "", "override path for the per-process local auth token (default: $XDG_CONFIG_HOME/zd-claude-proxy/local-token)")
-	fs.StringVar(&opts.opVault, "op-vault", "Cursor_IronClaw", "1Password vault name to scope item lookups to")
+	fs.StringVar(&opts.opVault, "op-vault", "Cursor_Helixon", "1Password vault name to scope item lookups to")
 	fs.BoolVar(&opts.probe, "probe", false, "resolve secrets via op, log redacted lengths, and exit (cheap smoke gate; no gateway request)")
 	fs.BoolVar(&opts.probeLive, "probe-live", false, "live end-to-end probe: send a tiny request through the configured gateway and exit (no listener bound)")
 	fs.StringVar(&opts.probeModel, "probe-model", "us.anthropic.claude-3-5-haiku-20241022-v1:0", "model id to use for --probe-live (default: cheapest Haiku)")

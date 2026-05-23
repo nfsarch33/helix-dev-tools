@@ -134,22 +134,22 @@ func TestClient_Recent(t *testing.T) {
 			"kind": "capsule",
 		},
 	}
-	// agent_outcome capsule from ironclaw-daemon's per-cycle hook. The
+	// agent_outcome capsule from helixon-daemon's per-cycle hook. The
 	// daemon writes these alongside the canonical kind=evoloop_cycle rows
 	// for every loop iteration (including gated cycles that never reach
 	// the cycle writer). The reader must surface these as synthetic
 	// cycles when --kind=cycle is requested.
 	cycleOutcomeWSL1 := map[string]any{
 		"id":         "out-cyc-wsl1-1",
-		"memory":     "[ironclaw-daemon] cycle:ok on wsl1: kpi=+0.04",
+		"memory":     "[helixon-daemon] cycle:ok on wsl1: kpi=+0.04",
 		"user_id":    "global",
 		"app_id":     "cursor-global-kb",
 		"created_at": "2026-04-23T11:30:00.000000",
 		"metadata": map[string]any{
 			"kind":        "agent_outcome",
-			"actor":       "ironclaw-daemon",
+			"actor":       "helixon-daemon",
 			"machine":     "wsl1",
-			"event":       "ironclaw-daemon:cycle:ok",
+			"event":       "helixon-daemon:cycle:ok",
 			"cycle_id":    "cyc-wsl1-99",
 			"kpi_delta":   0.04,
 			"duration_ms": 8200,
@@ -178,15 +178,15 @@ func TestClient_Recent(t *testing.T) {
 	// agent_outcome from a non-cycle event must NOT be promoted to cycle.
 	nonCycleOutcomeWSL1 := map[string]any{
 		"id":         "out-fi-wsl1-1",
-		"memory":     "[ironclaw-daemon] feature_import:ok on wsl1",
+		"memory":     "[helixon-daemon] feature_import:ok on wsl1",
 		"user_id":    "global",
 		"app_id":     "cursor-global-kb",
 		"created_at": "2026-04-23T11:35:00.000000",
 		"metadata": map[string]any{
 			"kind":    "agent_outcome",
-			"actor":   "ironclaw-daemon",
+			"actor":   "helixon-daemon",
 			"machine": "wsl1",
-			"event":   "ironclaw-daemon:feature_import:ok",
+			"event":   "helixon-daemon:feature_import:ok",
 		},
 	}
 	// Generic capsule (no source) must NOT be promoted to cycle even
@@ -322,7 +322,7 @@ func TestClient_Recent(t *testing.T) {
 				if outcome.KPIDelta == 0 {
 					t.Fatalf("outcome kpi_delta not parsed: %+v", outcome)
 				}
-				if outcome.Event != "ironclaw-daemon:cycle:ok" {
+				if outcome.Event != "helixon-daemon:cycle:ok" {
 					t.Fatalf("outcome event tag not preserved: %q", outcome.Event)
 				}
 				if outcome.DurationMS != 8200 {
@@ -464,9 +464,9 @@ func TestCycleLikeRow(t *testing.T) {
 		want bool
 	}{
 		{name: "canonical evoloop_cycle", meta: map[string]string{"kind": "evoloop_cycle"}, want: false}, // already kind=cycle
-		{name: "agent_outcome cycle event", meta: map[string]string{"kind": "agent_outcome", "actor": "ironclaw-daemon", "event": "ironclaw-daemon:cycle:ok"}, want: true},
-		{name: "agent_outcome non-cycle event", meta: map[string]string{"kind": "agent_outcome", "actor": "ironclaw-daemon", "event": "ironclaw-daemon:feature_import:ok"}, want: false},
-		{name: "agent_outcome wrong actor", meta: map[string]string{"kind": "agent_outcome", "actor": "fleet-cli", "event": "ironclaw-daemon:cycle:ok"}, want: false},
+		{name: "agent_outcome cycle event", meta: map[string]string{"kind": "agent_outcome", "actor": "helixon-daemon", "event": "helixon-daemon:cycle:ok"}, want: true},
+		{name: "agent_outcome non-cycle event", meta: map[string]string{"kind": "agent_outcome", "actor": "helixon-daemon", "event": "helixon-daemon:feature_import:ok"}, want: false},
+		{name: "agent_outcome wrong actor", meta: map[string]string{"kind": "agent_outcome", "actor": "fleet-cli", "event": "helixon-daemon:cycle:ok"}, want: false},
 		{name: "legacy capsule with evoloop-daemon source", meta: map[string]string{"kind": "capsule", "source": "evoloop-daemon"}, want: true},
 		{name: "plain capsule no source", meta: map[string]string{"kind": "capsule"}, want: false},
 		{name: "plain capsule wrong source", meta: map[string]string{"kind": "capsule", "source": "fleet-cli"}, want: false},

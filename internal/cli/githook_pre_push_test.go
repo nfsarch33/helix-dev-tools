@@ -205,13 +205,13 @@ func TestPrePush_AllowsZendeskNewBranchAllZeroRemoteSHA(t *testing.T) {
 func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/ironclaw-mcp.git",
+		RemoteURL: "git@github-agtc:nfsarch33/helixon-mcp.git",
 		GitEmail:  "jaslian@gmail.com",
 		Env:       map[string]string{},
 	})
 	withFakePublicRepoGate(t, func(remoteURL string) []string {
 		return []string{
-			"public-repo-gate failed for nfsarch33/ironclaw-mcp (alias=ironclaw-mcp):",
+			"public-repo-gate failed for nfsarch33/helixon-mcp (alias=helixon-mcp):",
 			"internal/foo.go:42 fleet_alias_2 win1",
 		}
 	})
@@ -220,7 +220,7 @@ func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/ironclaw-mcp.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/helixon-mcp.git"})
 	if *code != 1 {
 		t.Fatalf("public-repo-gate finding must block push, got exit %d", *code)
 	}
@@ -237,7 +237,7 @@ func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
 func TestPrePush_AllowsCleanPublicRepo(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/ironclaw-mcp.git",
+		RemoteURL: "git@github-agtc:nfsarch33/helixon-mcp.git",
 		GitEmail:  "jaslian@gmail.com",
 		Env:       map[string]string{},
 	})
@@ -251,7 +251,7 @@ func TestPrePush_AllowsCleanPublicRepo(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	if err := runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/ironclaw-mcp.git"}); err != nil {
+	if err := runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/helixon-mcp.git"}); err != nil {
 		t.Fatalf("clean public repo push should not error: %v", err)
 	}
 	if *code != 0 {
@@ -305,8 +305,8 @@ func TestPublicRepoNameFromURLDefault_TableDriven(t *testing.T) {
 		url  string
 		want string
 	}{
-		{name: "ssh agtc personal", url: "git@github-agtc:nfsarch33/ironclaw-mcp.git", want: "ironclaw-mcp"},
-		{name: "ssh agtc no .git", url: "git@github-agtc:nfsarch33/ironclaw-mcp", want: "ironclaw-mcp"},
+		{name: "ssh agtc personal", url: "git@github-agtc:nfsarch33/helixon-mcp.git", want: "helixon-mcp"},
+		{name: "ssh agtc no .git", url: "git@github-agtc:nfsarch33/helixon-mcp", want: "helixon-mcp"},
 		{name: "https personal", url: "https://github.com/nfsarch33/helix-dev-tools.git", want: "helix-dev-tools"},
 		{name: "zendesk work clone", url: "git@github.com:zendesk/secure-auth-platform.git", want: ""},
 		{name: "empty", url: "", want: ""},
@@ -328,8 +328,8 @@ func TestResolvePublicRepoAlias(t *testing.T) {
 	if got := resolvePublicRepoAlias("llm-cluster-router"); got != "router" {
 		t.Errorf("resolvePublicRepoAlias(llm-cluster-router) = %q, want router", got)
 	}
-	if got := resolvePublicRepoAlias("ironclaw-mcp"); got != "ironclaw-mcp" {
-		t.Errorf("resolvePublicRepoAlias(ironclaw-mcp) = %q, want identity", got)
+	if got := resolvePublicRepoAlias("helixon-mcp"); got != "helixon-mcp" {
+		t.Errorf("resolvePublicRepoAlias(helixon-mcp) = %q, want identity", got)
 	}
 }
 

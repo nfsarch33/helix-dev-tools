@@ -31,7 +31,7 @@ func sampleConfig() *mcpfilter.MCPConfig {
 			"user-chrome-devtools":      {Command: "devtools"},
 			"user-linkedin-mcp":         {Command: "linkedin"},
 			"user-upwork-mcp":           {Command: "upwork"},
-			"user-ironclaw":             {Command: "ironclaw"},
+			"user-helixon":             {Command: "helixon"},
 			"user-plantuml":             {Command: "plantuml"},
 			"user-mermaid":              {Command: "mermaid"},
 			"user-word-document-server": {Command: "word"},
@@ -113,7 +113,7 @@ func TestApplyProfile_WithExclude(t *testing.T) {
 	profile := mcpfilter.ProfileDef{
 		Name:    "custom",
 		Include: []string{"*"},
-		Exclude: []string{"user-ironclaw", "user-atlassian-jira"},
+		Exclude: []string{"user-helixon", "user-atlassian-jira"},
 	}
 
 	filtered, result := mcpfilter.ApplyProfile(cfg, profile)
@@ -121,7 +121,7 @@ func TestApplyProfile_WithExclude(t *testing.T) {
 	if result.TotalOut != 23 {
 		t.Errorf("TotalOut = %d, want 23 (25 - 2 excluded)", result.TotalOut)
 	}
-	if _, ok := filtered.MCPServers["user-ironclaw"]; ok {
+	if _, ok := filtered.MCPServers["user-helixon"]; ok {
 		t.Error("excluded server should not be in output")
 	}
 }

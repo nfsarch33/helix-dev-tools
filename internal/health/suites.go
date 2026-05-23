@@ -47,7 +47,7 @@ var suiteCatalog = []suiteSpec{
 	{name: "Log File Integrity", builder: suiteLogFileIntegrity},
 	{name: "Automation Pipeline", builder: suiteAutomationPipeline},
 	{name: "Skillvet EDR-Safety", builder: suiteSkillvetEDR},
-	{name: "IronClaw Readiness", builder: suiteIronClawReadiness},
+	{name: "Helixon Readiness", builder: suiteHelixonReadiness},
 	{name: "Global Cursor Config", builder: suiteGlobalCursorConfig},
 	{name: "Race Condition Prevention", builder: suiteRaceConditionPrevention},
 	{name: "Data Integrity", builder: suiteDataIntegrity},
@@ -129,7 +129,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"Hooks, Sub-agents, Commands, MCP",
 			"MCP Readiness",
 			"Mem0 Connectivity",
-			"IronClaw Readiness",
+			"Helixon Readiness",
 			"Platform Readiness",
 			"Programmatic Count Verification",
 		}
@@ -166,7 +166,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 		}
 	case "stack":
 		names = []string{
-			"IronClaw Readiness",
+			"Helixon Readiness",
 			"Agent Stack Health",
 			"MCP Readiness",
 			"Mem0 Connectivity",
@@ -920,27 +920,27 @@ func suiteAutomationPipeline(p config.Paths) *Suite {
 	return s
 }
 
-func suiteIronClawReadiness(p config.Paths) *Suite {
-	s := &Suite{Name: "IronClaw Readiness"}
+func suiteHelixonReadiness(p config.Paths) *Suite {
+	s := &Suite{Name: "Helixon Readiness"}
 	mcpPath := p.CursorMCPConfig()
 	cfg, err := loadMCPHealthConfig(mcpPath)
 	if err != nil {
-		s.Pass("mcp.json parses (IronClaw check skipped)")
+		s.Pass("mcp.json parses (Helixon check skipped)")
 		return s
 	}
-	spec, hasIronclaw := cfg.MCPServers["ironclaw"]
+	spec, hasIronclaw := cfg.MCPServers["helixon"]
 	if !hasIronclaw {
-		s.Pass("ironclaw not configured (optional for local Cursor+IronClaw integration)")
+		s.Pass("helixon not configured (optional for local Cursor+Helixon integration)")
 		return s
 	}
 	if spec.Disabled {
-		s.Pass("ironclaw configured but disabled")
+		s.Pass("helixon configured but disabled")
 		return s
 	}
-	s.Assert("ironclaw command resolvable", commandResolvable(spec.Command), "ironclaw-mcp binary not found: "+spec.Command)
-	// envReady is optional: ironclaw-mcp defaults to http://localhost:3000
+	s.Assert("helixon command resolvable", commandResolvable(spec.Command), "helixon-mcp binary not found: "+spec.Command)
+	// envReady is optional: helixon-mcp defaults to http://localhost:3000
 	if len(spec.Env) > 0 {
-		s.Assert("ironclaw env ready", envReady(spec.Env), "missing env placeholder for ironclaw")
+		s.Assert("helixon env ready", envReady(spec.Env), "missing env placeholder for helixon")
 	}
 	return s
 }

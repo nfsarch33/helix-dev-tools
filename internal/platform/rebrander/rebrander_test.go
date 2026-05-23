@@ -16,7 +16,7 @@ func writeFile(t *testing.T, dir, name, content string) string {
 }
 
 func TestNewScanner(t *testing.T) {
-	rules := []Rule{{Old: "helixon", New: "ironclaw"}}
+	rules := []Rule{{Old: "helixon", New: "helixon"}}
 	s := NewScanner(rules)
 	if len(s.Rules) != 1 {
 		t.Errorf("rules: %d", len(s.Rules))
@@ -26,9 +26,9 @@ func TestNewScanner(t *testing.T) {
 func TestScanFindsMatches(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "config.yaml", "host: helixon-mcp\nport: 8080\n")
-	writeFile(t, dir, "readme.md", "This uses ironclaw (not helixon).\n")
+	writeFile(t, dir, "readme.md", "This uses helixon (not helixon).\n")
 
-	s := NewScanner([]Rule{{Old: "helixon", New: "ironclaw"}})
+	s := NewScanner([]Rule{{Old: "helixon", New: "helixon"}})
 	findings, err := s.Scan(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -42,7 +42,7 @@ func TestScanCountsOccurrences(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "test.go", "helixon helixon helixon\n")
 
-	s := NewScanner([]Rule{{Old: "helixon", New: "ironclaw"}})
+	s := NewScanner([]Rule{{Old: "helixon", New: "helixon"}})
 	findings, err := s.Scan(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -57,7 +57,7 @@ func TestScanSkipsBinary(t *testing.T) {
 	writeFile(t, dir, "binary.exe", "\x00\x01helixon\x00\x02")
 	writeFile(t, dir, "text.go", "helixon\n")
 
-	s := NewScanner([]Rule{{Old: "helixon", New: "ironclaw"}})
+	s := NewScanner([]Rule{{Old: "helixon", New: "helixon"}})
 	findings, err := s.Scan(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -71,7 +71,7 @@ func TestApply(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "config.yaml", "host: helixon-mcp\nalias: helixon\n")
 
-	s := NewScanner([]Rule{{Old: "helixon", New: "ironclaw"}})
+	s := NewScanner([]Rule{{Old: "helixon", New: "helixon"}})
 	count, err := s.Apply(path, s.Rules[0])
 	if err != nil {
 		t.Fatal(err)
@@ -82,7 +82,7 @@ func TestApply(t *testing.T) {
 
 	data, _ := os.ReadFile(path)
 	content := string(data)
-	if content != "host: ironclaw-mcp\nalias: ironclaw\n" {
+	if content != "host: helixon-mcp\nalias: helixon\n" {
 		t.Errorf("content after apply: %q", content)
 	}
 }
@@ -91,7 +91,7 @@ func TestApplyNoMatch(t *testing.T) {
 	dir := t.TempDir()
 	path := writeFile(t, dir, "clean.go", "all good here\n")
 
-	s := NewScanner([]Rule{{Old: "helixon", New: "ironclaw"}})
+	s := NewScanner([]Rule{{Old: "helixon", New: "helixon"}})
 	count, err := s.Apply(path, s.Rules[0])
 	if err != nil {
 		t.Fatal(err)
@@ -106,8 +106,8 @@ func TestMultipleRules(t *testing.T) {
 	writeFile(t, dir, "mixed.go", "helixon and helix-ops both need updating\n")
 
 	s := NewScanner([]Rule{
-		{Old: "helixon", New: "ironclaw"},
-		{Old: "helix-ops", New: "ironclaw-ops"},
+		{Old: "helixon", New: "helixon"},
+		{Old: "helix-ops", New: "helixon-ops"},
 	})
 	findings, err := s.Scan(dir)
 	if err != nil {
@@ -124,7 +124,7 @@ func TestScanSubdirectories(t *testing.T) {
 	os.MkdirAll(sub, 0755)
 	writeFile(t, sub, "deep.go", "helixon inside subdir\n")
 
-	s := NewScanner([]Rule{{Old: "helixon", New: "ironclaw"}})
+	s := NewScanner([]Rule{{Old: "helixon", New: "helixon"}})
 	findings, err := s.Scan(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -136,7 +136,7 @@ func TestScanSubdirectories(t *testing.T) {
 
 func TestScanEmptyDir(t *testing.T) {
 	dir := t.TempDir()
-	s := NewScanner([]Rule{{Old: "helixon", New: "ironclaw"}})
+	s := NewScanner([]Rule{{Old: "helixon", New: "helixon"}})
 	findings, err := s.Scan(dir)
 	if err != nil {
 		t.Fatal(err)

@@ -213,7 +213,7 @@ func TestDetector_MixedProcesses(t *testing.T) {
 			{PID: 102, PPID: 42, Name: "pdf-mcp-server", Elapsed: 2 * time.Hour},
 			// 2 orphaned: PPID=1
 			{PID: 200, PPID: 1, Name: "sentrux", Elapsed: 10 * time.Minute},
-			{PID: 201, PPID: 1, Name: "ironclaw-mcp", Elapsed: 5 * time.Minute},
+			{PID: 201, PPID: 1, Name: "helixon-mcp", Elapsed: 5 * time.Minute},
 			// 1 long-running: exceeds threshold
 			{PID: 300, PPID: 42, Name: "cursor-tools", Elapsed: 5 * time.Hour},
 		},

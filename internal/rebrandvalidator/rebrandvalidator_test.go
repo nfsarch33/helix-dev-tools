@@ -15,14 +15,14 @@ import (
 func TestScanFileFindsLegacyTerms(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "example.go")
-	content := "package main\n\nimport \"ironclaw/pkg\"\n\nfunc main() {}\n"
+	content := "package main\n\nimport \"helixon/pkg\"\n\nfunc main() {}\n"
 	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
 
 	findings, err := ScanFile(path, DefaultLegacyTerms())
 	require.NoError(t, err)
 	require.Len(t, findings, 1)
 	assert.Equal(t, 3, findings[0].LineNumber)
-	assert.Equal(t, "ironclaw", findings[0].LegacyTerm)
+	assert.Equal(t, "helixon", findings[0].LegacyTerm)
 	assert.Equal(t, path, findings[0].FilePath)
 }
 
@@ -41,7 +41,7 @@ func TestScanDirectoryRecursive(t *testing.T) {
 	sub := filepath.Join(dir, "sub", "deep")
 	require.NoError(t, os.MkdirAll(sub, 0755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "root.go"), []byte("ironclaw\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "root.go"), []byte("helixon\n"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(sub, "nested.go"), []byte("cursor-tools config\n"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "clean.go"), []byte("nothing here\n"), 0644))
 
@@ -58,7 +58,7 @@ func TestScanDirectoryExcludes(t *testing.T) {
 	require.NoError(t, os.MkdirAll(gitDir, 0755))
 	require.NoError(t, os.MkdirAll(vendorDir, 0755))
 
-	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("ironclaw ref\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "HEAD"), []byte("helixon ref\n"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(vendorDir, "lib.go"), []byte("cursor-tools dep\n"), 0644))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("clean code\n"), 0644))
 
@@ -69,7 +69,7 @@ func TestScanDirectoryExcludes(t *testing.T) {
 
 func TestDefaultLegacyTerms(t *testing.T) {
 	terms := DefaultLegacyTerms()
-	expected := []string{"ironclaw", "cursor-tools", "cursor-global-kb", "cursor_tools", "cylrl", "IronClaw", "IRONCLAW"}
+	expected := []string{"helixon", "cursor-tools", "cursor-global-kb", "cursor_tools", "cylrl", "Helixon", "HELIXON"}
 	for _, e := range expected {
 		assert.Contains(t, terms, e, "missing expected term: %s", e)
 	}
@@ -79,7 +79,7 @@ func TestDefaultLegacyTerms(t *testing.T) {
 func TestScanFileMultipleTerms(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "multi.txt")
-	content := "line one\nironclaw and cursor-tools here\nIRONCLAW on line 3\n"
+	content := "line one\nhelixon and cursor-tools here\nHELIXON on line 3\n"
 	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
 
 	findings, err := ScanFile(path, DefaultLegacyTerms())
@@ -90,13 +90,13 @@ func TestScanFileMultipleTerms(t *testing.T) {
 func TestFindingHasContext(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "ctx.go")
-	content := "package main\n\nvar name = \"ironclaw-service\"\n"
+	content := "package main\n\nvar name = \"helixon-service\"\n"
 	require.NoError(t, os.WriteFile(path, []byte(content), 0644))
 
 	findings, err := ScanFile(path, DefaultLegacyTerms())
 	require.NoError(t, err)
 	require.NotEmpty(t, findings)
-	assert.Contains(t, findings[0].Context, "ironclaw-service")
+	assert.Contains(t, findings[0].Context, "helixon-service")
 }
 
 func TestScanDirectoryCountsFiles(t *testing.T) {
@@ -140,7 +140,7 @@ func TestScanFileLargeFile(t *testing.T) {
 	var b strings.Builder
 	for i := range 10000 {
 		if i == 5000 {
-			b.WriteString("found ironclaw here\n")
+			b.WriteString("found helixon here\n")
 			continue
 		}
 		b.WriteString("clean line of text content here\n")
@@ -162,11 +162,11 @@ func TestScanDirectory_WithAllowlist(t *testing.T) {
 	dir := t.TempDir()
 	// A file with a legacy term that we want to allowlist.
 	path := filepath.Join(dir, "legacy-sop.md")
-	require.NoError(t, os.WriteFile(path, []byte("This doc references ironclaw for historical reasons.\n"), 0644))
+	require.NoError(t, os.WriteFile(path, []byte("This doc references helixon for historical reasons.\n"), 0644))
 
-	// GIVEN: allowlist suppresses ironclaw in *.md files.
+	// GIVEN: allowlist suppresses helixon in *.md files.
 	allowlist := []AllowlistEntry{
-		{File: "*.md", Term: "ironclaw"},
+		{File: "*.md", Term: "helixon"},
 	}
 
 	// WHEN: ScanDirectory called with allowlist.
@@ -185,17 +185,17 @@ func TestScanDirectory_WithAllowlist(t *testing.T) {
 func TestScanDirectory_AllowlistDoesNotSuppressOtherTerms(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "doc.md")
-	require.NoError(t, os.WriteFile(path, []byte("ironclaw and cursor-tools both appear here.\n"), 0644))
+	require.NoError(t, os.WriteFile(path, []byte("helixon and cursor-tools both appear here.\n"), 0644))
 
-	// Only suppress ironclaw in .md files; cursor-tools is NOT suppressed.
+	// Only suppress helixon in .md files; cursor-tools is NOT suppressed.
 	allowlist := []AllowlistEntry{
-		{File: "*.md", Term: "ironclaw"},
+		{File: "*.md", Term: "helixon"},
 	}
 
 	result, err := ScanDirectory(dir, nil, allowlist)
 	require.NoError(t, err)
 
-	// cursor-tools must still be reported; ironclaw must be suppressed.
+	// cursor-tools must still be reported; helixon must be suppressed.
 	assert.Equal(t, 1, result.FindingCount)
 	assert.Equal(t, 1, result.SuppressedCount)
 }
@@ -204,7 +204,7 @@ func TestScanDirectory_AllowlistDoesNotSuppressOtherTerms(t *testing.T) {
 // nil allowlist produces the same result as before.
 func TestScanDirectory_EmptyAllowlist(t *testing.T) {
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("ironclaw ref\n"), 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("helixon ref\n"), 0644))
 
 	result, err := ScanDirectory(dir, nil, nil)
 	require.NoError(t, err)
@@ -245,7 +245,7 @@ func TestLoadAllowlistYAML_MissingFileIsOK(t *testing.T) {
 func TestScanResultJSON(t *testing.T) {
 	result := ScanResult{
 		Findings: []Finding{
-			{FilePath: "test.go", LineNumber: 1, LegacyTerm: "ironclaw", Context: "ironclaw ref", Line: "ironclaw ref"},
+			{FilePath: "test.go", LineNumber: 1, LegacyTerm: "helixon", Context: "helixon ref", Line: "helixon ref"},
 		},
 		FileCount:    1,
 		FindingCount: 1,

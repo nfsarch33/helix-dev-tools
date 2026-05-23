@@ -12,7 +12,7 @@
 //
 // This package is MacBook-only by repo-owner directive (v256 D28). It must not
 // be wired into the home fleet (llm-cluster-router, gstack research-agent,
-// pdf-mcp-server, IronClaw runtime, mission-control, member DevOps/SysAdmin
+// pdf-mcp-server, Helixon runtime, mission-control, member DevOps/SysAdmin
 // agents, Hermes, OpenClaw, or any Tailscale/OCI-attached node).
 package zdproxy
 

@@ -15,7 +15,7 @@ func TestFormat_EmptySummary(t *testing.T) {
 		Until:       time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC),
 	}
 	out := Format(s, "24h", nil)
-	if !strings.Contains(out, "ironclaw_cursor_metrics_jsonl_events_total") {
+	if !strings.Contains(out, "helixon_cursor_metrics_jsonl_events_total") {
 		t.Fatalf("missing events metric: %q", out)
 	}
 	if !strings.Contains(out, `window="24h"`) {
@@ -34,10 +34,10 @@ func TestFormat_HookTotals(t *testing.T) {
 		Tasks: metrics.TaskCoverage{Total: 5, SkillTasks: 2, MCPTasks: 3},
 	}
 	out := Format(s, "168h", nil)
-	if !strings.Contains(out, `ironclaw_cursor_hook_events_total{hook="guard_shell",window="168h"} 6`) {
+	if !strings.Contains(out, `helixon_cursor_hook_events_total{hook="guard_shell",window="168h"} 6`) {
 		t.Fatalf("expected guard_shell count: %s", out)
 	}
-	if !strings.Contains(out, "ironclaw_cursor_metrics_jsonl_intervention_rate_percent") {
+	if !strings.Contains(out, "helixon_cursor_metrics_jsonl_intervention_rate_percent") {
 		t.Fatal("missing intervention rate")
 	}
 	// 2 interventions / 10 total = 20%
@@ -53,10 +53,10 @@ func TestFormat_Smoke(t *testing.T) {
 		CheckedAt:         time.Date(2026, 3, 25, 12, 0, 0, 0, time.UTC),
 	}
 	out := Format(nil, "24h", smoke)
-	if !strings.Contains(out, "ironclaw_evoloop_smoke_prometheus_ok 1") {
+	if !strings.Contains(out, "helixon_evoloop_smoke_prometheus_ok 1") {
 		t.Fatalf("expected prom ok=1: %s", out)
 	}
-	if !strings.Contains(out, "ironclaw_evoloop_smoke_drl_service_ok 0") {
+	if !strings.Contains(out, "helixon_evoloop_smoke_drl_service_ok 0") {
 		t.Fatalf("expected drl ok=0: %s", out)
 	}
 }

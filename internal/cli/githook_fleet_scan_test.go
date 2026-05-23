@@ -68,15 +68,15 @@ func TestFleetScan_RejectsForbiddenZDURL(t *testing.T) {
 // under three roots in this repo set:
 //   - go/internal/cylrl, go/internal/mc, go/internal/router (cylrl
 //     orchestrator + MC + router)
-//   - ironclaw-ops/ (deployment overlays)
-//   - ironclaw/ (engine prod code)
+//   - helixon-ops/ (deployment overlays)
+//   - helixon/ (engine prod code)
 func TestFleetScan_FleetPathsAreCanonical(t *testing.T) {
 	want := []string{
 		"go/internal/cylrl/",
 		"go/internal/mc/",
 		"go/internal/router/",
-		"ironclaw-ops/",
-		"ironclaw/",
+		"helixon-ops/",
+		"helixon/",
 	}
 	got := fleetCodePathPrefixes()
 	if len(got) != len(want) {

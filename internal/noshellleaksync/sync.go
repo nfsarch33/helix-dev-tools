@@ -7,7 +7,7 @@
 // v299 D6: 14 mirror targets across personal repos. The canonical source of
 // truth lives at $HOME/Code/global-kb/cursor-config/rules/no-shell-leak.mdc.
 // Each mirror is keyed by its repo alias path; the syncer never touches
-// public mirror repos (ironclaw, openclaw, hermes, etc.) or dormant repos.
+// public mirror repos (helixon, openclaw, hermes, etc.) or dormant repos.
 package noshellleaksync
 
 import (
@@ -31,7 +31,7 @@ const MirrorRelativePath = ".cursor/rules/no-shell-leak.mdc"
 // $HOME) that should each carry a synchronized copy of the no-shell-leak
 // rule. Listed in deterministic order so test diffs are stable.
 //
-// Public mirror repos (ironclaw, openclaw, hermes, gstack, autoresearch,
+// Public mirror repos (helixon, openclaw, hermes, gstack, autoresearch,
 // openclaw-rl, windows-mcp, chromedp, Auto-claude-code-research-in-sleep,
 // skills, academic-research-skills) are intentionally excluded -- we do not
 // own them and must not push private rule content upstream.
@@ -49,9 +49,9 @@ func MirrorRepoPaths() []string {
 		"Code/secure-auth-platform",
 		"cursor-tools",
 		"hermes-agent",
-		"ironclaw",
-		"ironclaw-mcp",
-		"ironclaw-ops",
+		"helixon",
+		"helixon-mcp",
+		"helixon-ops",
 		"linkedin-mcp-server",
 		"memo",
 		"openclaw-mission-control",

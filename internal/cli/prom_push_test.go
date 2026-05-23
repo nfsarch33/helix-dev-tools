@@ -49,7 +49,7 @@ func TestPromPush_HTTPServerAcceptsPost(t *testing.T) {
 		t.Fatal(err)
 	}
 	client := &http.Client{}
-	resp, err := client.Post(u, "text/plain; version=0.0.4", strings.NewReader("ironclaw_test_metric 1\n"))
+	resp, err := client.Post(u, "text/plain; version=0.0.4", strings.NewReader("helixon_test_metric 1\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +57,7 @@ func TestPromPush_HTTPServerAcceptsPost(t *testing.T) {
 	if resp.StatusCode != 200 {
 		t.Fatalf("status %d", resp.StatusCode)
 	}
-	if !strings.Contains(gotBody, "ironclaw_test_metric") {
+	if !strings.Contains(gotBody, "helixon_test_metric") {
 		t.Fatalf("body %q", gotBody)
 	}
 }

@@ -116,7 +116,7 @@ func TestSignalMem0Metadata(t *testing.T) {
 		TargetFor: "macbook",
 		Priority:  "high",
 		Sprint:    "154",
-		Metadata:  map[string]string{"repo": "ironclaw-ops"},
+		Metadata:  map[string]string{"repo": "helixon-ops"},
 	}
 	meta := s.Mem0Metadata()
 
@@ -126,7 +126,7 @@ func TestSignalMem0Metadata(t *testing.T) {
 		"target_for": "macbook",
 		"priority":   "high",
 		"sprint":     "154",
-		"repo":       "ironclaw-ops",
+		"repo":       "helixon-ops",
 	}
 	for key, want := range checks {
 		if got := meta[key]; got != want {

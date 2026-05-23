@@ -35,7 +35,7 @@ var promPushCmd = &cobra.Command{
 	Short: "Push metrics.jsonl rollups (+ optional EvoLoop smoke) to Prometheus Pushgateway",
 	Long: `Aggregates ~/.cursor/hooks/metrics.jsonl for the last N days and POSTs Prometheus
 exposition text to Pushgateway (scraped by DRL Prometheus). Optionally probes DRL Prometheus
-and drl-service health and pushes ironclaw_evoloop_smoke_* gauges.
+and drl-service health and pushes helixon_evoloop_smoke_* gauges.
 
 Example:
   cursor-tools prom-push --with-smoke

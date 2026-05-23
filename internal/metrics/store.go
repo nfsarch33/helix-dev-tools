@@ -690,7 +690,7 @@ func (s *Summary) Markdown() string {
 		b.WriteString("\n## Task Adoption Coverage\n\n")
 		b.WriteString(fmt.Sprintf("- Skill task coverage: %d / %d = %.1f%%\n", s.Tasks.SkillTasks, s.Tasks.Total, percentageInt(s.Tasks.SkillTasks, s.Tasks.Total)))
 		b.WriteString(fmt.Sprintf("- MCP task coverage: %d / %d = %.1f%%\n", s.Tasks.MCPTasks, s.Tasks.Total, percentageInt(s.Tasks.MCPTasks, s.Tasks.Total)))
-		b.WriteString(fmt.Sprintf("- IronClaw MCP task coverage: %d / %d = %.1f%%\n", s.Tasks.IronclawTasks, s.Tasks.Total, percentageInt(s.Tasks.IronclawTasks, s.Tasks.Total)))
+		b.WriteString(fmt.Sprintf("- Helixon MCP task coverage: %d / %d = %.1f%%\n", s.Tasks.IronclawTasks, s.Tasks.Total, percentageInt(s.Tasks.IronclawTasks, s.Tasks.Total)))
 		b.WriteString(fmt.Sprintf("- Subagent task coverage: %d / %d = %.1f%%\n", s.Tasks.SubagentTasks, s.Tasks.Total, percentageInt(s.Tasks.SubagentTasks, s.Tasks.Total)))
 		b.WriteString(fmt.Sprintf("- Task grouping confidence: exact=%d, turn-based=%d, heuristic=%d\n", s.Tasks.ExactTasks, s.Tasks.TurnTasks, s.Tasks.HeuristicTasks))
 		b.WriteString(fmt.Sprintf("- Explicit task groups: %d\n", s.Tasks.ExplicitTasks))
@@ -1253,7 +1253,7 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 	type taskSignals struct {
 		skill    bool
 		mcp      bool
-		ironclaw bool
+		helixon bool
 		subagent bool
 		exact    bool
 		turn     bool
@@ -1323,8 +1323,8 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 			entry.skill = true
 		case "mcp":
 			entry.mcp = true
-			if eventMCPServer(e) == "ironclaw" {
-				entry.ironclaw = true
+			if eventMCPServer(e) == "helixon" {
+				entry.helixon = true
 			}
 		case "subagent":
 			entry.subagent = true
@@ -1340,7 +1340,7 @@ func buildTaskCoverage(events []Event, since time.Time) TaskCoverage {
 		if task.mcp {
 			coverage.MCPTasks++
 		}
-		if task.ironclaw {
+		if task.helixon {
 			coverage.IronclawTasks++
 		}
 		if task.subagent {

@@ -275,13 +275,13 @@ func expandHome(path, home string) string {
 // not block Workspace Doctor scoring.
 //
 // Members:
-//   - ironclaw, openclaw, hermes, gstack, temporal: analysis-only
+//   - helixon, openclaw, hermes, gstack, temporal: analysis-only
 //     forks tracked in daily-startup-prompt.md
 //   - windows-mcp: "Reference checkout" per repo-index.md (community
 //     OSS upstream we use but do not maintain)
 func isKnownVendorMirror(alias string) bool {
 	switch alias {
-	case "ironclaw", "openclaw", "hermes", "gstack", "temporal", "windows-mcp":
+	case "helixon", "openclaw", "hermes", "gstack", "temporal", "windows-mcp":
 		return true
 	default:
 		return false
