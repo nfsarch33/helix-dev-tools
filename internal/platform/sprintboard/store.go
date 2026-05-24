@@ -49,6 +49,7 @@ type Ticket struct {
 	Status             TicketStatus `json:"status"`
 	OwnerAgent         string       `json:"owner_agent,omitempty"`
 	Priority           int          `json:"priority"`
+	Labels             string       `json:"labels,omitempty"`
 	AcceptanceCriteria string       `json:"acceptance_criteria,omitempty"`
 	HandoffDocPath     string       `json:"handoff_doc_path,omitempty"`
 	CreatedAt          time.Time    `json:"created_at"`
@@ -187,7 +188,10 @@ func (s *Store) migrate() error {
 	if err := s.migrateClaiming(); err != nil {
 		return err
 	}
-	return s.migrateDAG()
+	if err := s.migrateDAG(); err != nil {
+		return err
+	}
+	return s.migrateLabels()
 }
 
 func (s *Store) CreateSprint(sp Sprint) error {
@@ -257,17 +261,17 @@ func (s *Store) CreateTicket(t Ticket) error {
 	}
 
 	_, err := s.db.Exec(
-		`INSERT INTO tickets (id, sprint_id, title, description, status, owner_agent, priority, acceptance_criteria, handoff_doc_path, created_at, updated_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO tickets (id, sprint_id, title, description, status, owner_agent, priority, labels, acceptance_criteria, handoff_doc_path, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		t.ID, t.SprintID, t.Title, t.Description, t.Status, t.OwnerAgent,
-		t.Priority, t.AcceptanceCriteria, t.HandoffDocPath,
+		t.Priority, t.Labels, t.AcceptanceCriteria, t.HandoffDocPath,
 		formatTime(t.CreatedAt), formatTime(t.UpdatedAt),
 	)
 	return err
 }
 
 func (s *Store) ListTickets(sprintID string) ([]Ticket, error) {
-	query := `SELECT id, sprint_id, title, description, status, owner_agent, priority, acceptance_criteria, handoff_doc_path, created_at, updated_at FROM tickets`
+	query := `SELECT id, sprint_id, title, description, status, owner_agent, priority, labels, acceptance_criteria, handoff_doc_path, created_at, updated_at FROM tickets`
 	var args []interface{}
 	if sprintID != "" {
 		query += ` WHERE sprint_id = ?`
@@ -286,7 +290,7 @@ func (s *Store) ListTickets(sprintID string) ([]Ticket, error) {
 		var t Ticket
 		var createdAt, updatedAt string
 		err := rows.Scan(&t.ID, &t.SprintID, &t.Title, &t.Description, &t.Status,
-			&t.OwnerAgent, &t.Priority, &t.AcceptanceCriteria, &t.HandoffDocPath,
+			&t.OwnerAgent, &t.Priority, &t.Labels, &t.AcceptanceCriteria, &t.HandoffDocPath,
 			&createdAt, &updatedAt)
 		if err != nil {
 			return nil, err
@@ -498,10 +502,10 @@ func (s *Store) GetTicket(id string) (Ticket, error) {
 	var t Ticket
 	var createdAt, updatedAt string
 	err := s.db.QueryRow(
-		`SELECT id, sprint_id, title, description, status, owner_agent, priority, acceptance_criteria, handoff_doc_path, created_at, updated_at
+		`SELECT id, sprint_id, title, description, status, owner_agent, priority, labels, acceptance_criteria, handoff_doc_path, created_at, updated_at
 		 FROM tickets WHERE id = ?`, id,
 	).Scan(&t.ID, &t.SprintID, &t.Title, &t.Description, &t.Status,
-		&t.OwnerAgent, &t.Priority, &t.AcceptanceCriteria, &t.HandoffDocPath,
+		&t.OwnerAgent, &t.Priority, &t.Labels, &t.AcceptanceCriteria, &t.HandoffDocPath,
 		&createdAt, &updatedAt)
 	if err != nil {
 		return Ticket{}, fmt.Errorf("ticket %q not found: %w", id, err)
@@ -524,4 +528,33 @@ func parseTime(s string) time.Time {
 	}
 	t, _ := time.Parse(time.RFC3339, s)
 	return t
+}
+
+func (s *Store) migrateLabels() error {
+	_, err := s.db.Exec(`ALTER TABLE tickets ADD COLUMN labels TEXT DEFAULT ''`)
+	if err != nil && !isAlreadyExistsError(err) {
+		return fmt.Errorf("add labels column: %w", err)
+	}
+	return nil
+}
+
+func isAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return len(msg) > 0 && (contains(msg, "duplicate column") || contains(msg, "already exists"))
+}
+
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || findSub(s, sub))
+}
+
+func findSub(s, sub string) bool {
+	for i := 0; i <= len(s)-len(sub); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
