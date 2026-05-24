@@ -76,7 +76,7 @@ func FormatGateVerdict(v GateVerdict) string {
 
 	if len(v.Failures) > 0 {
 		sb.WriteString("Failures:\n")
-		shown := v.FailCount
+		shown := len(v.Failures)
 		if shown > 10 {
 			shown = 10
 		}
@@ -84,8 +84,8 @@ func FormatGateVerdict(v GateVerdict) string {
 			f := v.Failures[i]
 			sb.WriteString(fmt.Sprintf("  - [%s] %s\n", f.GraderName, f.Reason))
 		}
-		if v.FailCount > 10 {
-			sb.WriteString(fmt.Sprintf("  ... and %d more\n", v.FailCount-10))
+		if len(v.Failures) > 10 {
+			sb.WriteString(fmt.Sprintf("  ... and %d more\n", len(v.Failures)-10))
 		}
 	}
 	return sb.String()
