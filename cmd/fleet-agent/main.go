@@ -15,7 +15,7 @@ func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	cfg := fleetagent.Config{
-		AgentID:      envOrDefault("FLEET_AGENT_ID", "wsl1-fleet-agent"),
+		AgentID:      envOrDefault("FLEET_AGENT_ID", "fleet-agent-1"),
 		Capabilities: []string{"go-build", "go-test", "docker", "k3s-deploy"},
 		PollInterval: 30 * time.Second,
 		MaxRetries:   3,
