@@ -41,19 +41,19 @@ cursor-tools version
 
 `~/.cursor/hooks.json` wires **IDE lifecycle** hooks (`hook guard-shell`, `hook post-edit`, etc.).
 It does **not** launch external agents. For copy-paste-free overnight runs, use
-`sprint-dispatch` after writing a kickoff under `~/Code/global-kb/session-handoffs/`:
+`sprint-dispatch` after writing a kickoff under your KB session-handoffs:
 
 ```bash
 cursor-tools sprint-dispatch --agent codex \
-  --kickoff ~/Code/global-kb/session-handoffs/2026-05-21-codex-v7100-kickoff.md \
+  --kickoff <your-kb>/session-handoffs/<kickoff-file>.md \
   --sprint v7100
 
 cursor-tools sprint-dispatch --agent claude-code \
-  --kickoff ~/Code/global-kb/session-handoffs/2026-05-21-claude-code-v7100-overnight-kickoff.md \
+  --kickoff <your-kb>/session-handoffs/<kickoff-file>.md \
   --sprint v7100
 ```
 
-Canonical SOP: `~/Code/global-kb/sop/agent-dispatch-automation.md` (Sprintboard MCP:
+See the agent-dispatch-automation SOP in your knowledge base (Sprintboard MCP:
 `agent_register` → `task_claim` → `task_complete`).
 
 ## Development

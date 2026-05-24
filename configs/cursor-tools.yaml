@@ -1,5 +1,5 @@
-global_kb: ~/Code/global-kb
-memo: ~/Code/global-kb
+global_kb: <your-kb-path>
+memo: <your-kb-path>
 hooks_dir: ~/.cursor/hooks
 stale_lock_seconds: 300
 log_max_bytes: 512000
