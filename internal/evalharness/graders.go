@@ -24,17 +24,17 @@ type DeterministicGrader interface {
 
 // AgentTraceEvent is the minimal parsed shape of an agentrace NDJSON line.
 type AgentTraceEvent struct {
-	Timestamp  string          `json:"ts"`
-	Event      string          `json:"event"`
-	Tool       string          `json:"tool,omitempty"`
-	LatencyMS  float64         `json:"latency_ms,omitempty"`
-	Success    bool            `json:"success,omitempty"`
-	Error      string          `json:"error,omitempty"`
-	TokensUsed int             `json:"tokens_used,omitempty"`
-	Coverage   float64         `json:"coverage,omitempty"`
-	LintClean  *bool           `json:"lint_clean,omitempty"`
-	TestPass   *bool           `json:"test_pass,omitempty"`
-	Raw        json.RawMessage `json:"raw,omitempty"`
+	Timestamp  string          `json:"ts" yaml:"ts"`
+	Event      string          `json:"event" yaml:"event"`
+	Tool       string          `json:"tool,omitempty" yaml:"tool"`
+	LatencyMS  float64         `json:"latency_ms,omitempty" yaml:"latency_ms"`
+	Success    bool            `json:"success,omitempty" yaml:"success"`
+	Error      string          `json:"error,omitempty" yaml:"error"`
+	TokensUsed int             `json:"tokens_used,omitempty" yaml:"tokens_used"`
+	Coverage   float64         `json:"coverage,omitempty" yaml:"coverage"`
+	LintClean  *bool           `json:"lint_clean,omitempty" yaml:"lint_clean"`
+	TestPass   *bool           `json:"test_pass,omitempty" yaml:"test_pass"`
+	Raw        json.RawMessage `json:"raw,omitempty" yaml:"raw"`
 }
 
 // GraderConfig holds thresholds for all deterministic graders.

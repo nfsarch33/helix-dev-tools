@@ -1,0 +1,17 @@
+description: "Verify graders pass on a successful tool call with good metrics"
+events:
+  - ts: "2026-05-25T01:00:00+10:00"
+    event: tool_call
+    tool: semble_search
+    latency_ms: 120
+    success: true
+    tokens_used: 500
+  - ts: "2026-05-25T01:01:00+10:00"
+    event: test_run
+    success: true
+    coverage: 0.82
+    test_pass: true
+    lint_clean: true
+expected:
+  all_pass: true
+  min_score: 0.8

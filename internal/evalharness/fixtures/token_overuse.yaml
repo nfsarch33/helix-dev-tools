@@ -1,0 +1,12 @@
+description: "Verify token efficiency grader fails on excessive usage"
+events:
+  - ts: "2026-05-25T05:00:00+10:00"
+    event: tool_call
+    tool: read_file
+    latency_ms: 200
+    success: true
+    tokens_used: 75000
+expected:
+  all_pass: false
+  failing_graders:
+    - token_efficiency

@@ -1,0 +1,13 @@
+description: "Verify error rate grader fails on errored event"
+events:
+  - ts: "2026-05-25T03:00:00+10:00"
+    event: tool_call
+    tool: shell
+    latency_ms: 50
+    success: false
+    error: "command not found: unknown-binary"
+    tokens_used: 100
+expected:
+  all_pass: false
+  failing_graders:
+    - error_rate

@@ -1,0 +1,12 @@
+description: "Verify coverage grader fails below 70% threshold"
+events:
+  - ts: "2026-05-25T04:00:00+10:00"
+    event: test_run
+    success: true
+    coverage: 0.45
+    test_pass: true
+    lint_clean: true
+expected:
+  all_pass: false
+  failing_graders:
+    - coverage
