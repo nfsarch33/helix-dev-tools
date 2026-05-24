@@ -545,16 +545,3 @@ func isAlreadyExistsError(err error) bool {
 	msg := err.Error()
 	return len(msg) > 0 && (contains(msg, "duplicate column") || contains(msg, "already exists"))
 }
-
-func contains(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || findSub(s, sub))
-}
-
-func findSub(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
-}
