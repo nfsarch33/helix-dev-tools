@@ -62,6 +62,8 @@ entries:
   - file: "*.go"
     term: "cursor-global-kb"
   - file: "*.go"
+    term: "cursor-tools"
+  - file: "*.go"
     term: "cursor_tools"
   - file: "*.go"
     term: "cylrl"
@@ -139,6 +141,16 @@ entries:
     term: "cylrl/"
   - file: "githook_fleet_scan_test.go"
     term: "cylrl/"
+
+  # ---- Build files (Makefile retains backward-compat binary name + new brand var) ----
+  - file: "Makefile"
+    term: "cursor-tools"
+  - file: "Makefile"
+    term: "HELIXON"
+  - file: "Makefile"
+    term: "Helixon"
+  - file: "Makefile"
+    term: "helixon"
 
   # ---- Docs and text files ----
   - file: "*.md"
