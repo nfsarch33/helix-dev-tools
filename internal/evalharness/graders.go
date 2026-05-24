@@ -174,12 +174,15 @@ func (g *CommitMessageGrader) Grade(event AgentTraceEvent) GradeResult {
 		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "not a commit event", Timestamp: now}
 	}
 
-	raw := string(event.Raw)
+	var msg string
+	if err := json.Unmarshal(event.Raw, &msg); err != nil {
+		msg = strings.Trim(string(event.Raw), "\"")
+	}
 	if !g.RequireConventional {
 		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "conventional commits not required", Timestamp: now}
 	}
 
-	if isConventionalCommit(raw) {
+	if isConventionalCommit(msg) {
 		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "conventional commit format", Timestamp: now}
 	}
 	return GradeResult{GraderName: g.Name(), Pass: false, Score: 0.0, Reason: "not conventional commit format", Timestamp: now}
