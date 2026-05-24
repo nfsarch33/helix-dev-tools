@@ -91,6 +91,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/fleet", s.handleFleet)
 	mux.HandleFunc("/roadmap", s.handleRoadmap)
 	mux.HandleFunc("/api/health", s.handleAPIHealth)
+	mux.HandleFunc("/healthz", s.handleAPIHealth)
 	return mux
 }
 
