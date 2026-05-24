@@ -5,6 +5,7 @@ package helixone2e
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 )
@@ -16,14 +17,16 @@ import (
 // 4. Verify memory is stored in Engram
 //
 // Prerequisites:
-//   - Helixon running: ~/runs/helixon serve --port 8200 --llm-endpoint http://localhost:8787
-//   - Engram running: accessible via tunnel at localhost:18888
-//   - LLM router running at :8787 on wsl1
+//   - Helixon running: ~/runs/helixon serve --port 8200 --llm-endpoint http://localhost:<llm-port>
+//   - Engram running: accessible via tunnel at localhost:<engram-port>
+//   - LLM router running on the remote host
 //
 // Run: go test -tags integration -run TestHelixonE2E ./internal/helixone2e/
 func TestHelixonE2E_HealthAndTask(t *testing.T) {
-	helixon := NewHelixonClient("http://localhost:8200")
-	engram := NewEngramVerifier("http://localhost:18888", "")
+	helixonURL := envOrDefault("HELIXON_URL", "http://localhost:8200")
+	engramURL := envOrDefault("ENGRAM_URL", "http://localhost:8281")
+	helixon := NewHelixonClient(helixonURL)
+	engram := NewEngramVerifier(engramURL, "")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -59,15 +62,22 @@ func TestHelixonE2E_HealthAndTask(t *testing.T) {
 	}
 }
 
+func envOrDefault(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
 // TestHelixonE2E_StartupDoc documents exact commands to start Helixon.
 func TestHelixonE2E_StartupDoc(t *testing.T) {
-	t.Log("Helixon serve-mode startup on wsl1:")
-	t.Log("  runx ssh exec --target wsl1-travel --raw \"~/runs/helixon serve --port 8200 --llm-endpoint http://localhost:8787 &\"")
+	t.Log("Helixon serve-mode startup on the remote host:")
+	t.Log("  runx ssh exec --target <host-alias> --raw \"~/runs/helixon serve --port 8200 --llm-endpoint http://localhost:<llm-port> &\"")
 	t.Log("")
 	t.Log("Prerequisites:")
-	t.Log("  1. LLM cluster router running at :8787")
+	t.Log("  1. LLM cluster router running on remote host")
 	t.Log("  2. Engram accessible (tunnel or direct)")
-	t.Log("  3. HELIXON_ENGRAM_URL env set to http://localhost:18888")
+	t.Log("  3. ENGRAM_URL env set")
 	t.Log("")
 	t.Log("Health check:")
 	t.Log("  curl -sS http://localhost:8200/healthz")
