@@ -251,16 +251,17 @@ func TestAgentraceFetcher_FileRead(t *testing.T) {
 		`{"ts":"t2","event":"grep_fallback","pattern":"bar","reason":"exact-literal"}`,
 		`{"ts":"t3","event":"semble_search","query":"baz"}`,
 		`{"ts":"t4","event":"semble_search","query":"qux"}`,
+		`{"ts":"t5","event":"semble_search","query":"quux"}`,
 	}
 	require.NoError(t, os.WriteFile(logPath, []byte(strings.Join(lines, "\n")+"\n"), 0o644))
 
-	f := &AgentraceFetcher{LogPath: logPath, TailSize: 3}
+	f := &AgentraceFetcher{LogPath: logPath, TailSize: 5}
 	status, err := f.Fetch(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "GREEN", status.Level)
 
 	data := status.Data.(map[string]interface{})
-	assert.Equal(t, 2, data["semble_count"])
+	assert.Equal(t, 4, data["semble_count"])
 	assert.Equal(t, 1, data["grep_count"])
 }
 
