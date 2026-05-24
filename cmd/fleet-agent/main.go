@@ -14,10 +14,16 @@ import (
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
+	pollSec := 30
+	if v := os.Getenv("POLL_INTERVAL_SECONDS"); v != "" {
+		if n, err := time.ParseDuration(v + "s"); err == nil {
+			pollSec = int(n.Seconds())
+		}
+	}
 	cfg := fleetagent.Config{
 		AgentID:      envOrDefault("FLEET_AGENT_ID", "fleet-agent-1"),
 		Capabilities: []string{"go-build", "go-test", "docker", "k3s-deploy"},
-		PollInterval: 30 * time.Second,
+		PollInterval: time.Duration(pollSec) * time.Second,
 		MaxRetries:   3,
 	}
 
