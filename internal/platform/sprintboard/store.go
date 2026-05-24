@@ -324,6 +324,90 @@ func (s *Store) UpdateTicket(id string, status TicketStatus, agentID string, not
 	return err
 }
 
+// UpdateTicketFields updates arbitrary ticket fields (priority, labels, description).
+func (s *Store) UpdateTicketFields(id string, priority *int, labels *string, description *string) error {
+	var exists int
+	if err := s.db.QueryRow(`SELECT 1 FROM tickets WHERE id = ?`, id).Scan(&exists); err != nil {
+		return fmt.Errorf("ticket %q not found: %w", id, err)
+	}
+
+	now := formatTime(time.Now())
+	if priority != nil {
+		if _, err := s.db.Exec(`UPDATE tickets SET priority = ?, updated_at = ? WHERE id = ?`, *priority, now, id); err != nil {
+			return err
+		}
+	}
+	if labels != nil {
+		if _, err := s.db.Exec(`UPDATE tickets SET labels = ?, updated_at = ? WHERE id = ?`, *labels, now, id); err != nil {
+			return err
+		}
+	}
+	if description != nil {
+		if _, err := s.db.Exec(`UPDATE tickets SET description = ?, updated_at = ? WHERE id = ?`, *description, now, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// SearchTicketsFilter returns tickets matching SQL-based filters.
+func (s *Store) SearchTicketsFilter(sprintID, status, owner, label, q string, priorityMin, limit int) ([]Ticket, error) {
+	query := `SELECT id, sprint_id, title, description, status, owner_agent, priority, labels, acceptance_criteria, handoff_doc_path, created_at, updated_at FROM tickets WHERE 1=1`
+	var args []interface{}
+
+	if sprintID != "" {
+		query += ` AND sprint_id = ?`
+		args = append(args, sprintID)
+	}
+	if status != "" {
+		query += ` AND status = ?`
+		args = append(args, status)
+	}
+	if owner != "" {
+		query += ` AND owner_agent = ?`
+		args = append(args, owner)
+	}
+	if priorityMin > 0 {
+		query += ` AND priority >= ?`
+		args = append(args, priorityMin)
+	}
+	if label != "" {
+		query += ` AND (',' || labels || ',' LIKE '%,' || ? || ',%')`
+		args = append(args, label)
+	}
+	if q != "" {
+		query += ` AND (title LIKE '%' || ? || '%' OR description LIKE '%' || ? || '%' OR acceptance_criteria LIKE '%' || ? || '%')`
+		args = append(args, q, q, q)
+	}
+
+	query += ` ORDER BY priority DESC, created_at ASC`
+	if limit > 0 {
+		query += fmt.Sprintf(` LIMIT %d`, limit)
+	}
+
+	rows, err := s.db.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tickets []Ticket
+	for rows.Next() {
+		var t Ticket
+		var createdAt, updatedAt string
+		err := rows.Scan(&t.ID, &t.SprintID, &t.Title, &t.Description, &t.Status,
+			&t.OwnerAgent, &t.Priority, &t.Labels, &t.AcceptanceCriteria, &t.HandoffDocPath,
+			&createdAt, &updatedAt)
+		if err != nil {
+			return nil, err
+		}
+		t.CreatedAt = parseTime(createdAt)
+		t.UpdatedAt = parseTime(updatedAt)
+		tickets = append(tickets, t)
+	}
+	return tickets, rows.Err()
+}
+
 func (s *Store) AssignTicket(id string, agent string) error {
 	res, err := s.db.Exec(`UPDATE tickets SET owner_agent = ?, updated_at = ? WHERE id = ?`,
 		agent, formatTime(time.Now()), id)

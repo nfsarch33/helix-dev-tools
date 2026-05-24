@@ -209,6 +209,7 @@ func (s *Server) handleToolsList(req JSONRPCRequest) JSONRPCResponse {
 		{Name: "ticket_blocked_by", Description: "List tickets that are blocking the given ticket (non-done blockers only)", InputSchema: idOnlySchema("ticket_id")},
 		{Name: "ticket_ready_list", Description: "List tickets that have no unresolved blockers (DAG-aware ready queue)", InputSchema: idOnlySchema("sprint_id")},
 		{Name: "sprint_topo_sort", Description: "Return tickets in topological order (dependency-first) for a sprint", InputSchema: idOnlySchema("sprint_id")},
+		{Name: "ticket_search_filter", Description: "Filter tickets by status/owner/priority/labels/sprint with optional free-text fragment (SQL, not vector)", InputSchema: ticketSearchFilterSchema()},
 	}
 	return JSONRPCResponse{JSONRPC: "2.0", ID: req.ID, Result: map[string]interface{}{"tools": tools}}
 }
@@ -296,6 +297,8 @@ func (s *Server) dispatchInner(tool string, args json.RawMessage) (string, bool)
 		return s.ticketReadyList(args)
 	case "sprint_topo_sort":
 		return s.sprintTopoSort(args)
+	case "ticket_search_filter":
+		return s.ticketSearchFilter(args)
 	default:
 		return fmt.Sprintf("unknown tool: %s", tool), true
 	}
@@ -459,18 +462,77 @@ func (s *Server) ticketList(args json.RawMessage) (string, bool) {
 
 func (s *Server) ticketUpdate(args json.RawMessage) (string, bool) {
 	var p struct {
-		ID     string `json:"id"`
-		Status string `json:"status"`
-		Note   string `json:"note"`
+		ID          string `json:"id"`
+		Status      string `json:"status"`
+		Note        string `json:"note"`
+		Priority    *int   `json:"priority,omitempty"`
+		Labels      string `json:"labels"`
+		Description string `json:"description"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
 		return err.Error(), true
 	}
-	err := s.store.UpdateTicket(p.ID, sprintboard.TicketStatus(p.Status), s.agentID, p.Note)
+
+	if p.Status != "" {
+		if err := s.store.UpdateTicket(p.ID, sprintboard.TicketStatus(p.Status), s.agentID, p.Note); err != nil {
+			return err.Error(), true
+		}
+	}
+
+	var labelsPtr *string
+	if p.Labels != "" {
+		labelsPtr = &p.Labels
+	}
+	var descPtr *string
+	if p.Description != "" {
+		descPtr = &p.Description
+	}
+
+	if p.Priority != nil || labelsPtr != nil || descPtr != nil {
+		if err := s.store.UpdateTicketFields(p.ID, p.Priority, labelsPtr, descPtr); err != nil {
+			return err.Error(), true
+		}
+	}
+
+	parts := []string{fmt.Sprintf("Ticket %q updated", p.ID)}
+	if p.Status != "" {
+		parts = append(parts, fmt.Sprintf("status=%s", p.Status))
+	}
+	if p.Priority != nil {
+		parts = append(parts, fmt.Sprintf("priority=%d", *p.Priority))
+	}
+	if labelsPtr != nil {
+		parts = append(parts, fmt.Sprintf("labels=%s", p.Labels))
+	}
+	return fmt.Sprintf("%s (by %s)", parts[0], s.agentID), false
+}
+
+func (s *Server) ticketSearchFilter(args json.RawMessage) (string, bool) {
+	var p struct {
+		SprintID    string `json:"sprint_id"`
+		Status      string `json:"status"`
+		Owner       string `json:"owner"`
+		Label       string `json:"label"`
+		Q           string `json:"q"`
+		PriorityMin int    `json:"priority_min"`
+		Limit       int    `json:"limit"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return err.Error(), true
+	}
+	if p.Limit <= 0 {
+		p.Limit = 20
+	}
+
+	tickets, err := s.store.SearchTicketsFilter(p.SprintID, p.Status, p.Owner, p.Label, p.Q, p.PriorityMin, p.Limit)
 	if err != nil {
 		return err.Error(), true
 	}
-	return fmt.Sprintf("Ticket %q -> %s (by %s)", p.ID, p.Status, s.agentID), false
+	if tickets == nil {
+		tickets = []sprintboard.Ticket{}
+	}
+	data, _ := json.MarshalIndent(tickets, "", "  ")
+	return string(data), false
 }
 
 func (s *Server) ticketAssign(args json.RawMessage) (string, bool) {
@@ -616,11 +678,14 @@ func ticketUpdateSchema() map[string]interface{} {
 	return map[string]interface{}{
 		"type": "object",
 		"properties": map[string]interface{}{
-			"id":     map[string]string{"type": "string", "description": "Ticket ID"},
-			"status": map[string]string{"type": "string", "description": "New status: backlog, ready, in_progress, review, done, blocked, ready_for_handoff"},
-			"note":   map[string]string{"type": "string", "description": "Transition note"},
+			"id":          map[string]string{"type": "string", "description": "Ticket ID"},
+			"status":      map[string]string{"type": "string", "description": "New status: backlog, ready, in_progress, review, done, blocked, ready_for_handoff"},
+			"note":        map[string]string{"type": "string", "description": "Transition note"},
+			"priority":    map[string]string{"type": "integer", "description": "Priority (0-10, higher is more important)"},
+			"labels":      map[string]string{"type": "string", "description": "Comma-separated labels"},
+			"description": map[string]string{"type": "string", "description": "Updated description"},
 		},
-		"required": []string{"id", "status"},
+		"required": []string{"id"},
 	}
 }
 
@@ -1160,6 +1225,21 @@ When done: handoff_publish(ticket_id="...", to_agent="cursor-parent", summary=".
 	)
 
 	return prompt, false
+}
+
+func ticketSearchFilterSchema() map[string]interface{} {
+	return map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"sprint_id":    map[string]string{"type": "string", "description": "Filter by sprint ID"},
+			"status":       map[string]string{"type": "string", "description": "Filter by status"},
+			"owner":        map[string]string{"type": "string", "description": "Filter by owner agent"},
+			"label":        map[string]string{"type": "string", "description": "Single label; tickets with this label match"},
+			"q":            map[string]string{"type": "string", "description": "Free-text fragment matched against title/description/acceptance"},
+			"priority_min": map[string]string{"type": "integer", "description": "Minimum priority threshold"},
+			"limit":        map[string]string{"type": "integer", "description": "Max results (default 20)"},
+		},
+	}
 }
 
 func ticketDependSchema() map[string]interface{} {
