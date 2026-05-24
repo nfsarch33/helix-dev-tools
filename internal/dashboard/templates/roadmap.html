@@ -1,0 +1,16 @@
+{{define "content"}}
+<h1>Roadmap Completeness</h1>
+<table>
+  <tr><th>Component</th><th>Status</th><th>Complete</th></tr>
+  {{range .Components}}
+  <tr>
+    <td>{{.Name}}</td>
+    <td>{{.Status}}</td>
+    <td>
+      <span class="badge badge-{{if ge .Pct 90}}GREEN{{else if ge .Pct 50}}YELLOW{{else}}RED{{end}}">{{.Pct}}%</span>
+    </td>
+  </tr>
+  {{end}}
+</table>
+{{if not .Components}}<p>No roadmap manifest found.</p>{{end}}
+{{end}}

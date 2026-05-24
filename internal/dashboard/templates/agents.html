@@ -1,0 +1,15 @@
+{{define "content"}}
+<h1>Registered Agents</h1>
+<table>
+  <tr><th>ID</th><th>Surface</th><th>Current Ticket</th><th>Last Seen</th></tr>
+  {{range .Agents}}
+  <tr>
+    <td>{{.ID}}</td>
+    <td>{{.Surface}}</td>
+    <td>{{.CurrentTicketID}}</td>
+    <td class="ts">{{.LastSeen}}</td>
+  </tr>
+  {{end}}
+</table>
+{{if not .Agents}}<p>No agents registered.</p>{{end}}
+{{end}}

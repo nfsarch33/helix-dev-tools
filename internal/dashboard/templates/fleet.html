@@ -1,0 +1,13 @@
+{{define "content"}}
+<h1>Fleet Health</h1>
+<div class="grid">
+{{range .Nodes}}
+<div class="card">
+  <h2>{{.Name}} <span class="badge badge-{{.Level}}">{{.Level}}</span></h2>
+  <p>Last probe: <span class="ts">{{.LastProbe}}</span></p>
+  <p>Free: {{.FreePct}}%</p>
+</div>
+{{end}}
+</div>
+{{if not .Nodes}}<p>No fleet probe data available.</p>{{end}}
+{{end}}

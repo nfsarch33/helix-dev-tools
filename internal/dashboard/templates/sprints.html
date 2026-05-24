@@ -1,0 +1,15 @@
+{{define "content"}}
+<h1>Sprints</h1>
+<table>
+  <tr><th>ID</th><th>Name</th><th>Status</th><th>Tickets</th></tr>
+  {{range .Sprints}}
+  <tr>
+    <td>{{.Sprint.ID}}</td>
+    <td>{{.Sprint.Name}}</td>
+    <td><span class="badge badge-{{if eq .Sprint.Status "active"}}GREEN{{else if eq .Sprint.Status "completed"}}GREEN{{else}}YELLOW{{end}}">{{.Sprint.Status}}</span></td>
+    <td>{{.TicketCount}}</td>
+  </tr>
+  {{end}}
+</table>
+{{if not .Sprints}}<p>No sprints found.</p>{{end}}
+{{end}}

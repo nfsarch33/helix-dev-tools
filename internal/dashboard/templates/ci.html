@@ -1,0 +1,20 @@
+{{define "content"}}
+<h1>CI Pipelines</h1>
+{{range $pid, $pipes := .Pipelines}}
+<div class="card">
+  <h2>Project {{$pid}}</h2>
+  <table>
+    <tr><th>ID</th><th>Status</th><th>Ref</th><th>Created</th></tr>
+    {{range $pipes}}
+    <tr>
+      <td>{{.ID}}</td>
+      <td><span class="badge badge-{{if eq .Status "success"}}GREEN{{else if eq .Status "failed"}}RED{{else}}YELLOW{{end}}">{{.Status}}</span></td>
+      <td>{{.Ref}}</td>
+      <td class="ts">{{.CreatedAt}}</td>
+    </tr>
+    {{end}}
+  </table>
+</div>
+{{end}}
+{{if not .Pipelines}}<p>No pipeline data available.</p>{{end}}
+{{end}}

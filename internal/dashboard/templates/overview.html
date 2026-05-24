@@ -1,0 +1,11 @@
+{{define "content"}}
+<h1>System Overview</h1>
+<div class="grid">
+{{range .Statuses}}
+<div class="card">
+  <h2>{{.Name}} <span class="badge badge-{{.Status.Level}}">{{.Status.Level}}</span></h2>
+  <p>{{.Status.Message}}</p>
+</div>
+{{end}}
+</div>
+{{end}}
