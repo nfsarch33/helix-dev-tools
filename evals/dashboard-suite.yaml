@@ -1,0 +1,12 @@
+id: dashboard-suite
+name: "Dashboard full test suite"
+description: "All dashboard tests pass including template rendering and auth"
+type: capability
+max_iterations: 3
+criteria:
+  - name: dashboard_tests_pass
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go test ./internal/dashboard/ -count=1"
+  - name: dashboard_vet_clean
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go vet ./internal/dashboard/"

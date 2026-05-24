@@ -1,0 +1,12 @@
+id: evalharness-suite
+name: "Eval harness test suite"
+description: "Eval harness graders, fixtures, gate, daemon, and report tests pass"
+type: capability
+max_iterations: 3
+criteria:
+  - name: evalharness_tests_pass
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go test ./internal/evalharness/ -count=1"
+  - name: evalharness_vet_clean
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go vet ./internal/evalharness/"

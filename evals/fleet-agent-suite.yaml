@@ -1,0 +1,12 @@
+id: fleet-agent-suite
+name: "Fleet agent test suite"
+description: "All fleet agent tests pass including HTTP clients and agent loop"
+type: capability
+max_iterations: 3
+criteria:
+  - name: fleetagent_tests_pass
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go test ./internal/fleetagent/ -count=1"
+  - name: fleetagent_binary_builds
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go build -o /dev/null ./cmd/fleet-agent/"

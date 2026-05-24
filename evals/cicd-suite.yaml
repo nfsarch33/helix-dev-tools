@@ -1,0 +1,12 @@
+id: cicd-suite
+name: "CI/CD pipeline test suite"
+description: "GitLab client, mirror, notifier, and webhook tests pass"
+type: capability
+max_iterations: 3
+criteria:
+  - name: cicd_tests_pass
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go test ./internal/cicd/ -count=1"
+  - name: cicd_vet_clean
+    grader_type: shell
+    command: "cd $HOME/cursor-tools && go vet ./internal/cicd/"

@@ -1,0 +1,9 @@
+id: engram-suite
+name: "Engram full test suite"
+description: "All Engram packages pass tests"
+type: capability
+max_iterations: 3
+criteria:
+  - name: engram_tests_pass
+    grader_type: shell
+    command: "cd $HOME/engram && go test ./... -count=1 -timeout 120s"
