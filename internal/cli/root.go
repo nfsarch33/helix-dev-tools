@@ -85,6 +85,7 @@ func init() {
 	rootCmd.AddCommand(fleetReportCmd)
 	rootCmd.AddCommand(mem0WatchdogCmd)
 	rootCmd.AddCommand(sprinteval.NewSprintEvalCmd())
+	rootCmd.AddCommand(evalCmd)
 }
 
 var versionCmd = &cobra.Command{
