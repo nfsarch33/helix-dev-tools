@@ -7,10 +7,10 @@
 
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Users/jason.lian/bin/cursor-tools</string>
+		<string>__HELIX_DEV_TOOLS_BIN__</string>
 		<string>mem0-watchdog</string>
 		<string>--probe-url</string>
-		<string>http://127.0.0.1:18888/docs</string>
+		<string>http://127.0.0.1:${MEM0_PORT:-8888}/docs</string>
 		<string>--interval</string>
 		<string>60s</string>
 		<string>--timeout</string>
@@ -18,7 +18,7 @@
 		<string>--threshold</string>
 		<string>3</string>
 		<string>--log-path</string>
-		<string>/Users/jason.lian/logs/runx/mem0-watchdog.ndjson</string>
+		<string>__HOME__/logs/runx/mem0-watchdog.ndjson</string>
 	</array>
 
 	<key>RunAtLoad</key>
@@ -31,10 +31,10 @@
 	<integer>30</integer>
 
 	<key>StandardOutPath</key>
-	<string>/Users/jason.lian/logs/runx/mem0-watchdog.stdout.log</string>
+	<string>__HOME__/logs/runx/mem0-watchdog.stdout.log</string>
 
 	<key>StandardErrorPath</key>
-	<string>/Users/jason.lian/logs/runx/mem0-watchdog.stderr.log</string>
+	<string>__HOME__/logs/runx/mem0-watchdog.stderr.log</string>
 
 	<key>ProcessType</key>
 	<string>Background</string>

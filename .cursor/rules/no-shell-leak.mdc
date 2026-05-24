@@ -10,11 +10,10 @@ in interactive zsh history, in `~/Library/Logs`, or in any session
 transcript visible to a model. Sensitive identifiers include:
 
 - internal IPs (Tailscale `100.x.x.x`, OCI public IPs, LAN `10.x.x.x`)
-- SSH key file paths (`$HOME/.ssh/fleet_lan`, etc.) and key bytes
+- SSH key file paths (`$HOME/.ssh/<key-name>`, etc.) and key bytes
 - Bearer tokens, JFrog tokens, GitHub PATs, AWS bearer tokens, HuggingFace
   tokens, 1Password Service Account tokens, or any credential string
-- Private repo absolute paths (`/Users/jason.lian/ai-agent-business-stack`,
-  `/Users/jason.lian/ironclaw`, ...)
+- Private repo absolute paths (`$HOME/<private-repo>`, etc.)
 - Container names tied to private GPU hosts
 - Git author email, signing identity selection, and hostname pairs
 - OCI instance IDs (`ocid1.*`), tenancy IDs, and compartment IDs
