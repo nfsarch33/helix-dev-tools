@@ -19,7 +19,8 @@ type Server struct {
 	Fetchers       []Fetcher
 	ManifestPath   string // YAML roadmap manifest path
 	ListenAddr     string
-	tmpl           *template.Template
+	AuthToken      string // if set, requires Bearer token on all routes except /healthz
+	pages          map[string]*template.Template
 	mu             sync.RWMutex
 	cachedStatuses []namedStatus
 }
@@ -69,15 +70,32 @@ func New(fetchers []Fetcher, manifestPath, listenAddr string) (*Server, error) {
 	funcMap := template.FuncMap{
 		"ge": func(a, b int) bool { return a >= b },
 	}
-	tmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/*.html")
+
+	layoutTmpl, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/layout.html")
 	if err != nil {
-		return nil, fmt.Errorf("parse templates: %w", err)
+		return nil, fmt.Errorf("parse layout: %w", err)
 	}
+
+	pageFiles := []string{"overview.html", "ci.html", "agents.html", "sprints.html", "fleet.html", "roadmap.html"}
+	pages := make(map[string]*template.Template, len(pageFiles))
+	for _, pf := range pageFiles {
+		clone, err := layoutTmpl.Clone()
+		if err != nil {
+			return nil, fmt.Errorf("clone layout for %s: %w", pf, err)
+		}
+		_, err = clone.ParseFS(templateFS, "templates/"+pf)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", pf, err)
+		}
+		pages[pf] = clone
+	}
+
 	return &Server{
 		Fetchers:     fetchers,
 		ManifestPath: manifestPath,
 		ListenAddr:   listenAddr,
-		tmpl:         tmpl,
+		AuthToken:    os.Getenv("DASHBOARD_TOKEN"),
+		pages:        pages,
 	}, nil
 }
 
@@ -92,7 +110,26 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/roadmap", s.handleRoadmap)
 	mux.HandleFunc("/api/health", s.handleAPIHealth)
 	mux.HandleFunc("/healthz", s.handleAPIHealth)
+
+	if s.AuthToken != "" {
+		return s.authMiddleware(mux)
+	}
 	return mux
+}
+
+func (s *Server) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/healthz" {
+			next.ServeHTTP(w, r)
+			return
+		}
+		auth := r.Header.Get("Authorization")
+		if auth != "Bearer "+s.AuthToken {
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // ListenAndServe starts the HTTP server.
@@ -136,7 +173,12 @@ func (s *Server) getStatuses(ctx context.Context) []namedStatus {
 func (s *Server) render(w http.ResponseWriter, name string, data PageData) {
 	data.RefreshedAt = time.Now().Format(time.RFC3339)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err := s.tmpl.ExecuteTemplate(w, "layout", data); err != nil {
+	tmpl, ok := s.pages[name]
+	if !ok {
+		http.Error(w, "unknown page: "+name, http.StatusInternalServerError)
+		return
+	}
+	if err := tmpl.ExecuteTemplate(w, "layout", data); err != nil {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
 	}
 }

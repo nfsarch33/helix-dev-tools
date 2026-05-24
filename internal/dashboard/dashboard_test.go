@@ -126,6 +126,31 @@ func TestDashboardServer_404ForUnknownPath(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 }
 
+func TestDashboardServer_AuthMiddleware(t *testing.T) {
+	stub := &stubFetcher{name: "test", status: Status{Level: "GREEN", Message: "ok"}}
+	srv := newTestServer(t, stub)
+	srv.AuthToken = "secret-token"
+	handler := srv.Handler()
+
+	t.Run("rejects without token", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+		assert.Equal(t, http.StatusUnauthorized, rec.Code)
+	})
+	t.Run("accepts with valid token", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Header.Set("Authorization", "Bearer secret-token")
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+	t.Run("healthz bypasses auth", func(t *testing.T) {
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+		assert.Equal(t, http.StatusOK, rec.Code)
+	})
+}
+
 func TestDashboardServer_MultipleFetchers(t *testing.T) {
 	fetchers := []Fetcher{
 		&stubFetcher{name: "gitlab", status: Status{Level: "GREEN", Message: "ok"}},

@@ -167,7 +167,7 @@ func TestSprintBoardFetcher_ReadTickets(t *testing.T) {
 	assert.Len(t, tickets, 2)
 	assert.Len(t, sprints, 1)
 	assert.Equal(t, "cursor-parent", agents[0].Surface)
-	assert.Equal(t, "Build dashboard", tickets[0].Title)
+	assert.Equal(t, "Write tests", tickets[0].Title)
 }
 
 func TestSprintBoardFetcher_Name(t *testing.T) {
