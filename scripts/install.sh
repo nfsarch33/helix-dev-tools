@@ -12,8 +12,8 @@ usage() {
   cat <<'EOF'
 Usage: scripts/install.sh [--with-deps] [--deps-only] [--check-only]
 
-  --with-deps   Install missing WSL/Linux prerequisites before building cursor-tools
-  --deps-only   Only install/check dependencies, do not build cursor-tools
+  --with-deps   Install missing WSL/Linux prerequisites before building helix-dev-tools
+  --deps-only   Only install/check dependencies, do not build helix-dev-tools
   --check-only  Report dependency status without installing anything
 
 Examples:
@@ -215,27 +215,33 @@ if [[ "$WITH_DEPS" == true || "$CHECK_ONLY" == true ]]; then
 fi
 
 if [[ "$DEPS_ONLY" == true || "$CHECK_ONLY" == true ]]; then
-  if [[ -x "${BIN_DIR}/cursor-tools" ]]; then
+  if [[ -x "${BIN_DIR}/helix-dev-tools" ]]; then
     log "Running dependency verification"
-    "${BIN_DIR}/cursor-tools" doctor deps || true
+    "${BIN_DIR}/helix-dev-tools" doctor deps || true
   else
-    warn "cursor-tools binary not installed yet; skip doctor deps verification"
+    warn "helix-dev-tools binary not installed yet; skip doctor deps verification"
   fi
   exit 0
 fi
 
-have_cmd go || fail "Go 1.24+ is required to build cursor-tools"
+have_cmd go || fail "Go 1.24+ is required to build helix-dev-tools"
 
-log "Building cursor-tools..."
+log "Building helix-dev-tools..."
 cd "$REPO_ROOT"
 
 VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
 CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" \
-    -o bin/cursor-tools ./cmd/cursor-tools/
+    -o bin/helix-dev-tools ./cmd/cursor-tools/
 
 mkdir -p "$BIN_DIR"
-cp bin/cursor-tools "$BIN_DIR/cursor-tools"
-chmod +x "$BIN_DIR/cursor-tools"
+cp bin/helix-dev-tools "$BIN_DIR/helix-dev-tools"
+chmod +x "$BIN_DIR/helix-dev-tools"
 
-log "Installed cursor-tools ${VERSION} to ${BIN_DIR}/cursor-tools"
-log "Verify: ${BIN_DIR}/cursor-tools doctor deps"
+# Backward-compat symlink
+if [[ ! -e "$BIN_DIR/cursor-tools" ]]; then
+  ln -s "$BIN_DIR/helix-dev-tools" "$BIN_DIR/cursor-tools"
+  log "Created backward-compat symlink cursor-tools -> helix-dev-tools"
+fi
+
+log "Installed helix-dev-tools ${VERSION} to ${BIN_DIR}/helix-dev-tools"
+log "Verify: ${BIN_DIR}/helix-dev-tools doctor deps"
