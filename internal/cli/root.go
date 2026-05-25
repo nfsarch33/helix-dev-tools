@@ -14,8 +14,8 @@ func SetVersion(v string) {
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "cursor-tools",
-	Short: "Cursor IDE memory system tools",
+	Use:   "helix-dev-tools",
+	Short: "Helix developer tools for IDE hooks and memory management",
 	Long:  "Single binary for Cursor hooks, git hooks, health checks, and memory system management.",
 }
 

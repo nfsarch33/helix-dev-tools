@@ -3,8 +3,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 # Windows GUI subsystem: avoids allocating a console when Cursor spawns hook subprocesses (fewer flashes).
 # Stdio pipes from the parent still work; use for hooks only — interactive CLI may show no console.
 WINDOWS_GUI_LDFLAGS := $(LDFLAGS) -H windowsgui
-BINARY         := cursor-tools
-BINARY_HELIXON := helix-dev-tools
+BINARY         := helix-dev-tools
 GOFLAGS := -race
 
 HOST_OS   := $(shell uname -s | tr '[:upper:]' '[:lower:]')
@@ -19,7 +18,7 @@ else
   HOST_GOARCH := $(HOST_ARCH)
 endif
 
-.PHONY: build build-zd-claude-proxy install-zd-claude-proxy test test-cover lint vuln security fuzz install install-helixon dist-install docker docker-native test-docker release clean
+.PHONY: build build-zd-claude-proxy install-zd-claude-proxy test test-cover lint vuln security fuzz install dist-install docker docker-native test-docker release clean
 
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) ./cmd/cursor-tools/
@@ -61,17 +60,11 @@ install: build
 		echo "Installed to $$dir/$(BINARY)"; \
 	done
 
-# install-helixon: builds and installs helix-dev-tools binary alongside cursor-tools symlink.
-# This is the Pair v6062 binary rename transition step. Both names coexist during the 30-day burn-in.
-install-helixon: build
+install-compat: install
 	@for dir in "$(HOME)/bin" "$(HOME)/.local/bin"; do \
-		mkdir -p "$$dir"; \
-		tmp="$$dir/.$(BINARY_HELIXON).$$$$.new"; \
-		cp bin/$(BINARY) "$$tmp" && mv -f "$$tmp" "$$dir/$(BINARY_HELIXON)"; \
-		echo "Installed canonical binary to $$dir/$(BINARY_HELIXON)"; \
-		if [ ! -e "$$dir/$(BINARY)" ]; then \
-			ln -s "$$dir/$(BINARY_HELIXON)" "$$dir/$(BINARY)"; \
-			echo "Created backward-compat symlink $$dir/$(BINARY) -> $(BINARY_HELIXON)"; \
+		if [ ! -e "$$dir/cursor-tools" ]; then \
+			ln -s "$$dir/$(BINARY)" "$$dir/cursor-tools"; \
+			echo "Created backward-compat symlink $$dir/cursor-tools -> $(BINARY)"; \
 		fi; \
 	done
 

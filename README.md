@@ -3,42 +3,42 @@
 Single Go binary for Cursor IDE hooks, git hooks, health checks, and memory system management.
 
 - Module: `github.com/nfsarch33/helix-dev-tools`
-- Binary: `cursor-tools` (legacy name retained for backward compatibility)
+- Binary: `helix-dev-tools` (backward-compat symlink `cursor-tools` available via `make install-compat`)
 - Go: 1.25.0+
 
 ## Quick Start
 
 ```bash
 make build install
-cursor-tools version
+helix-dev-tools version
 ```
 
 ## Commands
 
 | Command | Description |
 |---------|-------------|
-| `cursor-tools hook guard-shell` | beforeShellExecution: block dangerous commands |
-| `cursor-tools hook sanitize-read` | beforeReadFile: block secret file reads |
-| `cursor-tools hook guard-mcp` | beforeMCPExecution: gate destructive MCP tools |
-| `cursor-tools hook post-edit` | afterFileEdit: format, sync counts, promote |
-| `cursor-tools hook housekeeping` | stop: log rotation, git sync, promote |
-| `cursor-tools hook guard-no-shell-leak-sync` | beforeReadAgent: SHA-verify and resync no-shell-leak rule across 14 mirror repos (v299 D6) |
-| `cursor-tools githook commit-msg` | Reject AI attribution, enforce conventional commits |
-| `cursor-tools githook pre-push` | Block direct pushes to main/master |
-| `cursor-tools sync-counts [--apply]` | Verify and fix skill/hook counts in index files |
-| `cursor-tools promote [--workspace] [--dry-run]` | Promote learnings through memory hierarchy |
-| `cursor-tools health-check` | 33-suite integration health check |
-| `cursor-tools docsync check` | Audit README/VERSION/CHANGELOG/OpenAPI/release-checklist/ADR drift |
-| `cursor-tools docsync fix` | Repair deterministic docs drift such as ADR indexes and version fields |
-| `cursor-tools docs-check` | Backward-compatible wrapper for docs drift checks |
-| `cursor-tools selftest` | Hook unit tests (94 assertions) |
-| `cursor-tools memory-routine` | Export memory KPI and parity evidence, then optionally sync durable docs |
-| `cursor-tools bootstrap [--dry-run]` | Create all symlinks on a fresh machine |
-| `cursor-tools safe` | Launch Cursor with --disable-gpu |
-| `cursor-tools version` | Print version, commit, build date |
-| `cursor-tools sprint-dispatch` | Build headless Claude/Codex dispatch from a kickoff handoff (logs `~/logs/runx/agent-dispatch.ndjson`) |
-| `cursor-tools sprintboard-monitor` | Append Sprintboard status snapshot to `~/logs/runx/sprintboard-monitor.ndjson` |
-| `cursor-tools sprint-scaffold` | Emit 7-story sprint Markdown (5 themed + hygiene + capsule) per `sprint-scaffold-7-stories` rule |
+| `helix-dev-tools hook guard-shell` | beforeShellExecution: block dangerous commands |
+| `helix-dev-tools hook sanitize-read` | beforeReadFile: block secret file reads |
+| `helix-dev-tools hook guard-mcp` | beforeMCPExecution: gate destructive MCP tools |
+| `helix-dev-tools hook post-edit` | afterFileEdit: format, sync counts, promote |
+| `helix-dev-tools hook housekeeping` | stop: log rotation, git sync, promote |
+| `helix-dev-tools hook guard-no-shell-leak-sync` | beforeReadAgent: SHA-verify and resync no-shell-leak rule across 14 mirror repos (v299 D6) |
+| `helix-dev-tools githook commit-msg` | Reject AI attribution, enforce conventional commits |
+| `helix-dev-tools githook pre-push` | Block direct pushes to main/master |
+| `helix-dev-tools sync-counts [--apply]` | Verify and fix skill/hook counts in index files |
+| `helix-dev-tools promote [--workspace] [--dry-run]` | Promote learnings through memory hierarchy |
+| `helix-dev-tools health-check` | 33-suite integration health check |
+| `helix-dev-tools docsync check` | Audit README/VERSION/CHANGELOG/OpenAPI/release-checklist/ADR drift |
+| `helix-dev-tools docsync fix` | Repair deterministic docs drift such as ADR indexes and version fields |
+| `helix-dev-tools docs-check` | Backward-compatible wrapper for docs drift checks |
+| `helix-dev-tools selftest` | Hook unit tests (94 assertions) |
+| `helix-dev-tools memory-routine` | Export memory KPI and parity evidence, then optionally sync durable docs |
+| `helix-dev-tools bootstrap [--dry-run]` | Create all symlinks on a fresh machine |
+| `helix-dev-tools safe` | Launch Cursor with --disable-gpu |
+| `helix-dev-tools version` | Print version, commit, build date |
+| `helix-dev-tools sprint-dispatch` | Build headless Claude/Codex dispatch from a kickoff handoff (logs `~/logs/runx/agent-dispatch.ndjson`) |
+| `helix-dev-tools sprintboard-monitor` | Append Sprintboard status snapshot to `~/logs/runx/sprintboard-monitor.ndjson` |
+| `helix-dev-tools sprint-scaffold` | Emit 7-story sprint Markdown (5 themed + hygiene + capsule) per `sprint-scaffold-7-stories` rule |
 
 ### Overnight agent dispatch (v7100+)
 
@@ -47,11 +47,11 @@ It does **not** launch external agents. For copy-paste-free overnight runs, use
 `sprint-dispatch` after writing a kickoff under your KB session-handoffs:
 
 ```bash
-cursor-tools sprint-dispatch --agent codex \
+helix-dev-tools sprint-dispatch --agent codex \
   --kickoff <your-kb>/session-handoffs/<kickoff-file>.md \
   --sprint v7100
 
-cursor-tools sprint-dispatch --agent claude-code \
+helix-dev-tools sprint-dispatch --agent claude-code \
   --kickoff <your-kb>/session-handoffs/<kickoff-file>.md \
   --sprint v7100
 ```
@@ -77,7 +77,7 @@ make clean       # Remove build artefacts
 Single binary, zero runtime dependencies. All internal packages are in `/internal/`
 (Go compiler enforced: cannot be imported by external modules).
 
-Source lives in the private `nfsarch33/helix-dev-tools` repository (formerly `cursor-tools`). The binary is still installed as `~/bin/cursor-tools` for backward compatibility.
+Source lives in the `nfsarch33/helix-dev-tools` repository. A backward-compat symlink `cursor-tools -> helix-dev-tools` can be created via `make install-compat`.
 
 - `internal/hookio` -- Cursor hook JSON stdin/stdout protocol
 - `internal/patterns` -- Pre-compiled regex deny/warn/allow pattern engine
