@@ -156,7 +156,7 @@ func ValidateNodePortService(yamlData []byte, expectedPort int) error {
 
 // CheckPortAccessibility probes if a TCP port is reachable on a host.
 func CheckPortAccessibility(host string, port int, timeout time.Duration) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return fmt.Errorf("port %d not accessible on %s: %w", port, host, err)
