@@ -1,5 +1,8 @@
 {{define "content"}}
 <h1>CI Pipelines</h1>
+
+{{if .Pipelines}}
+<h2>GitLab</h2>
 {{range $pid, $pipes := .Pipelines}}
 <div class="card">
   <h2>Project {{$pid}}</h2>
@@ -16,5 +19,27 @@
   </table>
 </div>
 {{end}}
-{{if not .Pipelines}}<p>No pipeline data available.</p>{{end}}
+{{end}}
+
+{{if .GHWorkflows}}
+<h2>GitHub Actions</h2>
+{{range $repo, $runs := .GHWorkflows}}
+<div class="card">
+  <h2>{{$repo}}</h2>
+  <table>
+    <tr><th>Workflow</th><th>Status</th><th>Branch</th><th>Created</th></tr>
+    {{range $runs}}
+    <tr>
+      <td><a href="{{.HTMLURL}}">{{.Name}}</a></td>
+      <td><span class="badge badge-{{if eq .Conclusion "success"}}GREEN{{else if eq .Conclusion "failure"}}RED{{else}}YELLOW{{end}}">{{if .Conclusion}}{{.Conclusion}}{{else}}{{.Status}}{{end}}</span></td>
+      <td>{{.Branch}}</td>
+      <td class="ts">{{.CreatedAt}}</td>
+    </tr>
+    {{end}}
+  </table>
+</div>
+{{end}}
+{{end}}
+
+{{if and (not .Pipelines) (not .GHWorkflows)}}<p>No CI data available.</p>{{end}}
 {{end}}

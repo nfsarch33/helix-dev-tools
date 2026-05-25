@@ -36,16 +36,18 @@ type PageData struct {
 	RefreshedAt string
 	Statuses    []namedStatus
 	// Page-specific fields below
-	Pipelines  map[int][]GitLabPipeline
-	Agents     []SprintBoardAgent
-	Sprints    []sprintRow
-	Nodes      []fleetNode
-	Components []roadmapComponent
+	Pipelines   map[int][]GitLabPipeline
+	GHWorkflows map[string][]GitHubWorkflowRun
+	Agents      []SprintBoardAgent
+	Sprints     []sprintRow
+	Nodes       []fleetNode
+	Components  []roadmapComponent
 }
 
 type sprintRow struct {
 	Sprint      SprintBoardSprint
 	TicketCount int
+	DoneCount   int
 }
 
 type fleetNode struct {
@@ -53,6 +55,12 @@ type fleetNode struct {
 	Level     string
 	LastProbe string
 	FreePct   int
+	Services  []fleetService
+}
+
+type fleetService struct {
+	Name   string
+	Status string // "up", "down", "unknown"
 }
 
 type roadmapComponent struct {
@@ -198,14 +206,20 @@ func (s *Server) handleOverview(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleCI(w http.ResponseWriter, r *http.Request) {
 	statuses := s.getStatuses(r.Context())
 	pipelines := make(map[int][]GitLabPipeline)
+	ghWorkflows := make(map[string][]GitHubWorkflowRun)
 	for _, ns := range statuses {
 		if ns.Name == "gitlab" {
 			if data, ok := ns.Status.Data.(map[int][]GitLabPipeline); ok {
 				pipelines = data
 			}
 		}
+		if ns.Name == "github-ci" {
+			if data, ok := ns.Status.Data.(map[string][]GitHubWorkflowRun); ok {
+				ghWorkflows = data
+			}
+		}
 	}
-	s.render(w, "ci.html", PageData{Title: "CI Pipelines", Pipelines: pipelines})
+	s.render(w, "ci.html", PageData{Title: "CI Pipelines", Pipelines: pipelines, GHWorkflows: ghWorkflows})
 }
 
 func (s *Server) handleAgents(w http.ResponseWriter, r *http.Request) {
@@ -228,6 +242,7 @@ func (s *Server) handleSprints(w http.ResponseWriter, r *http.Request) {
 	var rows []sprintRow
 	var allTickets []SprintBoardTicket
 	var allSprints []SprintBoardSprint
+	var agents []SprintBoardAgent
 
 	for _, ns := range statuses {
 		if ns.Name == "sprintboard" {
@@ -238,19 +253,25 @@ func (s *Server) handleSprints(w http.ResponseWriter, r *http.Request) {
 				if sp, ok := data["sprints"].([]SprintBoardSprint); ok {
 					allSprints = sp
 				}
+				if a, ok := data["agents"].([]SprintBoardAgent); ok {
+					agents = a
+				}
 			}
 		}
 	}
 	for _, sp := range allSprints {
-		count := 0
+		total, done := 0, 0
 		for _, t := range allTickets {
 			if t.SprintID == sp.ID {
-				count++
+				total++
+				if t.Status == "done" || t.Status == "completed" {
+					done++
+				}
 			}
 		}
-		rows = append(rows, sprintRow{Sprint: sp, TicketCount: count})
+		rows = append(rows, sprintRow{Sprint: sp, TicketCount: total, DoneCount: done})
 	}
-	s.render(w, "sprints.html", PageData{Title: "Sprints", Sprints: rows})
+	s.render(w, "sprints.html", PageData{Title: "Sprints", Sprints: rows, Agents: agents})
 }
 
 func (s *Server) handleFleet(w http.ResponseWriter, r *http.Request) {
@@ -271,9 +292,10 @@ func (s *Server) readFleetProbe() []fleetNode {
 	seen := map[string]fleetNode{}
 	for _, e := range events {
 		var probe struct {
-			Ts      string `json:"ts"`
-			FreePct int    `json:"free_pct"`
-			Host    string `json:"host"`
+			Ts       string         `json:"ts"`
+			FreePct  int            `json:"free_pct"`
+			Host     string         `json:"host"`
+			Services []serviceProbe `json:"services,omitempty"`
 		}
 		raw, _ := json.Marshal(e)
 		_ = json.Unmarshal(raw, &probe)
@@ -286,11 +308,19 @@ func (s *Server) readFleetProbe() []fleetNode {
 		} else if probe.FreePct < 15 {
 			level = "YELLOW"
 		}
+		var services []fleetService
+		for _, svc := range probe.Services {
+			services = append(services, fleetService{Name: svc.Name, Status: svc.Status})
+			if svc.Status == "down" && level != "RED" {
+				level = "YELLOW"
+			}
+		}
 		seen[probe.Host] = fleetNode{
 			Name:      probe.Host,
 			Level:     level,
 			LastProbe: probe.Ts,
 			FreePct:   probe.FreePct,
+			Services:  services,
 		}
 	}
 	nodes := make([]fleetNode, 0, len(seen))
@@ -298,6 +328,11 @@ func (s *Server) readFleetProbe() []fleetNode {
 		nodes = append(nodes, n)
 	}
 	return nodes
+}
+
+type serviceProbe struct {
+	Name   string `json:"name"`
+	Status string `json:"status"`
 }
 
 func (s *Server) handleRoadmap(w http.ResponseWriter, r *http.Request) {

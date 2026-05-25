@@ -6,6 +6,17 @@
   <h2>{{.Name}} <span class="badge badge-{{.Level}}">{{.Level}}</span></h2>
   <p>Last probe: <span class="ts">{{.LastProbe}}</span></p>
   <p>Free: {{.FreePct}}%</p>
+  {{if .Services}}
+  <table>
+    <tr><th>Service</th><th>Status</th></tr>
+    {{range .Services}}
+    <tr>
+      <td>{{.Name}}</td>
+      <td><span class="badge badge-{{if eq .Status "up"}}GREEN{{else if eq .Status "down"}}RED{{else}}YELLOW{{end}}">{{.Status}}</span></td>
+    </tr>
+    {{end}}
+  </table>
+  {{end}}
 </div>
 {{end}}
 </div>

@@ -16,7 +16,7 @@ import (
 
 // Status represents the health result from a single fetcher.
 type Status struct {
-	Level   string      `json:"level"`   // "GREEN", "YELLOW", "RED"
+	Level   string      `json:"level"` // "GREEN", "YELLOW", "RED"
 	Message string      `json:"message"`
 	Data    interface{} `json:"data,omitempty"`
 }
@@ -92,6 +92,81 @@ func (f *GitLabFetcher) Fetch(ctx context.Context) (Status, error) {
 		}
 	}
 	return Status{Level: level, Message: "pipelines fetched", Data: allPipelines}, nil
+}
+
+// --- GitHub CI ---
+
+// GitHubWorkflowRun represents a GitHub Actions workflow run.
+type GitHubWorkflowRun struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	Status     string `json:"status"`
+	Conclusion string `json:"conclusion"`
+	Branch     string `json:"head_branch"`
+	CreatedAt  string `json:"created_at"`
+	HTMLURL    string `json:"html_url"`
+}
+
+// GitHubCIFetcher queries GitHub Actions for recent workflow runs.
+type GitHubCIFetcher struct {
+	Repos  []string // e.g. ["nfsarch33/helix-dev-tools", "nfsarch33/helixon-mcp"]
+	Token  string
+	Client *http.Client
+}
+
+func (f *GitHubCIFetcher) Name() string { return "github-ci" }
+
+func (f *GitHubCIFetcher) Fetch(ctx context.Context) (Status, error) {
+	client := f.Client
+	if client == nil {
+		client = &http.Client{Timeout: 10 * time.Second}
+	}
+
+	allRuns := make(map[string][]GitHubWorkflowRun)
+	level := "GREEN"
+	for _, repo := range f.Repos {
+		url := fmt.Sprintf("https://api.github.com/repos/%s/actions/runs?per_page=5", repo)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+		if err != nil {
+			continue
+		}
+		if f.Token != "" {
+			req.Header.Set("Authorization", "Bearer "+f.Token)
+		}
+		req.Header.Set("Accept", "application/vnd.github+json")
+		resp, err := client.Do(req)
+		if err != nil {
+			allRuns[repo] = nil
+			level = "YELLOW"
+			continue
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			allRuns[repo] = nil
+			if level != "RED" {
+				level = "YELLOW"
+			}
+			continue
+		}
+
+		var body struct {
+			WorkflowRuns []GitHubWorkflowRun `json:"workflow_runs"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+			continue
+		}
+		allRuns[repo] = body.WorkflowRuns
+		for _, run := range body.WorkflowRuns {
+			if run.Conclusion == "failure" {
+				level = "RED"
+			} else if run.Status == "in_progress" || run.Status == "queued" {
+				if level != "RED" {
+					level = "YELLOW"
+				}
+			}
+		}
+	}
+	return Status{Level: level, Message: fmt.Sprintf("%d repos checked", len(f.Repos)), Data: allRuns}, nil
 }
 
 // --- ArgoCD ---
