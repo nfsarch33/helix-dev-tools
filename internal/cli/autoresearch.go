@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -90,7 +91,11 @@ func runAutoresearch(cmd *cobra.Command, _ []string) error {
 		autoresearch.NewPromotePhase(promoteCfg),
 	)
 
-	history, err := runner.Run(cmd.Context())
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	history, err := runner.Run(ctx)
 	if err != nil {
 		return fmt.Errorf("autoresearch run: %w", err)
 	}
