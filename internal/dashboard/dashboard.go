@@ -21,6 +21,7 @@ type Server struct {
 	ListenAddr       string
 	AuthToken        string // if set, requires Bearer token on all routes except /healthz
 	AgentraceLogPath string // NDJSON log for KPI endpoint; defaults to ~/logs/runx/agentrace-mcp.ndjson
+	EvalDBPath       string // SQLite eval DB path; defaults to ~/.config/helix-dev-tools/eval.db
 	pages            map[string]*template.Template
 	mu               sync.RWMutex
 	cachedStatuses   []namedStatus
@@ -119,6 +120,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/roadmap", s.handleRoadmap)
 	mux.HandleFunc("/api/health", s.handleAPIHealth)
 	mux.HandleFunc("/api/agentrace/kpi", s.handleAgentraceKPI)
+	mux.HandleFunc("/api/eval/results", s.handleEvalResults)
 	mux.HandleFunc("/healthz", s.handleAPIHealth)
 
 	if s.AuthToken != "" {
