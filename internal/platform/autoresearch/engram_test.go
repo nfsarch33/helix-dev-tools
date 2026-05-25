@@ -14,8 +14,8 @@ func TestNewEngramClientDefaults(t *testing.T) {
 	t.Setenv("ENGRAM_USER_ID", "")
 
 	c := NewEngramClient()
-	if c.BaseURL != defaultEngramURL {
-		t.Errorf("BaseURL: got %q, want %q", c.BaseURL, defaultEngramURL)
+	if c.BaseURL != "http://localhost:8281" {
+		t.Errorf("BaseURL: got %q, want %q", c.BaseURL, "http://localhost:8281")
 	}
 	if c.UserID != "autoresearch-agent" {
 		t.Errorf("UserID: got %q, want %q", c.UserID, "autoresearch-agent")

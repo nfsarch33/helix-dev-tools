@@ -1,11 +1,14 @@
-# cursor-tools
+# helix-dev-tools
 
 Single Go binary for Cursor IDE hooks, git hooks, health checks, and memory system management.
+
+- Module: `github.com/nfsarch33/helix-dev-tools`
+- Binary: `cursor-tools` (legacy name retained for backward compatibility)
+- Go: 1.25.0+
 
 ## Quick Start
 
 ```bash
-cd ~/cursor-tools
 make build install
 cursor-tools version
 ```
@@ -74,7 +77,7 @@ make clean       # Remove build artefacts
 Single binary, zero runtime dependencies. All internal packages are in `/internal/`
 (Go compiler enforced: cannot be imported by external modules).
 
-Source lives in the private `nfsarch33/cursor-tools` repository. `global-kb` keeps bootstrap pointers and installs a pinned release into `~/bin/cursor-tools`.
+Source lives in the private `nfsarch33/helix-dev-tools` repository (formerly `cursor-tools`). The binary is still installed as `~/bin/cursor-tools` for backward compatibility.
 
 - `internal/hookio` -- Cursor hook JSON stdin/stdout protocol
 - `internal/patterns` -- Pre-compiled regex deny/warn/allow pattern engine
