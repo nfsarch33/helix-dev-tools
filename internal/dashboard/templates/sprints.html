@@ -1,15 +1,32 @@
 {{define "content"}}
 <h1>Sprints</h1>
 <table>
-  <tr><th>ID</th><th>Name</th><th>Status</th><th>Tickets</th></tr>
+  <tr><th>ID</th><th>Name</th><th>Status</th><th>Done</th><th>Total</th><th>Progress</th></tr>
   {{range .Sprints}}
   <tr>
     <td>{{.Sprint.ID}}</td>
     <td>{{.Sprint.Name}}</td>
     <td><span class="badge badge-{{if eq .Sprint.Status "active"}}GREEN{{else if eq .Sprint.Status "completed"}}GREEN{{else}}YELLOW{{end}}">{{.Sprint.Status}}</span></td>
+    <td>{{.DoneCount}}</td>
     <td>{{.TicketCount}}</td>
+    <td>{{if .TicketCount}}<progress value="{{.DoneCount}}" max="{{.TicketCount}}"></progress> {{.DoneCount}}/{{.TicketCount}}{{else}}&mdash;{{end}}</td>
   </tr>
   {{end}}
 </table>
 {{if not .Sprints}}<p>No sprints found.</p>{{end}}
+
+<h2>Task Allocation by Agent</h2>
+<table>
+  <tr><th>Agent</th><th>Surface</th><th>Current Ticket</th><th>Last Heartbeat</th><th>Status</th></tr>
+  {{range .Agents}}
+  <tr>
+    <td>{{.ID}}</td>
+    <td>{{.Surface}}</td>
+    <td>{{if .CurrentTicketID}}{{.CurrentTicketID}}{{else}}<em>idle</em>{{end}}</td>
+    <td class="ts">{{.LastSeen}}</td>
+    <td>{{if .CurrentTicketID}}<span class="badge badge-GREEN">working</span>{{else}}<span class="badge badge-YELLOW">idle</span>{{end}}</td>
+  </tr>
+  {{end}}
+</table>
+{{if not .Agents}}<p>No agents registered.</p>{{end}}
 {{end}}
