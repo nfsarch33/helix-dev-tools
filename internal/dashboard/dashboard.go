@@ -16,13 +16,14 @@ import (
 
 // Server is the HTTP dashboard backed by a set of Fetchers.
 type Server struct {
-	Fetchers       []Fetcher
-	ManifestPath   string // YAML roadmap manifest path
-	ListenAddr     string
-	AuthToken      string // if set, requires Bearer token on all routes except /healthz
-	pages          map[string]*template.Template
-	mu             sync.RWMutex
-	cachedStatuses []namedStatus
+	Fetchers         []Fetcher
+	ManifestPath     string // YAML roadmap manifest path
+	ListenAddr       string
+	AuthToken        string // if set, requires Bearer token on all routes except /healthz
+	AgentraceLogPath string // NDJSON log for KPI endpoint; defaults to ~/logs/runx/agentrace-mcp.ndjson
+	pages            map[string]*template.Template
+	mu               sync.RWMutex
+	cachedStatuses   []namedStatus
 }
 
 type namedStatus struct {
@@ -117,6 +118,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/fleet", s.handleFleet)
 	mux.HandleFunc("/roadmap", s.handleRoadmap)
 	mux.HandleFunc("/api/health", s.handleAPIHealth)
+	mux.HandleFunc("/api/agentrace/kpi", s.handleAgentraceKPI)
 	mux.HandleFunc("/healthz", s.handleAPIHealth)
 
 	if s.AuthToken != "" {
