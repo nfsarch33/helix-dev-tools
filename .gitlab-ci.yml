@@ -1,0 +1,74 @@
+stages:
+  - lint
+  - test
+  - build
+  - security
+
+variables:
+  GOVERSION: "1.25"
+  GOFLAGS: "-buildvcs=false"
+
+.go_base:
+  image: golang:${GOVERSION}
+  before_script:
+    - go mod download
+  tags:
+    - docker
+
+vet:
+  extends: .go_base
+  stage: lint
+  script:
+    - go vet ./...
+
+lint:
+  extends: .go_base
+  stage: lint
+  script:
+    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    - golangci-lint run --timeout 5m ./...
+  allow_failure: true
+
+test:
+  extends: .go_base
+  stage: test
+  script:
+    - go test -race -count=1 -coverprofile=coverage.out ./...
+    - go tool cover -func=coverage.out | tail -1
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.out
+    paths:
+      - coverage.out
+    expire_in: 7 days
+  coverage: "/total:\\s+\\(statements\\)\\s+(\\d+\\.\\d+)%/"
+
+build:
+  extends: .go_base
+  stage: build
+  script:
+    - CGO_ENABLED=0 go build -ldflags="-s -w" ./cmd/cursor-tools/
+  artifacts:
+    paths:
+      - cursor-tools
+    expire_in: 7 days
+  only:
+    - main
+    - tags
+
+govulncheck:
+  extends: .go_base
+  stage: security
+  script:
+    - go install golang.org/x/vuln/cmd/govulncheck@latest
+    - govulncheck ./...
+
+gosec:
+  extends: .go_base
+  stage: security
+  script:
+    - go install github.com/securego/gosec/v2/cmd/gosec@latest
+    - gosec -quiet ./...
+  allow_failure: true
