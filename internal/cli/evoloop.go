@@ -1,4 +1,4 @@
-// runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop client filters Mem0 capsules by the canonical evoloop-daemon source label and wsl1 producer-machine name
+// runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop client filters Mem0 capsules by the canonical evoloop-daemon source label and producer-machine name
 
 package cli
 
@@ -77,7 +77,7 @@ to merge both streams.`,
 
 func init() {
 	evoloopRecentCmd.Flags().StringVar(&evoloopRecentFlags.kind, "kind", "rollup", "Capsule kind to list: rollup, cycle, or all")
-	evoloopRecentCmd.Flags().StringVar(&evoloopRecentFlags.machine, "machine", "", "Filter by producing machine (e.g. wsl1, macbook). Empty = all machines.")
+	evoloopRecentCmd.Flags().StringVar(&evoloopRecentFlags.machine, "machine", "", "Filter by producing machine (e.g. gpu-host-1, macbook). Empty = all machines.")
 	evoloopRecentCmd.Flags().IntVar(&evoloopRecentFlags.limit, "limit", 10, "Maximum number of capsules to return")
 	evoloopRecentCmd.Flags().BoolVar(&evoloopRecentFlags.json, "json", false, "Output JSON instead of a human-readable table")
 	evoloopRecentCmd.Flags().BoolVar(&evoloopRecentFlags.debug, "debug", false, "Print the resolved Mem0 query to stderr before fetching capsules")

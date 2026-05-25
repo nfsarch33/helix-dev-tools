@@ -1,4 +1,4 @@
-// runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop client filters Mem0 capsules by the canonical evoloop-daemon source label and wsl1 producer-machine name
+// runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop client filters Mem0 capsules by the canonical evoloop-daemon source label and producer-machine name
 
 // Package evoloop queries Mem0 for EvoLoop capsules (rollups and cycles)
 // so any Cursor instance can read fleet-wide EvoLoop-DRL state at session
@@ -124,7 +124,7 @@ type RecentOptions struct {
 	// Kinds restricts results to one or more capsule kinds. Empty means
 	// "rollups only" because the rollup is the cheap cross-node summary.
 	Kinds []CapsuleKind
-	// Machine filters to a single producing machine (e.g. "wsl1"). Empty
+	// Machine filters to a single producing machine (e.g. "gpu-host-1"). Empty
 	// returns every machine.
 	Machine string
 	// Limit caps the number of capsules returned after sorting. <=0 means

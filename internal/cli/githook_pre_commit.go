@@ -6,7 +6,7 @@
 //
 //	"All personal repos MUST be committed with the nfsarch33 GitHub
 //	identity (jaslian@gmail.com). The Zendesk work identity
-//	(jlianzendesk@zendesk.com) MUST NEVER land on a personal repo."
+//	(work-identity@company.example) MUST NEVER land on a personal repo."
 //
 // Mechanism:
 //
@@ -49,7 +49,7 @@ var preCommitCmd = &cobra.Command{
 
 // denyZendeskIdentity matches any email containing the literal
 // substring "zendesk" (case-insensitive). The work account is
-// jlianzendesk@zendesk.com but staff emails like j.lian@zendesk.com
+// work-identity@company.example but staff emails like j.lian@zendesk.com
 // would be just as wrong on a personal repo, so we match the domain
 // substring rather than a specific local-part.
 var denyZendeskIdentity = regexp.MustCompile(`(?i)zendesk`)

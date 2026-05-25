@@ -1,4 +1,4 @@
-// runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop client filters Mem0 capsules by the canonical evoloop-daemon source label and wsl1 producer-machine name
+// runx-public-repo-gate: allow-file fleet_host_alias,internal_service_id — EvoLoop client filters Mem0 capsules by the canonical evoloop-daemon source label and producer-machine name
 
 // Package outcomes implements the agent_outcome capsule format used by every
 // Cursor hook, fleet worker, and Helixon daemon to feed the EvoLoop daemon.
