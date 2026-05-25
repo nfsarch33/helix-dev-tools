@@ -389,10 +389,10 @@ func generateHypotheses(results []ProbeResult) []Hypothesis {
 
 func categorize(r ProbeResult) string {
 	switch {
-	case strings.Contains(r.Pattern, "timeout"):
-		return "performance"
 	case strings.HasPrefix(r.Pattern, "error:"):
 		return "reliability"
+	case strings.Contains(r.Pattern, "timeout"):
+		return "performance"
 	default:
 		return "quality"
 	}

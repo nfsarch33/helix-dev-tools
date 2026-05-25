@@ -332,16 +332,22 @@ func TestNormalizeError(t *testing.T) {
 	}{
 		{"simple error", "error:simple error"},
 		{"line1\nline2", "error:line1 line2"},
-		{
-			"a very long error message that exceeds eighty characters and should be truncated at the boundary",
-			"error:a very long error message that exceeds eighty characters and should be tru",
-		},
 	}
 	for _, tc := range tests {
 		got := normalizeError(tc.input)
 		if got != tc.want {
 			t.Errorf("normalizeError(%q) = %q, want %q", tc.input, got, tc.want)
 		}
+	}
+
+	longInput := "a very long error message that exceeds eighty characters and should be truncated at the boundary"
+	got := normalizeError(longInput)
+	wantPrefix := "error:"
+	if len(got) > len(wantPrefix)+80 {
+		t.Errorf("normalizeError(long) should truncate input to 80 chars, got len=%d", len(got)-len(wantPrefix))
+	}
+	if got != "error:"+longInput[:80] {
+		t.Errorf("normalizeError(long) = %q, want %q", got, "error:"+longInput[:80])
 	}
 }
 
