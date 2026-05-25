@@ -13,9 +13,9 @@ import (
 )
 
 const (
-	engramAppID        = "autoresearch"
-	defaultEngramURL   = "http://127.0.0.1:18888"
-	engramTimeout      = 15 * time.Second
+	engramAppID      = "autoresearch"
+	defaultEngramURL = "http://localhost:8281"
+	engramTimeout    = 15 * time.Second
 )
 
 // EngramClient stores and retrieves research findings from Engram's
