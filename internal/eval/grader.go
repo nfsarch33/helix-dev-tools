@@ -43,6 +43,14 @@ func NewGrader(c Criterion) Grader {
 	switch c.GraderType {
 	case GraderShell:
 		return &ShellGrader{Command: c.Command}
+	case GraderCoverage:
+		return &CoverageGrader{Package: c.Package, Threshold: c.Threshold}
+	case GraderTest:
+		return &TestGrader{Package: c.Package, Race: c.Race}
+	case GraderLint:
+		return &LintGrader{Config: c.Config}
+	case GraderVet:
+		return &VetGrader{Package: c.Package}
 	case GraderCode:
 		return &CodeGrader{Pattern: c.Pattern}
 	default:
