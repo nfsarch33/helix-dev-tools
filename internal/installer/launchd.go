@@ -135,18 +135,6 @@ func parseLaunchctlPrint(output string) (running bool, pid int, lastExit int) {
 	return
 }
 
-// plist XML structures
-
-type plistDict struct {
-	XMLName xml.Name    `xml:"dict"`
-	Items   []plistItem `xml:",any"`
-}
-
-type plistItem struct {
-	XMLName xml.Name
-	Value   string `xml:",chardata"`
-}
-
 // GeneratePlist renders a launchd plist XML document from a DaemonConfig.
 func GeneratePlist(cfg DaemonConfig) ([]byte, error) {
 	var buf bytes.Buffer

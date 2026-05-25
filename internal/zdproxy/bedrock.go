@@ -246,21 +246,6 @@ func prepareBedrockBody(body []byte) ([]byte, error) {
 	return json.Marshal(m)
 }
 
-// injectAnthropicVersion is kept as a thin wrapper for legacy callers/tests
-// that only need the version-injection behaviour without the model/stream
-// strip. Prefer prepareBedrockBody for new code.
-func injectAnthropicVersion(body []byte) ([]byte, error) {
-	var m map[string]any
-	if err := json.Unmarshal(body, &m); err != nil {
-		return nil, err
-	}
-	if _, ok := m["anthropic_version"]; ok {
-		return body, nil
-	}
-	m["anthropic_version"] = bedrockAnthropicVersion
-	return json.Marshal(m)
-}
-
 // parseBedrockPassthroughPath returns the model id and endpoint segment for a
 // request path of the form /bedrock/model/{id}/invoke[-with-response-stream].
 // The endpoint must be exactly "invoke" or "invoke-with-response-stream".

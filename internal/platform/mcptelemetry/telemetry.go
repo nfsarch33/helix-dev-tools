@@ -79,7 +79,7 @@ func (r *Recorder) Record(tool string, agentID string, duration time.Duration, i
 	}
 
 	r.mu.Lock()
-	r.encoder.Encode(event)
+	_ = r.encoder.Encode(event)
 	r.mu.Unlock()
 }
 

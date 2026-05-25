@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	"log/slog"
@@ -51,7 +50,6 @@ type Source interface {
 
 // Collector aggregates multiple Sources into a StatusReport.
 type Collector struct {
-	mu            sync.RWMutex
 	sources       []Source
 	logger        *slog.Logger
 	hangThreshold time.Duration

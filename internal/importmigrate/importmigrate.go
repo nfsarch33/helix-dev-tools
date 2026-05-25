@@ -15,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"sync"
 	"sync/atomic"
 )
@@ -186,12 +185,3 @@ func processFile(path, oldPrefix, newPrefix string, dryRun bool) (bool, int, err
 	return true, count, nil
 }
 
-// skipDir reports whether the directory with the given name should be
-// excluded from migration.
-func skipDir(name string) bool {
-	switch name {
-	case "vendor", ".git", "node_modules":
-		return true
-	}
-	return strings.HasPrefix(name, ".")
-}

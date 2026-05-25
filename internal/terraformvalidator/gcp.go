@@ -8,7 +8,6 @@ import (
 
 var (
 	credentialsFieldRe   = regexp.MustCompile(`(?i)credentials\s*=`)
-	jsonKeyFileRe        = regexp.MustCompile(`(?i)\.(json|key)["']?\s*\)`)
 	googleCredentialsRe  = regexp.MustCompile(`(?i)GOOGLE_CREDENTIALS`)
 	accessTokenRe        = regexp.MustCompile(`access_token\s*=\s*"`)
 	googleAppCredsRe     = regexp.MustCompile(`(?i)GOOGLE_APPLICATION_CREDENTIALS`)
@@ -71,9 +70,7 @@ func ValidateGCPProject(hcl string, reqs GCPProjectRequirements) (*ValidationRes
 	if reqs.ForbidJSONKeys {
 		jsonKeyIssues := detectJSONKeyReferences(hcl)
 		if len(jsonKeyIssues) > 0 {
-			for _, issue := range jsonKeyIssues {
-				result.Failures = append(result.Failures, issue)
-			}
+			result.Failures = append(result.Failures, jsonKeyIssues...)
 		} else {
 			result.Passed = append(result.Passed, "no JSON key file references detected")
 		}
@@ -88,9 +85,7 @@ func ValidateNoJSONKeys(hcl string) (*ValidationResult, error) {
 
 	issues := detectJSONKeyReferences(hcl)
 	if len(issues) > 0 {
-		for _, issue := range issues {
-			result.Failures = append(result.Failures, issue)
-		}
+		result.Failures = append(result.Failures, issues...)
 	} else {
 		result.Passed = append(result.Passed, "no JSON key references found")
 	}

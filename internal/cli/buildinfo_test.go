@@ -8,8 +8,6 @@ import (
 )
 
 func TestEffectiveVersionFallsBackToBuildInfo(t *testing.T) {
-	t.Parallel()
-
 	original := readBuildInfo
 	readBuildInfo = func() (*debug.BuildInfo, bool) {
 		return &debug.BuildInfo{
@@ -31,8 +29,6 @@ func TestEffectiveVersionFallsBackToBuildInfo(t *testing.T) {
 }
 
 func TestPrintVersionUsesCommandWriter(t *testing.T) {
-	t.Parallel()
-
 	original := readBuildInfo
 	readBuildInfo = func() (*debug.BuildInfo, bool) { return nil, false }
 	defer func() { readBuildInfo = original }()

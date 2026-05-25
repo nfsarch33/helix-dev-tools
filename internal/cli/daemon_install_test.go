@@ -276,9 +276,15 @@ func TestKnownDaemonNames_NonEmpty(t *testing.T) {
 // --- platformLabel ---
 
 func TestPlatformLabel_Darwin(t *testing.T) {
-	label := platformLabel("cursor-resource-probe")
-	// Can't control runtime.GOOS in test, so just verify it returns non-empty
-	if label == "" {
-		t.Error("expected non-empty label")
+	label := platformLabel("cursor-resource-probe", "darwin")
+	if label != "com.user.cursor-resource-probe" {
+		t.Errorf("expected com.user.cursor-resource-probe, got %s", label)
+	}
+}
+
+func TestPlatformLabel_Linux(t *testing.T) {
+	label := platformLabel("cursor-resource-probe", "linux")
+	if label != "cursor-resource-probe.service" {
+		t.Errorf("expected cursor-resource-probe.service, got %s", label)
 	}
 }

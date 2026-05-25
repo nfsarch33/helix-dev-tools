@@ -45,8 +45,8 @@ func logPath(name string) string {
 }
 
 // platformLabel returns the platform-appropriate service label.
-func platformLabel(name string) string {
-	if runtime.GOOS == "darwin" {
+func platformLabel(name, goos string) string {
+	if goos == "darwin" {
 		return "com.user." + name
 	}
 	return name + ".service"
@@ -133,7 +133,7 @@ func runDaemonInstall(out io.Writer, name, goos string) error {
 		return err
 	}
 
-	label := platformLabel(name)
+	label := platformLabel(name, goos)
 	if err := inst.Install(label, cfg); err != nil {
 		return fmt.Errorf("install %s: %w", name, err)
 	}
@@ -152,7 +152,7 @@ func runDaemonUninstall(out io.Writer, name, goos string) error {
 		return err
 	}
 
-	label := platformLabel(name)
+	label := platformLabel(name, goos)
 	if err := inst.Uninstall(label); err != nil {
 		return fmt.Errorf("uninstall %s: %w", name, err)
 	}
@@ -181,7 +181,7 @@ func runDaemonStatus(out io.Writer, name, goos string) error {
 	}
 
 	for n := range targets {
-		label := platformLabel(n)
+		label := platformLabel(n, goos)
 		st, err := inst.Status(label)
 		if err != nil {
 			fmt.Fprintf(out, "  [ERR]  %-30s %v\n", n, err)

@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -211,11 +210,6 @@ func captureSentruxProcessCounts(ctx context.Context) (desktop int, mcp int, err
 	}
 	return desktop, mcp, nil
 }
-
-// ensure resource-probe-once writes through the cobra default streams
-// even when launchd captures stdout/stderr; this seam is here for
-// tests to replace the destination.
-var resourceProbeStdout io.Writer = os.Stdout
 
 func init() {
 	rootCmd.AddCommand(resourceProbeOnceCmd)

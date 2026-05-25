@@ -55,10 +55,7 @@ func IsConventionalCommitInvalid(msg string) bool {
 			return false
 		}
 	}
-	if strictConventionalCommit.MatchString(first) {
-		return false
-	}
-	return true
+	return !strictConventionalCommit.MatchString(first)
 }
 
 // extractCommitMessageFromShell pulls the `-m "..."` or `-m '...'`

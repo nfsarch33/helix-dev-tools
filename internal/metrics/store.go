@@ -69,11 +69,6 @@ func Record(path string, e Event) error {
 	return err
 }
 
-func currentTurnID() string {
-	turnID, _ := currentTaskIdentity()
-	return turnID
-}
-
 func currentTaskIdentity() (string, string) {
 	for _, key := range []string{
 		"CURSOR_TASK_ID",

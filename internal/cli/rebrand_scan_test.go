@@ -67,10 +67,10 @@ func TestScanFile_NoFalsePositives(t *testing.T) {
 	dir := t.TempDir()
 	content := `package main
 
-import "github.com/nfsarch33/helixon-ops/pkg/server"
+import "github.com/example/some-lib/pkg/server"
 
-const ns = "helixon-system"
-var prefix = "HELIXON_API_KEY"
+const ns = "default"
+var prefix = "APP_API_KEY"
 `
 	path := filepath.Join(dir, "clean.go")
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {

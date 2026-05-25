@@ -140,8 +140,5 @@ func isClusterHealthy(status *HealthStatus) bool {
 			return false
 		}
 	}
-	if status.PodAggregation.FailedPods > 0 {
-		return false
-	}
-	return true
+	return status.PodAggregation.FailedPods <= 0
 }

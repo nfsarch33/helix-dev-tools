@@ -109,5 +109,5 @@ func (o *Outbox) load() error {
 
 func (o *Outbox) save() {
 	data, _ := json.MarshalIndent(o.entries, "", "  ")
-	os.WriteFile(o.path, data, 0600)
+	_ = os.WriteFile(o.path, data, 0600)
 }

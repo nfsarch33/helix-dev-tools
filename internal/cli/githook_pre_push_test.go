@@ -246,6 +246,7 @@ func TestPrePush_AllowsCleanPublicRepo(t *testing.T) {
 		gateInvoked = true
 		return nil
 	})
+	withFakeRebrandGate(t, func(string) []string { return nil })
 	code, _ := withCapturedPrePushExit(t)
 
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")

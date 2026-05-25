@@ -125,7 +125,7 @@ func (m *Middleware) RecordCall(toolName string, args map[string]interface{}, du
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.writer != nil {
-		m.writer.Write(data)
+		_, _ = m.writer.Write(data)
 	}
 }
 
