@@ -24,36 +24,48 @@ type DeterministicGrader interface {
 
 // AgentTraceEvent is the minimal parsed shape of an agentrace NDJSON line.
 type AgentTraceEvent struct {
-	Timestamp  string          `json:"ts" yaml:"ts"`
-	Event      string          `json:"event" yaml:"event"`
-	Tool       string          `json:"tool,omitempty" yaml:"tool"`
-	LatencyMS  float64         `json:"latency_ms,omitempty" yaml:"latency_ms"`
-	Success    bool            `json:"success,omitempty" yaml:"success"`
-	Error      string          `json:"error,omitempty" yaml:"error"`
-	TokensUsed int             `json:"tokens_used,omitempty" yaml:"tokens_used"`
-	Coverage   float64         `json:"coverage,omitempty" yaml:"coverage"`
-	LintClean  *bool           `json:"lint_clean,omitempty" yaml:"lint_clean"`
-	TestPass   *bool           `json:"test_pass,omitempty" yaml:"test_pass"`
-	Raw        json.RawMessage `json:"raw,omitempty" yaml:"raw"`
+	Timestamp      string          `json:"ts" yaml:"ts"`
+	Event          string          `json:"event" yaml:"event"`
+	Tool           string          `json:"tool,omitempty" yaml:"tool"`
+	LatencyMS      float64         `json:"latency_ms,omitempty" yaml:"latency_ms"`
+	Success        bool            `json:"success,omitempty" yaml:"success"`
+	Error          string          `json:"error,omitempty" yaml:"error"`
+	TokensUsed     int             `json:"tokens_used,omitempty" yaml:"tokens_used"`
+	Coverage       float64         `json:"coverage,omitempty" yaml:"coverage"`
+	LintClean      *bool           `json:"lint_clean,omitempty" yaml:"lint_clean"`
+	TestPass       *bool           `json:"test_pass,omitempty" yaml:"test_pass"`
+	ToolsTotal     int             `json:"tools_total,omitempty" yaml:"tools_total"`
+	ToolsExercised int             `json:"tools_exercised,omitempty" yaml:"tools_exercised"`
+	TasksTotal     int             `json:"tasks_total,omitempty" yaml:"tasks_total"`
+	TasksCompleted int             `json:"tasks_completed,omitempty" yaml:"tasks_completed"`
+	BaselineScore  float64         `json:"baseline_score,omitempty" yaml:"baseline_score"`
+	CurrentScore   float64         `json:"current_score,omitempty" yaml:"current_score"`
+	Raw            json.RawMessage `json:"raw,omitempty" yaml:"raw"`
 }
 
 // GraderConfig holds thresholds for all deterministic graders.
 type GraderConfig struct {
-	MaxP95LatencyMS   float64 `json:"max_p95_latency_ms"`
-	MaxErrorRate      float64 `json:"max_error_rate"`
-	MinCoverage       float64 `json:"min_coverage"`
-	MaxTokensPerTask  int     `json:"max_tokens_per_task"`
-	RequireConventional bool  `json:"require_conventional"`
+	MaxP95LatencyMS     float64 `json:"max_p95_latency_ms"`
+	MaxErrorRate        float64 `json:"max_error_rate"`
+	MinCoverage         float64 `json:"min_coverage"`
+	MaxTokensPerTask    int     `json:"max_tokens_per_task"`
+	RequireConventional bool    `json:"require_conventional"`
+	MinToolCoverage     float64 `json:"min_tool_coverage"`
+	MinCompletionRate   float64 `json:"min_completion_rate"`
+	MaxRegressionDelta  float64 `json:"max_regression_delta"`
 }
 
 // DefaultGraderConfig returns sensible defaults per ADR-065.
 func DefaultGraderConfig() GraderConfig {
 	return GraderConfig{
-		MaxP95LatencyMS:    5000,
-		MaxErrorRate:       0.05,
-		MinCoverage:        0.70,
-		MaxTokensPerTask:   50000,
+		MaxP95LatencyMS:     5000,
+		MaxErrorRate:        0.05,
+		MinCoverage:         0.70,
+		MaxTokensPerTask:    50000,
 		RequireConventional: true,
+		MinToolCoverage:     0.60,
+		MinCompletionRate:   0.80,
+		MaxRegressionDelta:  0.10,
 	}
 }
 
@@ -199,7 +211,81 @@ func isConventionalCommit(msg string) bool {
 	return false
 }
 
-// AllGraders returns the 6 deterministic graders with the given config.
+// ToolCoverageGrader checks what percentage of available tools were exercised.
+type ToolCoverageGrader struct {
+	MinCoverage float64
+}
+
+func (g *ToolCoverageGrader) Name() string { return "tool_coverage" }
+
+func (g *ToolCoverageGrader) Grade(event AgentTraceEvent) GradeResult {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if event.Event != "session_summary" && event.ToolsTotal == 0 {
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "no tool coverage data", Timestamp: now}
+	}
+	if event.ToolsTotal == 0 {
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "no tools registered", Timestamp: now}
+	}
+	ratio := float64(event.ToolsExercised) / float64(event.ToolsTotal)
+	if ratio >= g.MinCoverage {
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: ratio, Reason: fmt.Sprintf("%.0f%% tools exercised >= %.0f%% minimum", ratio*100, g.MinCoverage*100), Timestamp: now}
+	}
+	return GradeResult{GraderName: g.Name(), Pass: false, Score: ratio, Reason: fmt.Sprintf("%.0f%% tools exercised < %.0f%% minimum", ratio*100, g.MinCoverage*100), Timestamp: now}
+}
+
+// CompletionRateGrader checks task completion percentage.
+type CompletionRateGrader struct {
+	MinRate float64
+}
+
+func (g *CompletionRateGrader) Name() string { return "completion_rate" }
+
+func (g *CompletionRateGrader) Grade(event AgentTraceEvent) GradeResult {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if event.Event != "session_summary" && event.TasksTotal == 0 {
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "no task completion data", Timestamp: now}
+	}
+	if event.TasksTotal == 0 {
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "no tasks assigned", Timestamp: now}
+	}
+	rate := float64(event.TasksCompleted) / float64(event.TasksTotal)
+	if rate >= g.MinRate {
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: rate, Reason: fmt.Sprintf("%.0f%% completed >= %.0f%% minimum", rate*100, g.MinRate*100), Timestamp: now}
+	}
+	return GradeResult{GraderName: g.Name(), Pass: false, Score: rate, Reason: fmt.Sprintf("%.0f%% completed < %.0f%% minimum", rate*100, g.MinRate*100), Timestamp: now}
+}
+
+// RegressionGrader detects score regressions against a baseline.
+type RegressionGrader struct {
+	MaxDelta float64
+}
+
+func (g *RegressionGrader) Name() string { return "regression" }
+
+func (g *RegressionGrader) Grade(event AgentTraceEvent) GradeResult {
+	now := time.Now().UTC().Format(time.RFC3339)
+	if event.Event != "eval_comparison" && event.BaselineScore == 0 {
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "no baseline data", Timestamp: now}
+	}
+	if event.BaselineScore == 0 {
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: 1.0, Reason: "no baseline established", Timestamp: now}
+	}
+	delta := event.BaselineScore - event.CurrentScore
+	if delta <= g.MaxDelta {
+		score := 1.0
+		if delta > 0 {
+			score = 1.0 - (delta / event.BaselineScore)
+		}
+		return GradeResult{GraderName: g.Name(), Pass: true, Score: score, Reason: fmt.Sprintf("delta %.2f within %.2f threshold", delta, g.MaxDelta), Timestamp: now}
+	}
+	score := 1.0 - (delta / event.BaselineScore)
+	if score < 0 {
+		score = 0
+	}
+	return GradeResult{GraderName: g.Name(), Pass: false, Score: score, Reason: fmt.Sprintf("regression delta %.2f exceeds %.2f threshold (baseline=%.2f, current=%.2f)", delta, g.MaxDelta, event.BaselineScore, event.CurrentScore), Timestamp: now}
+}
+
+// AllGraders returns all deterministic graders with the given config.
 func AllGraders(cfg GraderConfig) []DeterministicGrader {
 	return []DeterministicGrader{
 		&LatencyGrader{MaxMS: cfg.MaxP95LatencyMS},
@@ -208,5 +294,20 @@ func AllGraders(cfg GraderConfig) []DeterministicGrader {
 		&LintGrader{},
 		&TestPassGrader{},
 		&TokenEfficiencyGrader{MaxTokens: cfg.MaxTokensPerTask},
+		&ToolCoverageGrader{MinCoverage: cfg.MinToolCoverage},
+		&CompletionRateGrader{MinRate: cfg.MinCompletionRate},
+		&RegressionGrader{MaxDelta: cfg.MaxRegressionDelta},
+	}
+}
+
+// ADR065Graders returns the 6 graders specified in ADR-065 for gate evaluation.
+func ADR065Graders(cfg GraderConfig) []DeterministicGrader {
+	return []DeterministicGrader{
+		&LatencyGrader{MaxMS: cfg.MaxP95LatencyMS},
+		&ErrorRateGrader{},
+		&ToolCoverageGrader{MinCoverage: cfg.MinToolCoverage},
+		&TokenEfficiencyGrader{MaxTokens: cfg.MaxTokensPerTask},
+		&CompletionRateGrader{MinRate: cfg.MinCompletionRate},
+		&RegressionGrader{MaxDelta: cfg.MaxRegressionDelta},
 	}
 }

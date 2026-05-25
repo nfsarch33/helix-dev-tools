@@ -1,0 +1,45 @@
+description: "SprintBoard baseline evaluation - MCP tool CRUD and coordination"
+events:
+  - ts: "2026-05-25T00:00:00+10:00"
+    event: tool_call
+    tool: sprint_create
+    latency_ms: 80
+    success: true
+    tokens_used: 600
+  - ts: "2026-05-25T00:01:00+10:00"
+    event: tool_call
+    tool: ticket_create
+    latency_ms: 60
+    success: true
+    tokens_used: 500
+  - ts: "2026-05-25T00:02:00+10:00"
+    event: tool_call
+    tool: task_claim
+    latency_ms: 45
+    success: true
+    tokens_used: 300
+  - ts: "2026-05-25T00:03:00+10:00"
+    event: tool_call
+    tool: task_complete
+    latency_ms: 55
+    success: true
+    tokens_used: 350
+  - ts: "2026-05-25T00:04:00+10:00"
+    event: test_run
+    success: true
+    coverage: 0.82
+    test_pass: true
+    lint_clean: true
+  - ts: "2026-05-25T00:05:00+10:00"
+    event: session_summary
+    tools_total: 33
+    tools_exercised: 24
+    tasks_total: 8
+    tasks_completed: 7
+  - ts: "2026-05-25T00:06:00+10:00"
+    event: eval_comparison
+    baseline_score: 0.90
+    current_score: 0.91
+expected:
+  all_pass: true
+  min_score: 0.8

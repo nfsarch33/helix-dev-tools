@@ -186,19 +186,141 @@ func TestCommitMessageGrader_SkipNonCommit(t *testing.T) {
 	}
 }
 
-func TestAllGraders_Returns6(t *testing.T) {
+func TestToolCoverageGrader_Pass(t *testing.T) {
+	g := &ToolCoverageGrader{MinCoverage: 0.60}
+	event := AgentTraceEvent{Event: "session_summary", ToolsTotal: 10, ToolsExercised: 8}
+	result := g.Grade(event)
+	if !result.Pass {
+		t.Errorf("expected pass for 80%% tool coverage >= 60%% min: %s", result.Reason)
+	}
+	if result.Score < 0.79 || result.Score > 0.81 {
+		t.Errorf("expected score ~0.80, got %f", result.Score)
+	}
+}
+
+func TestToolCoverageGrader_Fail(t *testing.T) {
+	g := &ToolCoverageGrader{MinCoverage: 0.60}
+	event := AgentTraceEvent{Event: "session_summary", ToolsTotal: 10, ToolsExercised: 3}
+	result := g.Grade(event)
+	if result.Pass {
+		t.Errorf("expected fail for 30%% tool coverage < 60%% min")
+	}
+}
+
+func TestToolCoverageGrader_NoData(t *testing.T) {
+	g := &ToolCoverageGrader{MinCoverage: 0.60}
+	event := AgentTraceEvent{Event: "tool_call"}
+	result := g.Grade(event)
+	if !result.Pass {
+		t.Errorf("events without tool coverage data should pass")
+	}
+}
+
+func TestToolCoverageGrader_ZeroTools(t *testing.T) {
+	g := &ToolCoverageGrader{MinCoverage: 0.60}
+	event := AgentTraceEvent{Event: "session_summary", ToolsTotal: 0}
+	result := g.Grade(event)
+	if !result.Pass {
+		t.Errorf("zero registered tools should pass")
+	}
+}
+
+func TestCompletionRateGrader_Pass(t *testing.T) {
+	g := &CompletionRateGrader{MinRate: 0.80}
+	event := AgentTraceEvent{Event: "session_summary", TasksTotal: 10, TasksCompleted: 9}
+	result := g.Grade(event)
+	if !result.Pass {
+		t.Errorf("expected pass for 90%% completion >= 80%% min: %s", result.Reason)
+	}
+	if result.Score < 0.89 || result.Score > 0.91 {
+		t.Errorf("expected score ~0.90, got %f", result.Score)
+	}
+}
+
+func TestCompletionRateGrader_Fail(t *testing.T) {
+	g := &CompletionRateGrader{MinRate: 0.80}
+	event := AgentTraceEvent{Event: "session_summary", TasksTotal: 10, TasksCompleted: 5}
+	result := g.Grade(event)
+	if result.Pass {
+		t.Errorf("expected fail for 50%% completion < 80%% min")
+	}
+}
+
+func TestCompletionRateGrader_NoData(t *testing.T) {
+	g := &CompletionRateGrader{MinRate: 0.80}
+	event := AgentTraceEvent{Event: "tool_call"}
+	result := g.Grade(event)
+	if !result.Pass {
+		t.Errorf("events without task data should pass")
+	}
+}
+
+func TestRegressionGrader_NoRegression(t *testing.T) {
+	g := &RegressionGrader{MaxDelta: 0.10}
+	event := AgentTraceEvent{Event: "eval_comparison", BaselineScore: 0.90, CurrentScore: 0.92}
+	result := g.Grade(event)
+	if !result.Pass {
+		t.Errorf("expected pass when score improved: %s", result.Reason)
+	}
+}
+
+func TestRegressionGrader_SmallRegression(t *testing.T) {
+	g := &RegressionGrader{MaxDelta: 0.10}
+	event := AgentTraceEvent{Event: "eval_comparison", BaselineScore: 0.90, CurrentScore: 0.85}
+	result := g.Grade(event)
+	if !result.Pass {
+		t.Errorf("expected pass for 0.05 regression within 0.10 threshold: %s", result.Reason)
+	}
+}
+
+func TestRegressionGrader_LargeRegression(t *testing.T) {
+	g := &RegressionGrader{MaxDelta: 0.10}
+	event := AgentTraceEvent{Event: "eval_comparison", BaselineScore: 0.90, CurrentScore: 0.70}
+	result := g.Grade(event)
+	if result.Pass {
+		t.Errorf("expected fail for 0.20 regression exceeding 0.10 threshold")
+	}
+}
+
+func TestRegressionGrader_NoBaseline(t *testing.T) {
+	g := &RegressionGrader{MaxDelta: 0.10}
+	event := AgentTraceEvent{Event: "tool_call"}
+	result := g.Grade(event)
+	if !result.Pass {
+		t.Errorf("events without baseline should pass")
+	}
+}
+
+func TestAllGraders_Returns9(t *testing.T) {
 	graders := AllGraders(DefaultGraderConfig())
-	if len(graders) != 6 {
-		t.Errorf("expected 6 graders, got %d", len(graders))
+	if len(graders) != 9 {
+		t.Errorf("expected 9 graders, got %d", len(graders))
 	}
 	names := make(map[string]bool)
 	for _, g := range graders {
 		names[g.Name()] = true
 	}
-	expected := []string{"latency", "error_rate", "coverage", "lint", "test_pass", "token_efficiency"}
+	expected := []string{"latency", "error_rate", "coverage", "lint", "test_pass", "token_efficiency", "tool_coverage", "completion_rate", "regression"}
 	for _, name := range expected {
 		if !names[name] {
 			t.Errorf("missing grader: %s", name)
+		}
+	}
+}
+
+func TestADR065Graders_Returns6(t *testing.T) {
+	graders := ADR065Graders(DefaultGraderConfig())
+	if len(graders) != 6 {
+		t.Errorf("expected 6 ADR-065 graders, got %d", len(graders))
+	}
+	names := make(map[string]bool)
+	for _, g := range graders {
+		names[g.Name()] = true
+	}
+	expected := []string{"latency", "error_rate", "tool_coverage", "token_efficiency", "completion_rate", "regression"}
+	for _, name := range expected {
+		if !names[name] {
+			t.Errorf("missing ADR-065 grader: %s", name)
 		}
 	}
 }

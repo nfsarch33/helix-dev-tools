@@ -20,8 +20,9 @@ func TestGenerateSprintReport_Basic(t *testing.T) {
 	if report.EventCount != 3 {
 		t.Errorf("expected 3 events, got %d", report.EventCount)
 	}
-	if len(report.GraderStats) != 6 {
-		t.Errorf("expected 6 grader stats, got %d", len(report.GraderStats))
+	graderCount := len(AllGraders(DefaultGraderConfig()))
+	if len(report.GraderStats) != graderCount {
+		t.Errorf("expected %d grader stats, got %d", graderCount, len(report.GraderStats))
 	}
 }
 

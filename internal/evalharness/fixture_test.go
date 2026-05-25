@@ -80,6 +80,38 @@ func TestRunFixture_TokenOveruse(t *testing.T) {
 	assert.Empty(t, violations, "token_overuse expectations should match: %v", violations)
 }
 
+func TestLoadFixtureDir_Baselines(t *testing.T) {
+	dir := findBaselineDir(t)
+	fixtures, err := LoadFixtureDir(dir)
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, len(fixtures), 3, "expected at least 3 baseline fixtures")
+
+	expectedNames := []string{"engram-baseline", "sprintboard-baseline", "helix-dev-tools-baseline"}
+	for _, name := range expectedNames {
+		f, ok := fixtures[name]
+		if !ok {
+			t.Errorf("missing baseline fixture: %s", name)
+			continue
+		}
+		assert.NotEmpty(t, f.Description, "baseline %s missing description", name)
+		assert.NotEmpty(t, f.Events, "baseline %s has no events", name)
+	}
+}
+
+func TestRunFixture_Baselines_AllPass(t *testing.T) {
+	dir := findBaselineDir(t)
+	fixtures, err := LoadFixtureDir(dir)
+	require.NoError(t, err)
+
+	graders := AllGraders(DefaultGraderConfig())
+	for name, f := range fixtures {
+		results, err := RunFixture(f, graders)
+		require.NoError(t, err, "fixture %s", name)
+		violations := CheckExpectations(f, results)
+		assert.Empty(t, violations, "baseline %s has violations: %v", name, violations)
+	}
+}
+
 func findFixtureDir(t *testing.T) string {
 	t.Helper()
 	candidates := []string{
@@ -97,5 +129,27 @@ func findFixtureDir(t *testing.T) string {
 		return dir
 	}
 	t.Skip("fixture directory not found")
+	return ""
+}
+
+func findBaselineDir(t *testing.T) string {
+	t.Helper()
+	candidates := []string{
+		"testdata/eval",
+		"internal/evalharness/../../../testdata/eval",
+	}
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			return c
+		}
+	}
+	cwd, _ := os.Getwd()
+	for _, rel := range []string{"testdata/eval", "../../testdata/eval", "../../../testdata/eval"} {
+		dir := filepath.Join(cwd, rel)
+		if _, err := os.Stat(dir); err == nil {
+			return dir
+		}
+	}
+	t.Skip("baseline fixture directory not found")
 	return ""
 }

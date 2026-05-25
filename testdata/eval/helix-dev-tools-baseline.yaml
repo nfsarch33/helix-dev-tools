@@ -1,0 +1,39 @@
+description: "helix-dev-tools baseline evaluation - CLI build and test suite"
+events:
+  - ts: "2026-05-25T00:00:00+10:00"
+    event: tool_call
+    tool: go_build
+    latency_ms: 3200
+    success: true
+    tokens_used: 200
+  - ts: "2026-05-25T00:01:00+10:00"
+    event: tool_call
+    tool: go_test
+    latency_ms: 4500
+    success: true
+    tokens_used: 500
+  - ts: "2026-05-25T00:02:00+10:00"
+    event: tool_call
+    tool: golangci_lint
+    latency_ms: 2800
+    success: true
+    tokens_used: 150
+  - ts: "2026-05-25T00:03:00+10:00"
+    event: test_run
+    success: true
+    coverage: 0.71
+    test_pass: true
+    lint_clean: true
+  - ts: "2026-05-25T00:04:00+10:00"
+    event: session_summary
+    tools_total: 12
+    tools_exercised: 9
+    tasks_total: 10
+    tasks_completed: 9
+  - ts: "2026-05-25T00:05:00+10:00"
+    event: eval_comparison
+    baseline_score: 0.88
+    current_score: 0.90
+expected:
+  all_pass: true
+  min_score: 0.75

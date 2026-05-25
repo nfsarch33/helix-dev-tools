@@ -22,12 +22,13 @@ func TestDaemon_GradeEvent(t *testing.T) {
 	d := NewDaemon(DefaultDaemonConfig())
 	event := AgentTraceEvent{Event: "tool_call", LatencyMS: 100, Success: true}
 	results := d.GradeEvent(event)
-	if len(results) != 6 {
-		t.Errorf("expected 6 results (one per grader), got %d", len(results))
+	graderCount := len(AllGraders(DefaultGraderConfig()))
+	if len(results) != graderCount {
+		t.Errorf("expected %d results (one per grader), got %d", graderCount, len(results))
 	}
 	h := d.Health()
-	if h.EventsGraded != 6 {
-		t.Errorf("expected 6 total grades stored, got %d", h.EventsGraded)
+	if h.EventsGraded != graderCount {
+		t.Errorf("expected %d total grades stored, got %d", graderCount, h.EventsGraded)
 	}
 }
 
@@ -52,7 +53,8 @@ func TestDaemon_TailNDJSON(t *testing.T) {
 	}
 
 	results := d.Results()
-	expectedGrades := 3 * 6 // 3 events x 6 graders
+	graderCount := len(AllGraders(DefaultGraderConfig()))
+	expectedGrades := 3 * graderCount
 	if len(results) != expectedGrades {
 		t.Errorf("expected %d grade results, got %d", expectedGrades, len(results))
 	}
@@ -66,8 +68,9 @@ func TestDaemon_TailNDJSON_InvalidLines(t *testing.T) {
 		t.Fatalf("TailNDJSON error: %v", err)
 	}
 	results := d.Results()
-	if len(results) != 6 {
-		t.Errorf("expected 6 results from 1 valid event, got %d", len(results))
+	graderCount := len(AllGraders(DefaultGraderConfig()))
+	if len(results) != graderCount {
+		t.Errorf("expected %d results from 1 valid event, got %d", graderCount, len(results))
 	}
 }
 
@@ -121,8 +124,9 @@ func TestDaemon_PollFile(t *testing.T) {
 	d.Stop()
 
 	results := d.Results()
-	if len(results) < 6 {
-		t.Errorf("expected at least 6 results from polled file, got %d", len(results))
+	graderCount := len(AllGraders(DefaultGraderConfig()))
+	if len(results) < graderCount {
+		t.Errorf("expected at least %d results from polled file, got %d", graderCount, len(results))
 	}
 }
 
