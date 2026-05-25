@@ -21,7 +21,7 @@ endif
 .PHONY: build build-zd-claude-proxy install-zd-claude-proxy test test-cover lint vuln security fuzz install dist-install docker docker-native test-docker release clean
 
 build:
-	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) ./cmd/cursor-tools/
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/$(BINARY) ./cmd/helix-dev-tools/
 
 build-zd-claude-proxy:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/zd-claude-proxy ./cmd/zd-claude-proxy/
@@ -94,11 +94,11 @@ test-docker:
 
 release:
 	mkdir -p dist
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-darwin-arm64 ./cmd/cursor-tools/
-	CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-linux-amd64 ./cmd/cursor-tools/
-	CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-linux-arm64 ./cmd/cursor-tools/
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-windows-amd64.exe ./cmd/cursor-tools/
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(WINDOWS_GUI_LDFLAGS)" -o dist/$(BINARY)-windows-amd64-noconsole.exe ./cmd/cursor-tools/
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-darwin-arm64 ./cmd/helix-dev-tools/
+	CGO_ENABLED=0 GOOS=linux  GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-linux-amd64 ./cmd/helix-dev-tools/
+	CGO_ENABLED=0 GOOS=linux  GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-linux-arm64 ./cmd/helix-dev-tools/
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o dist/$(BINARY)-windows-amd64.exe ./cmd/helix-dev-tools/
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(WINDOWS_GUI_LDFLAGS)" -o dist/$(BINARY)-windows-amd64-noconsole.exe ./cmd/helix-dev-tools/
 	@echo "Built: darwin-arm64, linux-amd64, linux-arm64, windows-amd64.exe, windows-amd64-noconsole.exe"
 
 clean:
