@@ -226,6 +226,9 @@ var _ = Describe("FileLock", func() {
 			if runtime.GOOS == "windows" {
 				Skip("read-only directory semantics via chmod are not reliable on Windows")
 			}
+			if os.Getuid() == 0 {
+				Skip("root bypasses file permission checks")
+			}
 			readOnlyDir := filepath.Join(tmpDir, "readonly")
 			Expect(os.Mkdir(readOnlyDir, 0o444)).To(Succeed())
 			defer os.Chmod(readOnlyDir, 0o755)
@@ -239,6 +242,9 @@ var _ = Describe("FileLock", func() {
 		It("returns error when target parent dir is unwritable", func() {
 			if runtime.GOOS == "windows" {
 				Skip("read-only directory semantics via chmod are not reliable on Windows")
+			}
+			if os.Getuid() == 0 {
+				Skip("root bypasses file permission checks")
 			}
 			readOnlyDir := filepath.Join(tmpDir, "readonly-target")
 			Expect(os.MkdirAll(readOnlyDir, 0o444)).To(Succeed())
