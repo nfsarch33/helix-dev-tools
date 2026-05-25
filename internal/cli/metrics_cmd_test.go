@@ -90,7 +90,7 @@ var _ = Describe("metrics command", func() {
 
 	It("renders fleet EvoLoop parity mode", func() {
 		fake := &fakeEvoloopClient{capsules: []evoloop.Capsule{
-			{Kind: evoloop.KindRollup, Machine: "wsl1", Day: "2026-04-26", Cycles: 10, Improved: 8, LastKPI: 1.2},
+			{Kind: evoloop.KindRollup, Machine: "test-host-1", Day: "2026-04-26", Cycles: 10, Improved: 8, LastKPI: 1.2},
 			{Kind: evoloop.KindRollup, Machine: "wsl2", Day: "2026-04-26", Cycles: 4, Improved: 4, LastKPI: 0.6},
 		}}
 		orig := evoloopFactory

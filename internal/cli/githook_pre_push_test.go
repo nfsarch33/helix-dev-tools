@@ -212,7 +212,7 @@ func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
 	withFakePublicRepoGate(t, func(remoteURL string) []string {
 		return []string{
 			"public-repo-gate failed for nfsarch33/helixon-mcp (alias=helixon-mcp):",
-			"internal/foo.go:42 fleet_alias_2 win1",
+			"internal/foo.go:42 fleet_alias_2 test-host-2",
 		}
 	})
 	code, stderr := withCapturedPrePushExit(t)
@@ -227,7 +227,7 @@ func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
 	if !strings.Contains(stderr.String(), "public-repo-gate") {
 		t.Errorf("stderr should mention public-repo-gate: %q", stderr.String())
 	}
-	if !strings.Contains(stderr.String(), "win1") {
+	if !strings.Contains(stderr.String(), "test-host-2") {
 		t.Errorf("stderr should surface the finding body: %q", stderr.String())
 	}
 }

@@ -136,7 +136,7 @@ func TestEvoloopRecent_PassesFlagsToClient(t *testing.T) {
 		wantLimit   int
 	}{
 		{"defaults rollups limit 10", nil, []evoloop.CapsuleKind{evoloop.KindRollup}, "", 10},
-		{"machine filter", []string{"--machine=wsl1"}, []evoloop.CapsuleKind{evoloop.KindRollup}, "wsl1", 10},
+		{"machine filter", []string{"--machine=test-host-1"}, []evoloop.CapsuleKind{evoloop.KindRollup}, "test-host-1", 10},
 		{"kind=all merges", []string{"--kind=all"}, []evoloop.CapsuleKind{evoloop.KindRollup, evoloop.KindCycle}, "", 10},
 		{"custom limit", []string{"--kind=cycle", "--limit=3"}, []evoloop.CapsuleKind{evoloop.KindCycle}, "", 3},
 	}
@@ -176,7 +176,7 @@ func TestEvoloopRecent_JSONOutput(t *testing.T) {
 		ID:        "r-1",
 		Kind:      evoloop.KindRollup,
 		Text:      "EvoLoop rollup 2026-04-23",
-		Machine:   "wsl1",
+		Machine:   "test-host-1",
 		Day:       "2026-04-23",
 		CreatedAt: when,
 		Cycles:    6,
@@ -195,7 +195,7 @@ func TestEvoloopRecent_JSONOutput(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("invalid JSON output: %v\n--\n%s", err, out)
 	}
-	if len(got) != 1 || got[0].ID != "r-1" || got[0].Machine != "wsl1" {
+	if len(got) != 1 || got[0].ID != "r-1" || got[0].Machine != "test-host-1" {
 		t.Fatalf("unexpected parsed capsule: %+v", got)
 	}
 }
@@ -204,7 +204,7 @@ func TestEvoloopRecent_TableOutput(t *testing.T) {
 	// Serial: mutates cobra command state + evoloopFactory.
 	when := time.Date(2026, 4, 23, 11, 0, 0, 0, time.UTC)
 	rollup := evoloop.Capsule{
-		ID: "r-1", Kind: evoloop.KindRollup, Machine: "wsl1",
+		ID: "r-1", Kind: evoloop.KindRollup, Machine: "test-host-1",
 		Day: "2026-04-23", CreatedAt: when,
 		Cycles: 6, Improved: 5, RolledBack: 0, MeanDelta: 0.12, LastKPI: 0.88,
 	}
@@ -225,7 +225,7 @@ func TestEvoloopRecent_TableOutput(t *testing.T) {
 			name:     "rollup table",
 			args:     nil,
 			capsules: []evoloop.Capsule{rollup},
-			wantIn:   []string{"Capsules: 1", "wsl1", "2026-04-23", "cycles=6", "improved=5", "mean_delta=+0.120", "last_kpi=0.880", "R ["},
+			wantIn:   []string{"Capsules: 1", "test-host-1", "2026-04-23", "cycles=6", "improved=5", "mean_delta=+0.120", "last_kpi=0.880", "R ["},
 		},
 		{
 			name:     "cycle table shows KPI delta",
@@ -235,16 +235,16 @@ func TestEvoloopRecent_TableOutput(t *testing.T) {
 		},
 		{
 			name:     "machine filter reflected in header",
-			args:     []string{"--kind=all", "--machine=wsl1"},
+			args:     []string{"--kind=all", "--machine=test-host-1"},
 			capsules: []evoloop.Capsule{rollup},
-			wantIn:   []string{"machine=wsl1", "kind=evoloop_rollup,evoloop_cycle"},
+			wantIn:   []string{"machine=test-host-1", "kind=evoloop_rollup,evoloop_cycle"},
 		},
 		{
 			name:     "empty result prints info with no capsules rendered",
 			args:     nil,
 			capsules: nil,
 			wantIn:   []string{"no EvoLoop capsules"},
-			wantNot:  []string{"wsl1", "cycles="},
+			wantNot:  []string{"test-host-1", "cycles="},
 		},
 	}
 	for _, tc := range tests {

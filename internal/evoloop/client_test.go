@@ -120,8 +120,8 @@ func TestClient_Recent(t *testing.T) {
 	}
 
 	rollupMacbook := rollupRow("r-mac-1", "macbook", "2026-04-23", "2026-04-23T10:00:00.000000", 4, 3)
-	rollupWSL1 := rollupRow("r-wsl1-1", "wsl1", "2026-04-23", "2026-04-23T11:00:00.000000", 6, 5)
-	rollupWSL1Old := rollupRow("r-wsl1-0", "wsl1", "2026-04-22", "2026-04-22T11:00:00.000000", 2, 1)
+	rollupWSL1 := rollupRow("r-test-host-1-1", "test-host-1", "2026-04-23", "2026-04-23T11:00:00.000000", 6, 5)
+	rollupWSL1Old := rollupRow("r-test-host-1-0", "test-host-1", "2026-04-22", "2026-04-22T11:00:00.000000", 2, 1)
 	cycleMacbook := cycleRow("c-mac-1", "macbook", "cyc-mac-1", "2026-04-23T10:05:00.000000", 0.7, 0.82, 1234)
 	// capsule row with no kind metadata must be filtered out by default
 	nonEvoloopRow := map[string]any{
@@ -140,17 +140,17 @@ func TestClient_Recent(t *testing.T) {
 	// the cycle writer). The reader must surface these as synthetic
 	// cycles when --kind=cycle is requested.
 	cycleOutcomeWSL1 := map[string]any{
-		"id":         "out-cyc-wsl1-1",
-		"memory":     "[helixon-daemon] cycle:ok on wsl1: kpi=+0.04",
+		"id":         "out-cyc-test-host-1-1",
+		"memory":     "[helixon-daemon] cycle:ok on test-host-1: kpi=+0.04",
 		"user_id":    "global",
 		"app_id":     "cursor-global-kb",
 		"created_at": "2026-04-23T11:30:00.000000",
 		"metadata": map[string]any{
 			"kind":        "agent_outcome",
 			"actor":       "helixon-daemon",
-			"machine":     "wsl1",
+			"machine":     "test-host-1",
 			"event":       "helixon-daemon:cycle:ok",
-			"cycle_id":    "cyc-wsl1-99",
+			"cycle_id":    "cyc-test-host-1-99",
 			"kpi_delta":   0.04,
 			"duration_ms": 8200,
 		},
@@ -160,16 +160,16 @@ func TestClient_Recent(t *testing.T) {
 	// with this shape; the reader must accept them when --kind=cycle is
 	// requested so a fleet upgrade doesn't blind the reader.
 	legacyCapsuleWSL1 := map[string]any{
-		"id":         "cap-legacy-wsl1-1",
-		"memory":     "EvoLoop legacy cycle wsl1",
+		"id":         "cap-legacy-test-host-1-1",
+		"memory":     "EvoLoop legacy cycle test-host-1",
 		"user_id":    "global",
 		"app_id":     "cursor-global-kb",
 		"created_at": "2026-04-23T11:25:00.000000",
 		"metadata": map[string]any{
 			"kind":        "capsule",
 			"source":      "evoloop-daemon",
-			"machine":     "wsl1",
-			"cycle_id":    "cyc-wsl1-98",
+			"machine":     "test-host-1",
+			"cycle_id":    "cyc-test-host-1-98",
 			"kpi_before":  0.50,
 			"kpi_after":   0.55,
 			"duration_ms": 7100,
@@ -177,15 +177,15 @@ func TestClient_Recent(t *testing.T) {
 	}
 	// agent_outcome from a non-cycle event must NOT be promoted to cycle.
 	nonCycleOutcomeWSL1 := map[string]any{
-		"id":         "out-fi-wsl1-1",
-		"memory":     "[helixon-daemon] feature_import:ok on wsl1",
+		"id":         "out-fi-test-host-1-1",
+		"memory":     "[helixon-daemon] feature_import:ok on test-host-1",
 		"user_id":    "global",
 		"app_id":     "cursor-global-kb",
 		"created_at": "2026-04-23T11:35:00.000000",
 		"metadata": map[string]any{
 			"kind":    "agent_outcome",
 			"actor":   "helixon-daemon",
-			"machine": "wsl1",
+			"machine": "test-host-1",
 			"event":   "helixon-daemon:feature_import:ok",
 		},
 	}
@@ -199,7 +199,7 @@ func TestClient_Recent(t *testing.T) {
 		"created_at": "2026-04-23T11:40:00.000000",
 		"metadata": map[string]any{
 			"kind":    "capsule",
-			"machine": "wsl1",
+			"machine": "test-host-1",
 		},
 	}
 
@@ -230,7 +230,7 @@ func TestClient_Recent(t *testing.T) {
 				raw, _ := json.Marshal(map[string]any{"results": allFleetRows})
 				return http.StatusOK, raw
 			},
-			wantIDs: []string{"r-wsl1-1", "r-mac-1", "r-wsl1-0"},
+			wantIDs: []string{"r-test-host-1-1", "r-mac-1", "r-test-host-1-0"},
 			validate: func(t *testing.T, cap *captured, got []Capsule) {
 				if len(cap.calls) != 1 {
 					t.Fatalf("expected exactly 1 Mem0 call, got %d", len(cap.calls))
@@ -239,7 +239,7 @@ func TestClient_Recent(t *testing.T) {
 				if got0.Cycles != 6 || got0.Improved != 5 || got0.LastKPI != 0.88 {
 					t.Fatalf("rollup numeric fields not parsed: %+v", got0)
 				}
-				if got0.Day != "2026-04-23" || got0.Machine != "wsl1" {
+				if got0.Day != "2026-04-23" || got0.Machine != "test-host-1" {
 					t.Fatalf("rollup labels not parsed: %+v", got0)
 				}
 				filters := andFilters(cap.calls[0])
@@ -263,12 +263,12 @@ func TestClient_Recent(t *testing.T) {
 		},
 		{
 			name: "machine filter applied client-side",
-			opts: RecentOptions{Limit: 3, Machine: "wsl1"},
+			opts: RecentOptions{Limit: 3, Machine: "test-host-1"},
 			respond: func(call capturedCall) (int, []byte) {
 				raw, _ := json.Marshal(map[string]any{"results": allFleetRows})
 				return http.StatusOK, raw
 			},
-			wantIDs: []string{"r-wsl1-1", "r-wsl1-0"},
+			wantIDs: []string{"r-test-host-1-1", "r-test-host-1-0"},
 			validate: func(t *testing.T, cap *captured, _ []Capsule) {
 				if len(cap.calls) != 1 {
 					t.Fatalf("expected exactly 1 Mem0 call, got %d", len(cap.calls))
@@ -285,7 +285,7 @@ func TestClient_Recent(t *testing.T) {
 			// newest first: outcome (11:30), legacy (11:25), canonical (10:05).
 			// nonCycleOutcomeWSL1 (feature_import) and plainCapsuleNote
 			// must not be promoted to cycle.
-			wantIDs: []string{"out-cyc-wsl1-1", "cap-legacy-wsl1-1", "c-mac-1"},
+			wantIDs: []string{"out-cyc-test-host-1-1", "cap-legacy-test-host-1-1", "c-mac-1"},
 			validate: func(t *testing.T, cap *captured, got []Capsule) {
 				if len(cap.calls) != 1 {
 					t.Fatalf("expected 1 call, got %d", len(cap.calls))
@@ -304,9 +304,9 @@ func TestClient_Recent(t *testing.T) {
 					switch got[i].ID {
 					case "c-mac-1":
 						canonical = &got[i]
-					case "out-cyc-wsl1-1":
+					case "out-cyc-test-host-1-1":
 						outcome = &got[i]
-					case "cap-legacy-wsl1-1":
+					case "cap-legacy-test-host-1-1":
 						legacy = &got[i]
 					}
 				}
@@ -316,7 +316,7 @@ func TestClient_Recent(t *testing.T) {
 				if outcome == nil {
 					t.Fatalf("expected agent_outcome cycle to be surfaced as KindCycle")
 				}
-				if outcome.CycleID != "cyc-wsl1-99" {
+				if outcome.CycleID != "cyc-test-host-1-99" {
 					t.Fatalf("outcome cycle_id not propagated: got %q", outcome.CycleID)
 				}
 				if outcome.KPIDelta == 0 {
@@ -333,7 +333,7 @@ func TestClient_Recent(t *testing.T) {
 				}
 				// non-cycle outcome and plain capsule must be excluded.
 				for _, c := range got {
-					if c.ID == "out-fi-wsl1-1" || c.ID == "cap-misc-1" {
+					if c.ID == "out-fi-test-host-1-1" || c.ID == "cap-misc-1" {
 						t.Fatalf("non-cycle row leaked into kind=cycle results: %s", c.ID)
 					}
 				}
@@ -347,11 +347,11 @@ func TestClient_Recent(t *testing.T) {
 				return http.StatusOK, raw
 			},
 			// newest-first order:
-			//   out-cyc-wsl1-1 (synthetic cycle, 11:30)
-			//   cap-legacy-wsl1-1 (legacy cycle, 11:25)
-			//   r-wsl1-1 (rollup, 11:00)
+			//   out-cyc-test-host-1-1 (synthetic cycle, 11:30)
+			//   cap-legacy-test-host-1-1 (legacy cycle, 11:25)
+			//   r-test-host-1-1 (rollup, 11:00)
 			//   c-mac-1 (canonical cycle, 10:05)
-			wantIDs: []string{"out-cyc-wsl1-1", "cap-legacy-wsl1-1", "r-wsl1-1", "c-mac-1"},
+			wantIDs: []string{"out-cyc-test-host-1-1", "cap-legacy-test-host-1-1", "r-test-host-1-1", "c-mac-1"},
 			validate: func(t *testing.T, cap *captured, _ []Capsule) {
 				if len(cap.calls) != 1 {
 					t.Fatalf("expected 1 call regardless of kinds, got %d", len(cap.calls))
@@ -365,7 +365,7 @@ func TestClient_Recent(t *testing.T) {
 				raw, _ := json.Marshal(map[string]any{"results": allFleetRows})
 				return http.StatusOK, raw
 			},
-			wantIDs: []string{"out-cyc-wsl1-1"},
+			wantIDs: []string{"out-cyc-test-host-1-1"},
 		},
 		{
 			name: "mem0 400 surfaces as error",
@@ -382,7 +382,7 @@ func TestClient_Recent(t *testing.T) {
 				raw, _ := json.Marshal([]map[string]any{rollupMacbook, rollupWSL1})
 				return http.StatusOK, raw
 			},
-			wantIDs: []string{"r-wsl1-1", "r-mac-1"},
+			wantIDs: []string{"r-test-host-1-1", "r-mac-1"},
 		},
 	}
 
@@ -436,7 +436,7 @@ func TestClient_DebugWriter(t *testing.T) {
 	var buf strings.Builder
 	client.Debug = &buf
 
-	if _, err := client.Recent(context.Background(), RecentOptions{Limit: 5, Machine: "wsl1", Kinds: []CapsuleKind{KindCycle}}); err != nil {
+	if _, err := client.Recent(context.Background(), RecentOptions{Limit: 5, Machine: "test-host-1", Kinds: []CapsuleKind{KindCycle}}); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	got := buf.String()
@@ -444,7 +444,7 @@ func TestClient_DebugWriter(t *testing.T) {
 		"POST /v2/memories/",
 		`"app_id":"cursor-global-kb"`,
 		`"user_id":"global"`,
-		"machine=wsl1",
+		"machine=test-host-1",
 		"kind=evoloop_cycle",
 	} {
 		if !strings.Contains(got, want) {

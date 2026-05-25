@@ -178,7 +178,7 @@ func TestEvoloopPromoteFlagValidation(t *testing.T) {
 func TestEvoloopPromoteDryRunByDefault(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := evoloop.Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: evoloop.KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: evoloop.KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, LastKPI: 0.62, CreatedAt: now,
 	}
 	writer := &recordingWriter{}
@@ -212,7 +212,7 @@ func TestEvoloopPromoteDryRunByDefault(t *testing.T) {
 func TestEvoloopPromoteAutoWritesOutbox(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := evoloop.Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: evoloop.KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: evoloop.KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, LastKPI: 0.62, CreatedAt: now,
 	}
 	writer := &recordingWriter{}
@@ -226,7 +226,7 @@ func TestEvoloopPromoteAutoWritesOutbox(t *testing.T) {
 	out, err := runPromoteForTest(t, []string{
 		"--auto",
 		"--gate-cmd=true",
-		"--user-id=jason-lian-macbook",
+		"--user-id=test-operator-host",
 		"--outbox=/tmp/test-outbox.jsonl",
 		"--json",
 	})
@@ -243,7 +243,7 @@ func TestEvoloopPromoteAutoWritesOutbox(t *testing.T) {
 		t.Fatalf("writer must be closed after run")
 	}
 	got := writer.caps[0]
-	if got.UserID != "jason-lian-macbook" {
+	if got.UserID != "test-operator-host" {
 		t.Fatalf("user_id flag override ignored, got %q", got.UserID)
 	}
 	if got.Metadata["kind"] != "evoloop_promotion" {
@@ -257,7 +257,7 @@ func TestEvoloopPromoteAutoWritesOutbox(t *testing.T) {
 func TestEvoloopPromoteSkipsAlreadyPromoted(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := evoloop.Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: evoloop.KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: evoloop.KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, LastKPI: 0.62, CreatedAt: now,
 	}
 	prior := []evoloop.Capsule{
@@ -292,7 +292,7 @@ func TestEvoloopPromoteSkipsAlreadyPromoted(t *testing.T) {
 func TestEvoloopPromoteFailsWhenGateFails(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := evoloop.Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: evoloop.KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: evoloop.KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, LastKPI: 0.62, CreatedAt: now,
 	}
 	writer := &recordingWriter{}
@@ -316,10 +316,10 @@ func TestEvoloopPromoteFailsWhenGateFails(t *testing.T) {
 func TestEvoloopPromoteEmitsRollback(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	rollups := []evoloop.Capsule{
-		{ID: "r1", Kind: evoloop.KindRollup, Machine: "wsl1", LastKPI: 0.80, MeanDelta: 0.0, Improved: 0, CreatedAt: now.Add(-20 * time.Hour)},
-		{ID: "r2", Kind: evoloop.KindRollup, Machine: "wsl1", LastKPI: 0.82, MeanDelta: 0.0, Improved: 0, CreatedAt: now.Add(-15 * time.Hour)},
-		{ID: "r3", Kind: evoloop.KindRollup, Machine: "wsl1", LastKPI: 0.80, MeanDelta: 0.0, Improved: 0, CreatedAt: now.Add(-10 * time.Hour)},
-		{ID: "r4", Kind: evoloop.KindRollup, Machine: "wsl1", LastKPI: 0.55, MeanDelta: 0.0, Improved: 0, CreatedAt: now.Add(-1 * time.Hour)},
+		{ID: "r1", Kind: evoloop.KindRollup, Machine: "test-host-1", LastKPI: 0.80, MeanDelta: 0.0, Improved: 0, CreatedAt: now.Add(-20 * time.Hour)},
+		{ID: "r2", Kind: evoloop.KindRollup, Machine: "test-host-1", LastKPI: 0.82, MeanDelta: 0.0, Improved: 0, CreatedAt: now.Add(-15 * time.Hour)},
+		{ID: "r3", Kind: evoloop.KindRollup, Machine: "test-host-1", LastKPI: 0.80, MeanDelta: 0.0, Improved: 0, CreatedAt: now.Add(-10 * time.Hour)},
+		{ID: "r4", Kind: evoloop.KindRollup, Machine: "test-host-1", LastKPI: 0.55, MeanDelta: 0.0, Improved: 0, CreatedAt: now.Add(-1 * time.Hour)},
 	}
 	prior := []evoloop.Capsule{
 		{
@@ -328,7 +328,7 @@ func TestEvoloopPromoteEmitsRollback(t *testing.T) {
 			Metadata: map[string]string{
 				"kind":           "evoloop_promotion",
 				"source_capsule": "r4",
-				"machine":        "wsl1",
+				"machine":        "test-host-1",
 			},
 		},
 	}
@@ -379,7 +379,7 @@ func TestEvoloopPromoteSubcommandRegistered(t *testing.T) {
 func TestEvoloopPromoteFiltersHistoryByKind(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := evoloop.Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: evoloop.KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: evoloop.KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, LastKPI: 0.62, CreatedAt: now,
 	}
 	prior := []evoloop.Capsule{

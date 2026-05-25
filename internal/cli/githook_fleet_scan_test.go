@@ -27,7 +27,7 @@ func TestFleetScan_RejectsForbiddenZDURL(t *testing.T) {
 		},
 		{
 			"fleet code with forbidden cursor-ai.zendesk subdomain",
-			"go/internal/router/wsl1.go",
+			"go/internal/router/test-host-1.go",
 			"// upstream: https://gateway.cursor-ai.zendesk.com\n",
 			true,
 		},
@@ -95,14 +95,14 @@ func TestFleetScan_FleetPathsAreCanonical(t *testing.T) {
 func TestFleetScan_RunStreamFlagsAndExits(t *testing.T) {
 	stagedFiles := []stagedFileScan{
 		{Path: "go/internal/mc/delegate.go", Content: []byte("// good\n")},
-		{Path: "go/internal/router/wsl1.go", Content: []byte("const gw = \"https://gateway.cursor-ai.zendesk.com\"\n")},
+		{Path: "go/internal/router/test-host-1.go", Content: []byte("const gw = \"https://gateway.cursor-ai.zendesk.com\"\n")},
 		{Path: "docs/strategy.md", Content: []byte("# notes about https://api.cursor-ai.zendesk.com\n")},
 	}
 	findings := runFleetScan(stagedFiles)
 	if len(findings) != 1 {
 		t.Fatalf("expected exactly 1 finding, got %d: %#v", len(findings), findings)
 	}
-	if !strings.Contains(findings[0], "go/internal/router/wsl1.go") {
+	if !strings.Contains(findings[0], "go/internal/router/test-host-1.go") {
 		t.Fatalf("expected finding to name fleet path, got: %s", findings[0])
 	}
 	if !strings.Contains(findings[0], "cursor-ai.zendesk.com") {

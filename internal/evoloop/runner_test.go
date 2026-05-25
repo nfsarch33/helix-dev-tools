@@ -31,9 +31,9 @@ func fixedNow(t time.Time) func() time.Time {
 func TestPromoteRunnerHappyPath(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := Capsule{
-		ID:        "rollup-wsl1-2026-06-11",
+		ID:        "rollup-test-host-1-2026-06-11",
 		Kind:      KindRollup,
-		Machine:   "wsl1",
+		Machine:   "test-host-1",
 		Day:       "2026-06-11",
 		Improved:  3,
 		MeanDelta: 0.075,
@@ -52,7 +52,7 @@ func TestPromoteRunnerHappyPath(t *testing.T) {
 			return GateResult{ExitCode: 0, Stdout: "ok"}, nil
 		},
 		Writer: rec.write,
-		UserID: "jason-lian-macbook",
+		UserID: "test-operator-host",
 	}
 
 	summary, err := runner.Run(context.Background(), PromoteOptions{
@@ -75,7 +75,7 @@ func TestPromoteRunnerHappyPath(t *testing.T) {
 	if got.Metadata["kind"] != "evoloop_promotion" {
 		t.Fatalf("metadata.kind: %q", got.Metadata["kind"])
 	}
-	if got.UserID != "jason-lian-macbook" {
+	if got.UserID != "test-operator-host" {
 		t.Fatalf("user id: %q", got.UserID)
 	}
 }
@@ -90,13 +90,13 @@ func TestPromoteRunnerSkipsNonCandidates(t *testing.T) {
 			return GateResult{}, nil
 		},
 		Writer: rec.write,
-		UserID: "jason-lian-macbook",
+		UserID: "test-operator-host",
 	}
 	summary, err := runner.Run(context.Background(), PromoteOptions{
 		Candidates: []Capsule{
-			{ID: "no-improvement", Kind: KindRollup, Machine: "wsl1", Improved: 0, MeanDelta: 0.1, CreatedAt: now},
-			{ID: "negative-mean", Kind: KindRollup, Machine: "wsl1", Improved: 4, MeanDelta: -0.05, CreatedAt: now},
-			{ID: "cycle-not-rollup", Kind: KindCycle, Machine: "wsl1", Improved: 9, MeanDelta: 0.2, CreatedAt: now},
+			{ID: "no-improvement", Kind: KindRollup, Machine: "test-host-1", Improved: 0, MeanDelta: 0.1, CreatedAt: now},
+			{ID: "negative-mean", Kind: KindRollup, Machine: "test-host-1", Improved: 4, MeanDelta: -0.05, CreatedAt: now},
+			{ID: "cycle-not-rollup", Kind: KindCycle, Machine: "test-host-1", Improved: 9, MeanDelta: 0.2, CreatedAt: now},
 		},
 	})
 	if err != nil {
@@ -113,7 +113,7 @@ func TestPromoteRunnerSkipsNonCandidates(t *testing.T) {
 func TestPromoteRunnerSkipsAlreadyPromoted(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, CreatedAt: now,
 	}
 	prior := []Capsule{
@@ -147,7 +147,7 @@ func TestPromoteRunnerSkipsAlreadyPromoted(t *testing.T) {
 func TestPromoteRunnerWithholdsOnGateFailure(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, CreatedAt: now,
 	}
 	rec := &recorder{}
@@ -180,7 +180,7 @@ func TestPromoteRunnerWithholdsOnGateFailure(t *testing.T) {
 func TestPromoteRunnerGateRunnerErrorIsFailure(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, CreatedAt: now,
 	}
 	rec := &recorder{}
@@ -210,10 +210,10 @@ func TestPromoteRunnerGateRunnerErrorIsFailure(t *testing.T) {
 func TestPromoteRunnerRollbackOnRegression(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	rollups := []Capsule{
-		{ID: "r1", Kind: KindRollup, Machine: "wsl1", LastKPI: 0.80, CreatedAt: now.Add(-20 * time.Hour)},
-		{ID: "r2", Kind: KindRollup, Machine: "wsl1", LastKPI: 0.82, CreatedAt: now.Add(-15 * time.Hour)},
-		{ID: "r3", Kind: KindRollup, Machine: "wsl1", LastKPI: 0.80, CreatedAt: now.Add(-10 * time.Hour)},
-		{ID: "r4", Kind: KindRollup, Machine: "wsl1", LastKPI: 0.55, CreatedAt: now.Add(-1 * time.Hour)}, // big drop
+		{ID: "r1", Kind: KindRollup, Machine: "test-host-1", LastKPI: 0.80, CreatedAt: now.Add(-20 * time.Hour)},
+		{ID: "r2", Kind: KindRollup, Machine: "test-host-1", LastKPI: 0.82, CreatedAt: now.Add(-15 * time.Hour)},
+		{ID: "r3", Kind: KindRollup, Machine: "test-host-1", LastKPI: 0.80, CreatedAt: now.Add(-10 * time.Hour)},
+		{ID: "r4", Kind: KindRollup, Machine: "test-host-1", LastKPI: 0.55, CreatedAt: now.Add(-1 * time.Hour)}, // big drop
 	}
 	prior := []Capsule{
 		{
@@ -222,7 +222,7 @@ func TestPromoteRunnerRollbackOnRegression(t *testing.T) {
 			Metadata: map[string]string{
 				"kind":           "evoloop_promotion",
 				"source_capsule": "r4",
-				"machine":        "wsl1",
+				"machine":        "test-host-1",
 			},
 		},
 	}
@@ -263,9 +263,9 @@ func TestPromoteRunnerRollbackOnRegression(t *testing.T) {
 func TestPromoteRunnerNoRollbackWithoutPriorPromotion(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	rollups := []Capsule{
-		{ID: "r1", Kind: KindRollup, Machine: "wsl1", LastKPI: 0.80, CreatedAt: now.Add(-10 * time.Hour)},
-		{ID: "r2", Kind: KindRollup, Machine: "wsl1", LastKPI: 0.82, CreatedAt: now.Add(-5 * time.Hour)},
-		{ID: "r3", Kind: KindRollup, Machine: "wsl1", LastKPI: 0.30, CreatedAt: now.Add(-1 * time.Hour)},
+		{ID: "r1", Kind: KindRollup, Machine: "test-host-1", LastKPI: 0.80, CreatedAt: now.Add(-10 * time.Hour)},
+		{ID: "r2", Kind: KindRollup, Machine: "test-host-1", LastKPI: 0.82, CreatedAt: now.Add(-5 * time.Hour)},
+		{ID: "r3", Kind: KindRollup, Machine: "test-host-1", LastKPI: 0.30, CreatedAt: now.Add(-1 * time.Hour)},
 	}
 	rec := &recorder{}
 	runner := &PromoteRunner{
@@ -296,7 +296,7 @@ func TestPromoteRunnerNoRollbackWithoutPriorPromotion(t *testing.T) {
 func TestPromoteRunnerDryRunSkipsWriter(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, CreatedAt: now,
 	}
 	runner := &PromoteRunner{
@@ -320,7 +320,7 @@ func TestPromoteRunnerDryRunSkipsWriter(t *testing.T) {
 func TestPromoteRunnerRequiresWriterWhenNotDryRun(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := Capsule{
-		ID: "rollup-wsl1-2026-06-11", Kind: KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1-2026-06-11", Kind: KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, CreatedAt: now,
 	}
 	runner := &PromoteRunner{
@@ -338,7 +338,7 @@ func TestPromoteRunnerRequiresWriterWhenNotDryRun(t *testing.T) {
 func TestPromoteRunnerHonoursContextCancellation(t *testing.T) {
 	now := time.Date(2026, 6, 11, 12, 0, 0, 0, time.UTC)
 	candidate := Capsule{
-		ID: "rollup-wsl1", Kind: KindRollup, Machine: "wsl1",
+		ID: "rollup-test-host-1", Kind: KindRollup, Machine: "test-host-1",
 		Improved: 3, MeanDelta: 0.05, CreatedAt: now,
 	}
 	ctx, cancel := context.WithCancel(context.Background())

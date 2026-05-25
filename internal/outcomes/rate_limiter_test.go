@@ -82,7 +82,7 @@ func TestRateLimitedEmitter_PerMachineIsolation(t *testing.T) {
 	o1 := newValidOutcome()
 	o1.Machine = "macbook"
 	o2 := newValidOutcome()
-	o2.Machine = "wsl1"
+	o2.Machine = "test-host-1"
 	_ = rl.Emit(context.Background(), o1)
 	_ = rl.Emit(context.Background(), o2)
 	if got := len(rec.Snapshot()); got != 2 {

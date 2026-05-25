@@ -70,7 +70,7 @@ func TestGuardShell_DeniesSensitiveCommandWhenIdentityPoisoned(t *testing.T) {
 		metricsPath: filepath.Join(tmp, "metrics.jsonl"),
 	}
 
-	// Inject a poisoned state. The wsl1 personal repo + a leaked
+	// Inject a poisoned state. The test-host-1 personal repo + a leaked
 	// GITHUB_TOKEN is the canonical regression we want to catch
 	// before `git push` ever runs.
 	prev := identityGateStateProviderForTest
