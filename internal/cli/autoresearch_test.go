@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,12 +12,24 @@ import (
 	"github.com/nfsarch33/helix-dev-tools/internal/platform/autoresearch"
 )
 
+func seedAutoresearchLog(t *testing.T, dir string) string {
+	t.Helper()
+	logPath := filepath.Join(dir, "ar.ndjson")
+	cfg := autoresearch.DefaultConfig()
+	cfg.MaxIterations = 1
+	cfg.LogPath = logPath
+	r := autoresearch.New(cfg, nil, nil, nil, nil, nil)
+	if _, err := r.Run(context.Background()); err != nil {
+		t.Fatalf("seed run: %v", err)
+	}
+	return logPath
+}
+
 func TestAutoresearchRunCommand(t *testing.T) {
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "ar.ndjson")
 	outputDir := filepath.Join(dir, "promotions")
 
-	// Seed agentrace data
 	agtracePath := filepath.Join(dir, "agentrace.ndjson")
 	f, err := os.Create(agtracePath)
 	if err != nil {
@@ -26,20 +39,18 @@ func TestAutoresearchRunCommand(t *testing.T) {
 	f.WriteString(`{"phase":"evaluate","error":"test error","note":""}` + "\n")
 	f.Close()
 
-	// Override the probe config via environment
-	t.Setenv("ENGRAM_URL", "http://127.0.0.1:1") // deliberately unreachable
+	t.Setenv("ENGRAM_URL", "http://localhost:1")
 
-	cmd := autoresearchRunCmd
+	autoresearchFlags.iterations = 1
+	autoresearchFlags.logPath = logPath
+	autoresearchFlags.outputDir = outputDir
+	autoresearchFlags.jsonOutput = false
+
 	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{
-		"--iterations", "1",
-		"--log", logPath,
-		"--output-dir", outputDir,
-	})
+	autoresearchRunCmd.SetOut(buf)
+	autoresearchRunCmd.SetErr(buf)
 
-	err = cmd.Execute()
+	err = runAutoresearch(autoresearchRunCmd, nil)
 	if err != nil {
 		t.Logf("run output: %s", buf.String())
 		t.Logf("run error (may be expected if no agentrace data at default path): %v", err)
@@ -48,24 +59,16 @@ func TestAutoresearchRunCommand(t *testing.T) {
 
 func TestAutoresearchStatusCommand(t *testing.T) {
 	dir := t.TempDir()
-	logPath := filepath.Join(dir, "ar.ndjson")
+	logPath := seedAutoresearchLog(t, dir)
 
-	// Write a minimal log
-	cfg := autoresearch.DefaultConfig()
-	cfg.MaxIterations = 1
-	cfg.LogPath = logPath
-	r := autoresearch.New(cfg, nil, nil, nil, nil, nil)
-	if _, err := r.Run(t.Context()); err != nil {
-		t.Fatalf("seed run: %v", err)
-	}
+	autoresearchFlags.logPath = logPath
+	autoresearchFlags.jsonOutput = false
 
-	cmd := autoresearchStatusCmd
 	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"--log", logPath})
+	autoresearchStatusCmd.SetOut(buf)
+	autoresearchStatusCmd.SetErr(buf)
 
-	if err := cmd.Execute(); err != nil {
+	if err := showAutoresearchStatus(autoresearchStatusCmd, nil); err != nil {
 		t.Fatalf("status: %v", err)
 	}
 
@@ -80,23 +83,16 @@ func TestAutoresearchStatusCommand(t *testing.T) {
 
 func TestAutoresearchStatusJSON(t *testing.T) {
 	dir := t.TempDir()
-	logPath := filepath.Join(dir, "ar.ndjson")
+	logPath := seedAutoresearchLog(t, dir)
 
-	cfg := autoresearch.DefaultConfig()
-	cfg.MaxIterations = 1
-	cfg.LogPath = logPath
-	r := autoresearch.New(cfg, nil, nil, nil, nil, nil)
-	if _, err := r.Run(t.Context()); err != nil {
-		t.Fatalf("seed run: %v", err)
-	}
+	autoresearchFlags.logPath = logPath
+	autoresearchFlags.jsonOutput = true
 
-	cmd := autoresearchStatusCmd
 	buf := new(bytes.Buffer)
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"--log", logPath, "--json"})
+	autoresearchStatusCmd.SetOut(buf)
+	autoresearchStatusCmd.SetErr(buf)
 
-	if err := cmd.Execute(); err != nil {
+	if err := showAutoresearchStatus(autoresearchStatusCmd, nil); err != nil {
 		t.Fatalf("status: %v", err)
 	}
 
