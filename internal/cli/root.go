@@ -84,6 +84,7 @@ func init() {
 	rootCmd.AddCommand(sprintboardMonitorCmd)
 	rootCmd.AddCommand(fleetReportCmd)
 	rootCmd.AddCommand(mem0WatchdogCmd)
+	rootCmd.AddCommand(autoresearchCmd)
 	rootCmd.AddCommand(sprinteval.NewSprintEvalCmd())
 	rootCmd.AddCommand(evalCmd)
 }
