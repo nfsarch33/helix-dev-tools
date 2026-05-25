@@ -16,9 +16,13 @@ const (
 type GraderType string
 
 const (
-	GraderCode  GraderType = "code"
-	GraderShell GraderType = "shell"
-	GraderModel GraderType = "model"
+	GraderCode     GraderType = "code"
+	GraderShell    GraderType = "shell"
+	GraderModel    GraderType = "model"
+	GraderCoverage GraderType = "coverage"
+	GraderTest     GraderType = "test"
+	GraderLint     GraderType = "lint"
+	GraderVet      GraderType = "vet"
 )
 
 type Criterion struct {
@@ -27,6 +31,10 @@ type Criterion struct {
 	GraderType  GraderType `json:"grader_type" yaml:"grader_type"`
 	Command     string     `json:"command,omitempty" yaml:"command,omitempty"`
 	Pattern     string     `json:"pattern,omitempty" yaml:"pattern,omitempty"`
+	Package     string     `json:"package,omitempty" yaml:"package,omitempty"`
+	Threshold   float64    `json:"threshold,omitempty" yaml:"threshold,omitempty"`
+	Config      string     `json:"config,omitempty" yaml:"config,omitempty"`
+	Race        bool       `json:"race,omitempty" yaml:"race,omitempty"`
 	Weight      float64    `json:"weight,omitempty" yaml:"weight,omitempty"`
 }
 
