@@ -110,3 +110,47 @@ func TestAppendOne_EmptyPath(t *testing.T) {
 		t.Fatalf("AppendOne(\"\"): %v", err)
 	}
 }
+
+// TestAppend_FileRaceSafe verifies that multiple goroutines writing through
+// the same file-backed Writer produce parseable lines with no truncation,
+// no concatenation, and the expected total count. This guards against the
+// pre-v17100 bug where payload and newline were two separate Write calls,
+// allowing concurrent writers to interleave between them.
+func TestAppend_FileRaceSafe(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "race.ndjson")
+	w, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer w.Close()
+	const n, k = 24, 64
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for i := 0; i < n; i++ {
+		go func(id int) {
+			defer wg.Done()
+			for j := 0; j < k; j++ {
+				if err := w.Append(map[string]any{"id": id, "j": j, "pad": strings.Repeat("x", j%17)}); err != nil {
+					t.Errorf("Append: %v", err)
+				}
+			}
+		}(i)
+	}
+	wg.Wait()
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	lines := strings.Split(strings.TrimRight(string(body), "\n"), "\n")
+	if want := n * k; len(lines) != want {
+		t.Fatalf("lines = %d, want %d", len(lines), want)
+	}
+	for idx, line := range lines {
+		var ev map[string]any
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			t.Fatalf("line %d not valid JSON: %v -- %q", idx, err, line)
+		}
+	}
+}
