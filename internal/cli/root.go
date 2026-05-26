@@ -49,6 +49,7 @@ func init() {
 	rootCmd.AddCommand(signalCmd)
 	rootCmd.AddCommand(outcomeCmd)
 	rootCmd.AddCommand(evoloopCmd)
+	rootCmd.AddCommand(evospineCmd)
 	rootCmd.AddCommand(autoUpdateCmd)
 	rootCmd.AddCommand(claudeUsageCmd)
 	rootCmd.AddCommand(claudeRunCmd)
