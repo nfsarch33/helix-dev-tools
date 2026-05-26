@@ -1,13 +1,14 @@
 name: Sentrux Gate
 
 on:
+  workflow_dispatch:
   pull_request:
   push:
     branches: [main]
 
 jobs:
   sentrux:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]  # fallback: ubuntu-latest (if self-hosted unavailable)
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
