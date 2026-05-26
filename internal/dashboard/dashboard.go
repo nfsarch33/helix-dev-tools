@@ -25,6 +25,7 @@ type Server struct {
 	pages            map[string]*template.Template
 	mu               sync.RWMutex
 	cachedStatuses   []namedStatus
+	fleetHealthCache fleetHealthCache
 }
 
 type namedStatus struct {
@@ -119,6 +120,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/fleet", s.handleFleet)
 	mux.HandleFunc("/roadmap", s.handleRoadmap)
 	mux.HandleFunc("/api/health", s.handleAPIHealth)
+	mux.HandleFunc("/api/fleet/health", s.handleFleetHealth)
 	mux.HandleFunc("/api/agentrace/kpi", s.handleAgentraceKPI)
 	mux.HandleFunc("/api/eval/results", s.handleEvalResults)
 	mux.HandleFunc("/healthz", s.handleAPIHealth)
