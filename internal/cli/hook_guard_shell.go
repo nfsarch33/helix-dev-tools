@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"strings"
 	"fmt"
 	"os"
 	"time"
@@ -49,6 +50,13 @@ func newGuardShellHandler() (*guardShellHandler, error) {
 
 func (h *guardShellHandler) Handle(_ context.Context, input *hookio.Input) (*hookio.Response, error) {
 	start := time.Now()
+
+	// Allow remote fleet commands via runx ssh exec - the dangerous
+	// command runs on the remote host, not locally on the MacBook.
+	if strings.HasPrefix(input.Command, "runx ssh exec") {
+		return hookio.Allow(), nil
+	}
+
 	if input.Command == "" {
 		return hookio.Allow(), nil
 	}
