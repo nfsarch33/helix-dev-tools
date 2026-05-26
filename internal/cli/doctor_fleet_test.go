@@ -35,11 +35,21 @@ func defaultTestConfig() FleetConfig {
 	}
 }
 
-func TestBuildFleetProbes_Count(t *testing.T) {
+func TestBuildFleetProbes_Count_Remote(t *testing.T) {
 	t.Parallel()
 	probes := buildFleetProbes(defaultTestConfig())
 	if len(probes) != 11 {
-		t.Fatalf("expected 11 probes, got %d", len(probes))
+		t.Fatalf("expected 11 probes in remote mode, got %d", len(probes))
+	}
+}
+
+func TestBuildFleetProbes_Count_Local(t *testing.T) {
+	t.Parallel()
+	cfg := defaultTestConfig()
+	cfg.LocalMode = true
+	probes := buildFleetProbes(cfg)
+	if len(probes) != 9 {
+		t.Fatalf("expected 9 probes in local mode (no SSH/tunnel), got %d", len(probes))
 	}
 }
 
@@ -65,7 +75,86 @@ func TestBuildFleetProbes_SSHTarget(t *testing.T) {
 	}
 }
 
-func TestBuildFleetProbes_LocalProbe(t *testing.T) {
+func TestBuildFleetProbes_LocalMode_UsesShellDirect(t *testing.T) {
+	t.Parallel()
+	cfg := defaultTestConfig()
+	cfg.LocalMode = true
+	probes := buildFleetProbes(cfg)
+	for _, p := range probes {
+		if p.Command[0] != "sh" {
+			t.Errorf("local probe %q should use sh, got %s", p.Name, p.Command[0])
+		}
+		if p.Command[1] != "-c" {
+			t.Errorf("local probe %q should have -c arg, got %s", p.Name, p.Command[1])
+		}
+	}
+}
+
+func TestBuildFleetProbes_LocalMode_NoSSHProbe(t *testing.T) {
+	t.Parallel()
+	cfg := defaultTestConfig()
+	cfg.LocalMode = true
+	probes := buildFleetProbes(cfg)
+	for _, p := range probes {
+		if p.Name == "SSH connectivity" {
+			t.Error("local mode should not include SSH connectivity probe")
+		}
+		if p.Name == "Engram tunnel" {
+			t.Error("local mode should not include Engram tunnel probe")
+		}
+	}
+}
+
+func TestIsLocalMode_EnvVar(t *testing.T) {
+	old := doctorFleetFlags.local
+	doctorFleetFlags.local = false
+	defer func() { doctorFleetFlags.local = old }()
+
+	t.Setenv("FLEET_LOCAL", "true")
+	if !isLocalMode() {
+		t.Error("expected local mode when FLEET_LOCAL=true")
+	}
+
+	t.Setenv("FLEET_LOCAL", "false")
+	if isLocalMode() {
+		t.Error("expected remote mode when FLEET_LOCAL=false")
+	}
+}
+
+func TestIsLocalMode_Flag(t *testing.T) {
+	old := doctorFleetFlags.local
+	doctorFleetFlags.local = true
+	defer func() { doctorFleetFlags.local = old }()
+
+	t.Setenv("FLEET_LOCAL", "")
+	if !isLocalMode() {
+		t.Error("expected local mode when --local flag is set")
+	}
+}
+
+func TestWrapCommand_Remote(t *testing.T) {
+	t.Parallel()
+	cfg := FleetConfig{SSHTarget: "test-host", LocalMode: false}
+	cmd := wrapCommand(cfg, "echo hello")
+	if cmd[0] != "runx" {
+		t.Errorf("remote mode should use runx, got %s", cmd[0])
+	}
+	if cmd[len(cmd)-1] != "echo hello" {
+		t.Errorf("raw command should be last arg, got %s", cmd[len(cmd)-1])
+	}
+}
+
+func TestWrapCommand_Local(t *testing.T) {
+	t.Parallel()
+	cfg := FleetConfig{SSHTarget: "test-host", LocalMode: true}
+	cmd := wrapCommand(cfg, "echo hello")
+	expected := []string{"sh", "-c", "echo hello"}
+	if len(cmd) != 3 || cmd[0] != expected[0] || cmd[1] != expected[1] || cmd[2] != expected[2] {
+		t.Errorf("local mode should use sh -c, got %v", cmd)
+	}
+}
+
+func TestBuildFleetProbes_LocalProbe_RemoteMode(t *testing.T) {
 	t.Parallel()
 	probes := buildFleetProbes(defaultTestConfig())
 	localCount := 0
@@ -78,7 +167,7 @@ func TestBuildFleetProbes_LocalProbe(t *testing.T) {
 		}
 	}
 	if localCount != 1 {
-		t.Fatalf("expected 1 local probe, got %d", localCount)
+		t.Fatalf("expected 1 local probe in remote mode, got %d", localCount)
 	}
 }
 
@@ -194,6 +283,25 @@ func TestRunFleetProbes_AllGreen(t *testing.T) {
 	green, _, _ := countFleetResults(results)
 	if green != 11 {
 		t.Fatalf("expected all 11 GREEN, got %d", green)
+	}
+}
+
+func TestRunFleetProbes_AllGreen_Local(t *testing.T) {
+	t.Parallel()
+	old := fleetExecCommandContext
+	fleetExecCommandContext = mockExecCustom("Ready Running Healthy active ok Up healthy")
+	defer func() { fleetExecCommandContext = old }()
+
+	cfg := defaultTestConfig()
+	cfg.LocalMode = true
+	probes := buildFleetProbes(cfg)
+	results := runFleetProbes(probes)
+	if len(results) != 9 {
+		t.Fatalf("expected 9 results in local mode, got %d", len(results))
+	}
+	green, _, _ := countFleetResults(results)
+	if green != 9 {
+		t.Fatalf("expected all 9 GREEN in local mode, got %d", green)
 	}
 }
 
@@ -404,7 +512,7 @@ func TestFleetProbeStatus_Values(t *testing.T) {
 	}
 }
 
-func TestBuildFleetProbes_Names(t *testing.T) {
+func TestBuildFleetProbes_Names_Remote(t *testing.T) {
 	t.Parallel()
 	probes := buildFleetProbes(defaultTestConfig())
 	expected := []string{
@@ -430,9 +538,37 @@ func TestBuildFleetProbes_Names(t *testing.T) {
 	}
 }
 
+func TestBuildFleetProbes_Names_Local(t *testing.T) {
+	t.Parallel()
+	cfg := defaultTestConfig()
+	cfg.LocalMode = true
+	probes := buildFleetProbes(cfg)
+	expected := []string{
+		"K3s nodes",
+		"K3s pods (cicd)",
+		"ArgoCD apps",
+		"Engram systemd",
+		"Engram healthz",
+		"Fleet Agent systemd",
+		"GitLab CE",
+		"ArgoCD Docker",
+		"Dashboard",
+	}
+	if len(probes) != len(expected) {
+		t.Fatalf("probe count mismatch: got %d, want %d", len(probes), len(expected))
+	}
+	for i, p := range probes {
+		if p.Name != expected[i] {
+			t.Errorf("probe[%d] name=%q, want %q", i, p.Name, expected[i])
+		}
+	}
+}
+
 func TestBuildFleetProbes_RemoteUsesRunx(t *testing.T) {
 	t.Parallel()
-	probes := buildFleetProbes(defaultTestConfig())
+	cfg := defaultTestConfig()
+	cfg.LocalMode = false
+	probes := buildFleetProbes(cfg)
 	for _, p := range probes {
 		if p.Local {
 			continue

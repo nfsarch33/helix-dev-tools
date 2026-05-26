@@ -87,6 +87,8 @@ func init() {
 	rootCmd.AddCommand(autoresearchCmd)
 	rootCmd.AddCommand(sprinteval.NewSprintEvalCmd())
 	rootCmd.AddCommand(evalCmd)
+	rootCmd.AddCommand(memoCmd)
+	rootCmd.AddCommand(dashboardServeCmd)
 }
 
 var versionCmd = &cobra.Command{

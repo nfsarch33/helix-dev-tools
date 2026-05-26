@@ -43,20 +43,23 @@ type FleetConfig struct {
 	EngramHealthzURL string
 	EngramTunnelURL  string
 	DashboardURL     string
+	LocalMode        bool
 }
 
 var fleetExecCommandContext = execCommandContext
 
 var doctorFleetFlags struct {
 	sshTarget string
+	local     bool
 }
 
 var doctorFleetCmd = &cobra.Command{
 	Use:   "fleet",
 	Short: "Probe fleet SSH, K3s, services, and tunnels",
-	Long: "Run 11 fleet health probes covering SSH connectivity, K3s cluster,\n" +
+	Long: "Run fleet health probes covering SSH connectivity, K3s cluster,\n" +
 		"systemd services, Docker containers, and local tunnels.\n" +
-		"Uses runx ssh exec for remote probes and curl for local endpoints.",
+		"Uses runx ssh exec for remote probes (MacBook) or direct commands\n" +
+		"when running in local mode (--local or FLEET_LOCAL=true).",
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg := fleetConfigFromEnv()
 		probes := buildFleetProbes(cfg)
@@ -67,8 +70,12 @@ var doctorFleetCmd = &cobra.Command{
 		}
 		printFleetTable(cmd, results)
 		green, yellow, red := countFleetResults(results)
-		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nFleet health: %d/%d GREEN, %d YELLOW, %d RED\n",
-			green, len(results), yellow, red)
+		mode := "remote"
+		if cfg.LocalMode {
+			mode = "local"
+		}
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "\nFleet health (%s): %d/%d GREEN, %d YELLOW, %d RED\n",
+			mode, green, len(results), yellow, red)
 		if red > 0 {
 			return fmt.Errorf("fleet health: %d probe(s) RED", red)
 		}
@@ -79,7 +86,17 @@ var doctorFleetCmd = &cobra.Command{
 func init() {
 	doctorFleetCmd.Flags().StringVar(&doctorFleetFlags.sshTarget, "ssh-target", "",
 		"SSH target alias for remote probes (default: FLEET_SSH_TARGET or wsl1-travel)")
+	doctorFleetCmd.Flags().BoolVar(&doctorFleetFlags.local, "local", false,
+		"Run probes locally (no SSH); auto-detected via FLEET_LOCAL=true")
 	doctorCmd.AddCommand(doctorFleetCmd)
+}
+
+// isLocalMode returns true if the fleet doctor should use direct commands.
+func isLocalMode() bool {
+	if doctorFleetFlags.local {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("FLEET_LOCAL")), "true")
 }
 
 func fleetConfigFromEnv() FleetConfig {
@@ -88,6 +105,7 @@ func fleetConfigFromEnv() FleetConfig {
 		EngramHealthzURL: envOrDefault("FLEET_ENGRAM_HEALTHZ_URL", "http://127.0.0.1:8280/healthz"),
 		EngramTunnelURL:  envOrDefault("FLEET_ENGRAM_TUNNEL_URL", "http://127.0.0.1:18888/healthz"),
 		DashboardURL:     envOrDefault("FLEET_DASHBOARD_URL", "http://127.0.0.1:9095/api/health"),
+		LocalMode:        isLocalMode(),
 	}
 	if doctorFleetFlags.sshTarget != "" {
 		cfg.SSHTarget = doctorFleetFlags.sshTarget
@@ -102,77 +120,94 @@ func envOrDefault(key, fallback string) string {
 	return fallback
 }
 
+// wrapCommand wraps a raw command string for either local or remote execution.
+func wrapCommand(cfg FleetConfig, rawCmd string) []string {
+	if cfg.LocalMode {
+		return []string{"sh", "-c", rawCmd}
+	}
+	return []string{"runx", "ssh", "exec", "--target", cfg.SSHTarget, "--raw", rawCmd}
+}
+
 func buildFleetProbes(cfg FleetConfig) []FleetProbe {
-	t := cfg.SSHTarget
-	return []FleetProbe{
-		{
-			Name:    "SSH connectivity",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", "echo OK"},
-			Expect:  "OK",
-			Timeout: 10 * time.Second,
-		},
+	probes := []FleetProbe{
 		{
 			Name:    "K3s nodes",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", "sudo -n k3s kubectl get nodes --no-headers"},
+			Command: wrapCommand(cfg, "sudo -n k3s kubectl get nodes --no-headers"),
 			Expect:  "Ready",
 			Timeout: 10 * time.Second,
 		},
 		{
 			Name:    "K3s pods (cicd)",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", "sudo -n k3s kubectl -n cicd get pods --no-headers"},
+			Command: wrapCommand(cfg, "sudo -n k3s kubectl -n cicd get pods --no-headers"),
 			Expect:  "Running",
 			Timeout: 10 * time.Second,
 		},
 		{
 			Name:    "ArgoCD apps",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", "sudo -n k3s kubectl get applications -n argocd --no-headers"},
+			Command: wrapCommand(cfg, "sudo -n k3s kubectl get applications -n argocd --no-headers"),
 			Expect:  "Healthy",
 			Timeout: 10 * time.Second,
 		},
 		{
 			Name:    "Engram systemd",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", "systemctl is-active engram"},
+			Command: wrapCommand(cfg, "systemctl is-active engram"),
 			Expect:  "active",
 			Timeout: 10 * time.Second,
 		},
 		{
 			Name:    "Engram healthz",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", fmt.Sprintf("curl -sS --max-time 5 %s", cfg.EngramHealthzURL)},
+			Command: wrapCommand(cfg, fmt.Sprintf("curl -sS --max-time 5 %s", cfg.EngramHealthzURL)),
 			Expect:  "ok",
 			Timeout: 10 * time.Second,
 		},
 		{
 			Name:    "Fleet Agent systemd",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", "systemctl is-active fleet-agent"},
+			Command: wrapCommand(cfg, "systemctl is-active fleet-agent"),
 			Expect:  "active",
 			Timeout: 10 * time.Second,
 		},
 		{
 			Name:    "GitLab CE",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", "docker inspect --format '{{.State.Health.Status}}' gitlab-ce"},
+			Command: wrapCommand(cfg, "docker inspect --format '{{.State.Health.Status}}' gitlab-ce"),
 			Expect:  "healthy",
 			Timeout: 10 * time.Second,
 		},
 		{
 			Name:    "ArgoCD Docker",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", "docker ps --filter name=argocd-server --format '{{.Status}}'"},
+			Command: wrapCommand(cfg, "docker ps --filter name=argocd-server --format '{{.Status}}'"),
 			Expect:  "Up",
 			Timeout: 10 * time.Second,
 		},
 		{
 			Name:    "Dashboard",
-			Command: []string{"runx", "ssh", "exec", "--target", t, "--raw", fmt.Sprintf("curl -sS --max-time 5 %s", cfg.DashboardURL)},
+			Command: wrapCommand(cfg, fmt.Sprintf("curl -sS --max-time 5 %s", cfg.DashboardURL)),
 			Expect:  "ok",
 			Timeout: 10 * time.Second,
 		},
-		{
+	}
+
+	if !cfg.LocalMode {
+		// SSH connectivity probe only makes sense in remote mode
+		sshProbe := FleetProbe{
+			Name:    "SSH connectivity",
+			Command: []string{"runx", "ssh", "exec", "--target", cfg.SSHTarget, "--raw", "echo OK"},
+			Expect:  "OK",
+			Timeout: 10 * time.Second,
+		}
+		probes = append([]FleetProbe{sshProbe}, probes...)
+
+		// Engram tunnel probe only makes sense from MacBook (remote)
+		tunnelProbe := FleetProbe{
 			Name:    "Engram tunnel",
 			Command: []string{"curl", "-sS", "--max-time", "5", cfg.EngramTunnelURL},
 			Expect:  "ok",
 			Timeout: 10 * time.Second,
 			Local:   true,
-		},
+		}
+		probes = append(probes, tunnelProbe)
 	}
+
+	return probes
 }
 
 func runFleetProbes(probes []FleetProbe) []FleetProbeResult {
