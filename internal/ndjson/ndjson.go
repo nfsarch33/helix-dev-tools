@@ -49,7 +49,7 @@ func NewWriter(wc io.WriteCloser) *Writer {
 	return &Writer{w: wc}
 }
 
-// Path returns the backing file path, or "" for an in-memory writer.
+// Path returns the backing file path, or empty string for an in-memory writer.
 func (w *Writer) Path() string {
 	if w == nil {
 		return ""
@@ -58,7 +58,10 @@ func (w *Writer) Path() string {
 }
 
 // Append marshals event as JSON and writes one NDJSON line. Safe to call on
-// a nil Writer (returns nil).
+// a nil Writer (returns nil). The payload and trailing newline are written
+// in a single Write call so concurrent writers cannot interleave a partial
+// JSON object with another writers newline. POSIX guarantees atomicity for
+// O_APPEND writes up to PIPE_BUF; agentrace events stay well under that.
 func (w *Writer) Append(event any) error {
 	if w == nil || w.w == nil {
 		return nil
@@ -67,19 +70,19 @@ func (w *Writer) Append(event any) error {
 	if err != nil {
 		return fmt.Errorf("ndjson: marshal: %w", err)
 	}
+	line := make([]byte, 0, len(data)+1)
+	line = append(line, data...)
+	line = append(line, byte(0x0a))
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	if _, err := w.w.Write(data); err != nil {
-		return fmt.Errorf("ndjson: write payload: %w", err)
-	}
-	if _, err := w.w.Write([]byte("\n")); err != nil {
-		return fmt.Errorf("ndjson: write newline: %w", err)
+	if _, err := w.w.Write(line); err != nil {
+		return fmt.Errorf("ndjson: write line: %w", err)
 	}
 	return nil
 }
 
 // AppendOne is a convenience for one-shot appends to path: opens, appends,
-// closes. Useful when callers don't want to keep a long-lived Writer.
+// closes. Useful when callers do not want to keep a long-lived Writer.
 func AppendOne(path string, event any) error {
 	w, err := Open(path)
 	if err != nil {
