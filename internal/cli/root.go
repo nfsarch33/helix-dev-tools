@@ -90,6 +90,7 @@ func init() {
 	rootCmd.AddCommand(evalCmd)
 	rootCmd.AddCommand(memoCmd)
 	rootCmd.AddCommand(dashboardServeCmd)
+	rootCmd.AddCommand(dashboardCmd)
 }
 
 var versionCmd = &cobra.Command{

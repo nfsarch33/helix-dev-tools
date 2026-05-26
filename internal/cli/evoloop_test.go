@@ -84,7 +84,6 @@ func runRecentForTest(t *testing.T, args []string) (string, error) {
 }
 
 func TestParseEvoloopKinds(t *testing.T) {
-	t.Parallel()
 	tests := []struct {
 		name    string
 		input   string
@@ -103,7 +102,6 @@ func TestParseEvoloopKinds(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
 			got, err := parseEvoloopKinds(tc.input)
 			if tc.wantErr {
 				if err == nil {
@@ -371,7 +369,6 @@ func TestEvoloopSubcommandsRegistered(t *testing.T) {
 }
 
 func TestCapsuleIcon(t *testing.T) {
-	t.Parallel()
 	if capsuleIcon(evoloop.KindRollup) != "R" {
 		t.Fatalf("rollup icon")
 	}
@@ -384,7 +381,6 @@ func TestCapsuleIcon(t *testing.T) {
 }
 
 func TestFormatCapsuleTimestamp(t *testing.T) {
-	t.Parallel()
 	if got := formatCapsuleTimestamp(time.Time{}); got != "--" {
 		t.Fatalf("zero time: %q", got)
 	}

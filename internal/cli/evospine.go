@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -42,33 +43,10 @@ func runEvospineDaemon(cmd *cobra.Command, _ []string) error {
 
 	fmt.Fprintf(os.Stderr, "evospine daemon starting, interval=%v\n", interval)
 
-	runCycle := func() {
-		home, _ := os.UserHomeDir()
-		logPath := home + "/logs/runx/agentrace-mcp.ndjson"
-
-		events, err := readAgentraceEvents(logPath)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "evospine: read agentrace: %v\n", err)
-			return
-		}
-		if len(events) == 0 {
-			fmt.Fprintf(os.Stderr, "evospine: no events, skipping cycle\n")
-			return
-		}
-
-		capsule := generateORHEP(events)
-
-		outDir := home + "/logs/runx"
-		os.MkdirAll(outDir, 0o755)
-		outPath := outDir + "/evospine-capsule-" + time.Now().Format("2006-01-02T150405") + ".md"
-		if err := os.WriteFile(outPath, []byte(capsule), 0o644); err != nil {
-			fmt.Fprintf(os.Stderr, "evospine: write capsule: %v\n", err)
-			return
-		}
-		fmt.Fprintf(os.Stderr, "evospine: capsule written to %s\n", outPath)
+	home, _ := os.UserHomeDir()
+	if err := runEvospineCycle(home); err != nil {
+		fmt.Fprintf(os.Stderr, "evospine: cycle: %v\n", err)
 	}
-
-	runCycle()
 
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -79,7 +57,38 @@ func runEvospineDaemon(cmd *cobra.Command, _ []string) error {
 			fmt.Fprintf(os.Stderr, "evospine daemon shutting down\n")
 			return nil
 		case <-ticker.C:
-			runCycle()
+			if err := runEvospineCycle(home); err != nil {
+				fmt.Fprintf(os.Stderr, "evospine: cycle: %v\n", err)
+			}
 		}
 	}
+}
+
+// runEvospineCycle performs one ORHEP cycle: read agentrace events,
+// generate a capsule, and write it under home/logs/runx/.
+// Returns nil when there are no events to process.
+func runEvospineCycle(home string) error {
+	logPath := filepath.Join(home, "logs", "runx", "agentrace-mcp.ndjson")
+
+	events, err := readAgentraceEvents(logPath)
+	if err != nil {
+		return fmt.Errorf("read agentrace: %w", err)
+	}
+	if len(events) == 0 {
+		fmt.Fprintf(os.Stderr, "evospine: no events, skipping cycle\n")
+		return nil
+	}
+
+	capsule := generateORHEP(events)
+
+	outDir := filepath.Join(home, "logs", "runx")
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("mkdir capsules: %w", err)
+	}
+	outPath := filepath.Join(outDir, "evospine-capsule-"+time.Now().Format("2006-01-02T150405")+".md")
+	if err := os.WriteFile(outPath, []byte(capsule), 0o644); err != nil {
+		return fmt.Errorf("write capsule: %w", err)
+	}
+	fmt.Fprintf(os.Stderr, "evospine: capsule written to %s\n", outPath)
+	return nil
 }

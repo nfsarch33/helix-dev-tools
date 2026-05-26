@@ -3,3 +3,4 @@ dist/
 cursor-tools
 coverage.out
 *.test
+helix-dev-tools

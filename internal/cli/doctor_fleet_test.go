@@ -36,7 +36,6 @@ func defaultTestConfig() FleetConfig {
 }
 
 func TestBuildFleetProbes_Count_Remote(t *testing.T) {
-	t.Parallel()
 	probes := buildFleetProbes(defaultTestConfig())
 	if len(probes) != 11 {
 		t.Fatalf("expected 11 probes in remote mode, got %d", len(probes))
@@ -44,7 +43,6 @@ func TestBuildFleetProbes_Count_Remote(t *testing.T) {
 }
 
 func TestBuildFleetProbes_Count_Local(t *testing.T) {
-	t.Parallel()
 	cfg := defaultTestConfig()
 	cfg.LocalMode = true
 	probes := buildFleetProbes(cfg)
@@ -54,7 +52,6 @@ func TestBuildFleetProbes_Count_Local(t *testing.T) {
 }
 
 func TestBuildFleetProbes_SSHTarget(t *testing.T) {
-	t.Parallel()
 	cfg := defaultTestConfig()
 	cfg.SSHTarget = "custom-host"
 	probes := buildFleetProbes(cfg)
@@ -76,7 +73,6 @@ func TestBuildFleetProbes_SSHTarget(t *testing.T) {
 }
 
 func TestBuildFleetProbes_LocalMode_UsesShellDirect(t *testing.T) {
-	t.Parallel()
 	cfg := defaultTestConfig()
 	cfg.LocalMode = true
 	probes := buildFleetProbes(cfg)
@@ -91,7 +87,6 @@ func TestBuildFleetProbes_LocalMode_UsesShellDirect(t *testing.T) {
 }
 
 func TestBuildFleetProbes_LocalMode_NoSSHProbe(t *testing.T) {
-	t.Parallel()
 	cfg := defaultTestConfig()
 	cfg.LocalMode = true
 	probes := buildFleetProbes(cfg)
@@ -133,7 +128,6 @@ func TestIsLocalMode_Flag(t *testing.T) {
 }
 
 func TestWrapCommand_Remote(t *testing.T) {
-	t.Parallel()
 	cfg := FleetConfig{SSHTarget: "test-host", LocalMode: false}
 	cmd := wrapCommand(cfg, "echo hello")
 	if cmd[0] != "runx" {
@@ -145,7 +139,6 @@ func TestWrapCommand_Remote(t *testing.T) {
 }
 
 func TestWrapCommand_Local(t *testing.T) {
-	t.Parallel()
 	cfg := FleetConfig{SSHTarget: "test-host", LocalMode: true}
 	cmd := wrapCommand(cfg, "echo hello")
 	expected := []string{"sh", "-c", "echo hello"}
@@ -155,7 +148,6 @@ func TestWrapCommand_Local(t *testing.T) {
 }
 
 func TestBuildFleetProbes_LocalProbe_RemoteMode(t *testing.T) {
-	t.Parallel()
 	probes := buildFleetProbes(defaultTestConfig())
 	localCount := 0
 	for _, p := range probes {
@@ -172,7 +164,6 @@ func TestBuildFleetProbes_LocalProbe_RemoteMode(t *testing.T) {
 }
 
 func TestBuildFleetProbes_AllHaveTimeout(t *testing.T) {
-	t.Parallel()
 	probes := buildFleetProbes(defaultTestConfig())
 	for _, p := range probes {
 		if p.Timeout == 0 {
@@ -182,7 +173,6 @@ func TestBuildFleetProbes_AllHaveTimeout(t *testing.T) {
 }
 
 func TestBuildFleetProbes_AllHaveNonEmptyExpect(t *testing.T) {
-	t.Parallel()
 	probes := buildFleetProbes(defaultTestConfig())
 	for _, p := range probes {
 		if p.Expect == "" {
@@ -192,7 +182,6 @@ func TestBuildFleetProbes_AllHaveNonEmptyExpect(t *testing.T) {
 }
 
 func TestRunSingleFleetProbe_Green(t *testing.T) {
-	t.Parallel()
 	old := fleetExecCommandContext
 	fleetExecCommandContext = mockExecOK
 	defer func() { fleetExecCommandContext = old }()
@@ -213,7 +202,6 @@ func TestRunSingleFleetProbe_Green(t *testing.T) {
 }
 
 func TestRunSingleFleetProbe_Red(t *testing.T) {
-	t.Parallel()
 	old := fleetExecCommandContext
 	fleetExecCommandContext = mockExecFail
 	defer func() { fleetExecCommandContext = old }()
@@ -234,14 +222,13 @@ func TestRunSingleFleetProbe_Red(t *testing.T) {
 }
 
 func TestRunSingleFleetProbe_Yellow(t *testing.T) {
-	t.Parallel()
 	old := fleetExecCommandContext
-	fleetExecCommandContext = mockExecCustom("NotReady")
+	fleetExecCommandContext = mockExecCustom("Pending")
 	defer func() { fleetExecCommandContext = old }()
 
 	probe := FleetProbe{
 		Name:    "yellow-probe",
-		Command: []string{"echo", "NotReady"},
+		Command: []string{"echo", "Pending"},
 		Expect:  "Ready",
 		Timeout: 5 * time.Second,
 	}
@@ -252,7 +239,6 @@ func TestRunSingleFleetProbe_Yellow(t *testing.T) {
 }
 
 func TestRunSingleFleetProbe_Duration(t *testing.T) {
-	t.Parallel()
 	old := fleetExecCommandContext
 	fleetExecCommandContext = mockExecOK
 	defer func() { fleetExecCommandContext = old }()
@@ -270,7 +256,6 @@ func TestRunSingleFleetProbe_Duration(t *testing.T) {
 }
 
 func TestRunFleetProbes_AllGreen(t *testing.T) {
-	t.Parallel()
 	old := fleetExecCommandContext
 	fleetExecCommandContext = mockExecCustom("OK Ready Running Healthy active ok Up healthy")
 	defer func() { fleetExecCommandContext = old }()
@@ -287,7 +272,6 @@ func TestRunFleetProbes_AllGreen(t *testing.T) {
 }
 
 func TestRunFleetProbes_AllGreen_Local(t *testing.T) {
-	t.Parallel()
 	old := fleetExecCommandContext
 	fleetExecCommandContext = mockExecCustom("Ready Running Healthy active ok Up healthy")
 	defer func() { fleetExecCommandContext = old }()
@@ -306,7 +290,6 @@ func TestRunFleetProbes_AllGreen_Local(t *testing.T) {
 }
 
 func TestRunFleetProbes_MixedResults(t *testing.T) {
-	t.Parallel()
 	callCount := 0
 	old := fleetExecCommandContext
 	fleetExecCommandContext = func(_ context.Context, _ string, _ ...string) ([]byte, error) {
@@ -336,7 +319,6 @@ func TestRunFleetProbes_MixedResults(t *testing.T) {
 }
 
 func TestCountFleetResults(t *testing.T) {
-	t.Parallel()
 	results := []FleetProbeResult{
 		{Status: FleetGreen},
 		{Status: FleetGreen},
@@ -350,7 +332,6 @@ func TestCountFleetResults(t *testing.T) {
 }
 
 func TestCountFleetResults_Empty(t *testing.T) {
-	t.Parallel()
 	green, yellow, red := countFleetResults(nil)
 	if green != 0 || yellow != 0 || red != 0 {
 		t.Fatalf("expected 0/0/0, got %d/%d/%d", green, yellow, red)
@@ -358,7 +339,6 @@ func TestCountFleetResults_Empty(t *testing.T) {
 }
 
 func TestWriteFleetJSON(t *testing.T) {
-	t.Parallel()
 	results := []FleetProbeResult{
 		{Name: "test-a", Status: FleetGreen, Output: "OK", Duration: 50 * time.Millisecond},
 		{Name: "test-b", Status: FleetRed, Error: "fail", Duration: 100 * time.Millisecond},
@@ -396,7 +376,6 @@ func TestWriteFleetJSON(t *testing.T) {
 }
 
 func TestPrintFleetTable(t *testing.T) {
-	t.Parallel()
 	results := []FleetProbeResult{
 		{Name: "SSH connectivity", Status: FleetGreen, Output: "OK"},
 		{Name: "K3s nodes", Status: FleetRed, Error: "timeout"},
@@ -418,7 +397,6 @@ func TestPrintFleetTable(t *testing.T) {
 }
 
 func TestPrintFleetTable_TruncatesLongDetail(t *testing.T) {
-	t.Parallel()
 	longOutput := strings.Repeat("x", 100)
 	results := []FleetProbeResult{
 		{Name: "long-output", Status: FleetGreen, Output: longOutput},
@@ -437,7 +415,6 @@ func TestPrintFleetTable_TruncatesLongDetail(t *testing.T) {
 }
 
 func TestFleetConfigFromEnv_Defaults(t *testing.T) {
-	t.Parallel()
 	doctorFleetFlags.sshTarget = ""
 	t.Setenv("FLEET_SSH_TARGET", "")
 	t.Setenv("FLEET_ENGRAM_HEALTHZ_URL", "")
@@ -454,7 +431,6 @@ func TestFleetConfigFromEnv_Defaults(t *testing.T) {
 }
 
 func TestFleetConfigFromEnv_OverrideViaEnv(t *testing.T) {
-	t.Parallel()
 	doctorFleetFlags.sshTarget = ""
 	t.Setenv("FLEET_SSH_TARGET", "custom-alias")
 
@@ -477,7 +453,6 @@ func TestFleetConfigFromEnv_FlagOverridesEnv(t *testing.T) {
 }
 
 func TestEnvOrDefault(t *testing.T) {
-	t.Parallel()
 	t.Setenv("TEST_FLEET_KEY", "custom-val")
 	if v := envOrDefault("TEST_FLEET_KEY", "fallback"); v != "custom-val" {
 		t.Errorf("expected custom-val, got %s", v)
@@ -489,7 +464,6 @@ func TestEnvOrDefault(t *testing.T) {
 }
 
 func TestDoctorFleetCommandRegistered(t *testing.T) {
-	t.Parallel()
 	names := []string{}
 	for _, cmd := range doctorCmd.Commands() {
 		names = append(names, cmd.Name())
@@ -500,7 +474,6 @@ func TestDoctorFleetCommandRegistered(t *testing.T) {
 }
 
 func TestFleetProbeStatus_Values(t *testing.T) {
-	t.Parallel()
 	if FleetGreen != "GREEN" {
 		t.Error("FleetGreen should be GREEN")
 	}
@@ -513,7 +486,6 @@ func TestFleetProbeStatus_Values(t *testing.T) {
 }
 
 func TestBuildFleetProbes_Names_Remote(t *testing.T) {
-	t.Parallel()
 	probes := buildFleetProbes(defaultTestConfig())
 	expected := []string{
 		"SSH connectivity",
@@ -539,7 +511,6 @@ func TestBuildFleetProbes_Names_Remote(t *testing.T) {
 }
 
 func TestBuildFleetProbes_Names_Local(t *testing.T) {
-	t.Parallel()
 	cfg := defaultTestConfig()
 	cfg.LocalMode = true
 	probes := buildFleetProbes(cfg)
@@ -565,7 +536,6 @@ func TestBuildFleetProbes_Names_Local(t *testing.T) {
 }
 
 func TestBuildFleetProbes_RemoteUsesRunx(t *testing.T) {
-	t.Parallel()
 	cfg := defaultTestConfig()
 	cfg.LocalMode = false
 	probes := buildFleetProbes(cfg)
@@ -580,7 +550,6 @@ func TestBuildFleetProbes_RemoteUsesRunx(t *testing.T) {
 }
 
 func TestPrintFleetTable_MultilineOutputFlattened(t *testing.T) {
-	t.Parallel()
 	results := []FleetProbeResult{
 		{Name: "multiline", Status: FleetGreen, Output: "line1\nline2\nline3"},
 	}
