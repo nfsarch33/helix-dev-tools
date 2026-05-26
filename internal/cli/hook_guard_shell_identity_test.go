@@ -76,8 +76,8 @@ func TestGuardShell_DeniesSensitiveCommandWhenIdentityPoisoned(t *testing.T) {
 	prev := identityGateStateProviderForTest
 	identityGateStateProviderForTest = func() identityGateState {
 		return identityGateState{
-			RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-			GitEmail:  "jaslian@gmail.com",
+			RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+			GitEmail:  "user@example.com",
 			Env: map[string]string{
 				"GITHUB_TOKEN": "leaked-zendesk-token",
 			},
@@ -113,8 +113,8 @@ func TestGuardShell_AllowsSensitiveCommandWhenIdentityClean(t *testing.T) {
 	prev := identityGateStateProviderForTest
 	identityGateStateProviderForTest = func() identityGateState {
 		return identityGateState{
-			RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-			GitEmail:  "jaslian@gmail.com",
+			RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+			GitEmail:  "user@example.com",
 			Env:       map[string]string{},
 		}
 	}

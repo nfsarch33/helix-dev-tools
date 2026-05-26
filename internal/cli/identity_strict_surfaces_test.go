@@ -49,8 +49,8 @@ func TestIdentityStrictSurfaces_RegisterCanonicalFour(t *testing.T) {
 // shim invokes the strict gate and surfaces failures back to the caller.
 func TestRunIdentityStrictGate_BlocksOnFailure(t *testing.T) {
 	state := identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/ai-agent-business-stack.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/ai-agent-business-stack.git",
+		GitEmail:  "user@example.com",
 		Env: map[string]string{
 			"GITHUB_TOKEN": "leaked-token",
 		},
@@ -62,8 +62,8 @@ func TestRunIdentityStrictGate_BlocksOnFailure(t *testing.T) {
 
 func TestRunIdentityStrictGate_PassesOnClean(t *testing.T) {
 	state := identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/ai-agent-business-stack.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/ai-agent-business-stack.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	}
 	if err := runIdentityStrictGateWithState(state); err != nil {

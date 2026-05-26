@@ -352,8 +352,8 @@ func runPrePush(_ *cobra.Command, args []string) error {
 		fmt.Fprintln(prePushStderr,
 			"\nRemediation:\n"+
 				"  unset GITHUB_TOKEN GITHUB_API_TOKEN HOMEBREW_GITHUB_API_TOKEN VENDIR_GITHUB_API_TOKEN\n"+
-				"  git config user.email jaslian@gmail.com\n"+
-				"  git config user.name 'Jason Lian'\n"+
+				fmt.Sprintf("  git config user.email %s\n", personalEmailOrPlaceholder())+
+				"  git config user.name '<your-name>'\n"+
 				"  cursor-tools doctor identity --strict   # confirm gate is green\n"+
 				"To opt-out (rare): git config hooks.allowMainPush true (only for main-branch protection bypass; identity gate has no opt-out)")
 		prePushExit(1)

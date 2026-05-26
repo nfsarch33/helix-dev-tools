@@ -1,4 +1,3 @@
-// runx-public-repo-gate: allow-file personal_path_id — identity gate detects literal personal-stack identifiers, so the strings must remain in source
 
 package cli
 
@@ -69,8 +68,13 @@ func evaluateIdentityGate(state identityGateState) []string {
 			}
 		}
 		email := strings.TrimSpace(strings.ToLower(state.GitEmail))
-		if email != "" && email != "jaslian@gmail.com" && !strings.Contains(email, "noreply.github.com") {
-			failures = append(failures, "personal repo git email must be jaslian@gmail.com or nfsarch33 noreply")
+		expected := personalEmail()
+		if expected != "" {
+			if email != "" && email != expected && !strings.Contains(email, "noreply.github.com") {
+				failures = append(failures, fmt.Sprintf("personal repo git email must be %s or nfsarch33 noreply", expected))
+			}
+		} else if email != "" && strings.Contains(email, "zendesk") {
+			failures = append(failures, "personal repo git email must not be a zendesk address")
 		}
 	}
 	return failures
@@ -99,7 +103,7 @@ func evaluateIdentityGateStrict(state identityGateState) []string {
 	}
 	if isPersonalRemote(state.RemoteURL) {
 		if strings.TrimSpace(state.GitEmail) == "" {
-			failures = append(failures, "strict: personal repo requires explicit user.email (set git config user.email jaslian@gmail.com)")
+			failures = append(failures, fmt.Sprintf("strict: personal repo requires explicit user.email (set git config user.email %s)", personalEmailOrPlaceholder()))
 		}
 	}
 	return failures
@@ -156,9 +160,14 @@ func gatherIdentityGateState() identityGateState {
 
 func isPersonalRemote(remote string) bool {
 	remote = strings.ToLower(remote)
-	return strings.Contains(remote, "github-agtc:nfsarch33/") ||
-		strings.Contains(remote, "github.com:nfsarch33/") ||
-		strings.Contains(remote, "github.com/nfsarch33/")
+	if strings.Contains(remote, "github.com:nfsarch33/") ||
+		strings.Contains(remote, "github.com/nfsarch33/") {
+		return true
+	}
+	if alias := os.Getenv("RUNX_PERSONAL_SSH_HOST"); alias != "" {
+		return strings.Contains(remote, strings.ToLower(alias)+":nfsarch33/")
+	}
+	return false
 }
 
 func selectedEnv(keys []string) map[string]string {

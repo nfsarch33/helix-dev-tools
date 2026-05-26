@@ -154,7 +154,7 @@ func (s *BenchmarkSuite) ToMarkdown() string {
 func DefaultPrompts() []string {
 	return []string{
 		"Summarize this text in 3 bullet points: The quick brown fox jumps over the lazy dog. This sentence contains every letter of the English alphabet.",
-		"Extract the key entities from: Jason Lian is building the Helixon platform on a MacBook Pro with Go, running vLLM on WSL1 with 3x NVIDIA 3090 GPUs.",
+		"Extract the key entities from: A developer is building a platform on a workstation with Go, running vLLM on Linux with multiple NVIDIA GPUs.",
 		"Generate a JSON object with fields: name, role, and 3 capabilities for a coding agent called cursor-parent.",
 		"What are the top 3 performance bottlenecks when running an LLM inference server behind a reverse proxy?",
 		"Write a single Go test function that verifies a map has exactly 3 entries with specific keys.",

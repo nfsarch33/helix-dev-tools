@@ -1,4 +1,3 @@
-// runx-public-repo-gate: allow-file personal_path_id,fleet_host_alias — tests assert detection of literal personal-stack identifiers (gate test fixtures)
 
 package cli
 
@@ -8,8 +7,8 @@ func TestEvaluateIdentityGate_RejectsPoisonedGitHubTokens(t *testing.T) {
 	t.Parallel()
 
 	failures := evaluateIdentityGate(identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/ai-agent-business-stack.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/ai-agent-business-stack.git",
+		GitEmail:  "user@example.com",
 		Env: map[string]string{
 			"GITHUB_TOKEN":              "ghp_work",
 			"GITHUB_API_TOKEN":          "ghp_work",
@@ -27,7 +26,7 @@ func TestEvaluateIdentityGate_RejectsZendeskEmailOnPersonalRemote(t *testing.T) 
 	t.Parallel()
 
 	failures := evaluateIdentityGate(identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
 		GitEmail:  "jason.lian@zendesk.com",
 		Env:       map[string]string{},
 	})
@@ -41,8 +40,8 @@ func TestEvaluateIdentityGate_AllowsPersonalIdentity(t *testing.T) {
 	t.Parallel()
 
 	failures := evaluateIdentityGate(identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 

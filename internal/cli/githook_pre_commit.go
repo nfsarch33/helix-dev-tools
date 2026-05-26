@@ -1,11 +1,10 @@
-// runx-public-repo-gate: allow-file personal_path_id — identity gate detects literal personal-stack identifiers, so the strings must remain in source
 
 // Package cli — git pre-commit handler.
 //
 // This hook enforces the v254 sprint cross-cutting policy:
 //
 //	"All personal repos MUST be committed with the nfsarch33 GitHub
-//	identity (jaslian@gmail.com). The Zendesk work identity
+//	identity (RUNX_PERSONAL_EMAIL). The Zendesk work identity
 //	(work-identity@company.example) MUST NEVER land on a personal repo."
 //
 // Mechanism:
@@ -86,7 +85,7 @@ func runPreCommit(_ *cobra.Command, _ []string) error {
 	email = strings.TrimSpace(email)
 	if email == "" {
 		fmt.Fprint(preCommitStderr, "ERROR: git config user.email is empty.\n"+
-			"Personal repos require: git config user.email \"jaslian@gmail.com\"\n"+
+			fmt.Sprintf("Personal repos require: git config user.email %s\n", personalEmailOrPlaceholder())+
 			"To opt-out (work clones): git config hooks.allowZendeskIdentity true\n")
 		preCommitExit(1)
 		return nil
@@ -96,7 +95,7 @@ func runPreCommit(_ *cobra.Command, _ []string) error {
 		fmt.Fprintf(preCommitStderr,
 			"ERROR: refusing to commit with Zendesk identity %q on a personal repo.\n"+
 				"Personal repos must use the nfsarch33 GitHub identity:\n"+
-				"  git config user.email \"jaslian@gmail.com\"\n"+
+				fmt.Sprintf("  git config user.email %s\n", personalEmailOrPlaceholder())+
 				"  git config user.name  \"Jason Lian\"\n"+
 				"To opt-out (intentional work clone): git config hooks.allowZendeskIdentity true\n",
 			email)

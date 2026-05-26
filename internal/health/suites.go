@@ -410,7 +410,12 @@ func suiteGitSync(p config.Paths) *Suite {
 	s.Assert("remote points to cursor-global-kb", strings.Contains(remotes, "cursor-global-kb"), "wrong remote URL")
 
 	email, _ := gitOutput(p.GlobalKB, "config", "user.email")
-	s.Assert("git identity is personal", strings.Contains(email, "jaslian@gmail.com"), "expected jaslian@gmail.com, got "+email)
+	expectedEmail := os.Getenv("RUNX_PERSONAL_EMAIL")
+	if expectedEmail != "" {
+		s.Assert("git identity is personal", strings.Contains(email, expectedEmail), "expected "+expectedEmail+", got "+email)
+	} else {
+		s.Assert("git identity not zendesk", !strings.Contains(strings.ToLower(email), "zendesk"), "zendesk email on personal repo")
+	}
 
 	allowMain, _ := gitOutput(p.GlobalKB, "config", "hooks.allowMainPush")
 	s.Assert("allowMainPush is true", strings.Contains(allowMain, "true"), "expected true")
@@ -1144,7 +1149,10 @@ func suiteGitHookIntegrity(p config.Paths) *Suite {
 	s.Assert("global-kb allows main push", strings.Contains(allowMain, "true"), "not true")
 
 	email, _ := gitOutput(p.GlobalKB, "config", "user.email")
-	s.Assert("git email is personal", strings.Contains(email, "jaslian"), "expected personal email")
+	personalEmail := os.Getenv("RUNX_PERSONAL_EMAIL")
+	if personalEmail != "" {
+		s.Assert("git email is personal", strings.Contains(email, personalEmail), "expected "+personalEmail)
+	}
 	s.Assert("git email not zendesk", !strings.Contains(email, "zendesk"), "zendesk email on personal repo")
 
 	return s

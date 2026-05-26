@@ -32,7 +32,7 @@ func TestEvaluateIdentityGateForHookSurface_DefersOnEmptyRemote(t *testing.T) {
 	// for its own identity discipline.
 	failures := evaluateIdentityGateForHookSurface(identityGateState{
 		RemoteURL: "",
-		GitEmail:  "jaslian@gmail.com",
+		GitEmail:  "user@example.com",
 		Env: map[string]string{
 			"GITHUB_TOKEN":              "ghp_anything",
 			"GITHUB_API_TOKEN":          "ghp_anything",
@@ -53,7 +53,7 @@ func TestEvaluateIdentityGateForHookSurface_FailsOnPersonalRemoteWithPoisonedTok
 	// a fail with an actionable message naming the offending var.
 	failures := evaluateIdentityGateForHookSurface(identityGateState{
 		RemoteURL: "git@github.com:nfsarch33/cursor-tools.git",
-		GitEmail:  "jaslian@gmail.com",
+		GitEmail:  "user@example.com",
 		Env: map[string]string{
 			"GITHUB_TOKEN": "ghp_anything",
 		},
@@ -70,8 +70,8 @@ func TestEvaluateIdentityGateForHookSurface_PassesOnPersonalRemoteWithCleanEnv(t
 	t.Parallel()
 
 	failures := evaluateIdentityGateForHookSurface(identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	if len(failures) != 0 {
@@ -106,7 +106,7 @@ func TestIdentityStrictShellDeny_DefersWhenHookCwdHasNoOrigin(t *testing.T) {
 	identityGateStateProviderForTest = func() identityGateState {
 		return identityGateState{
 			RemoteURL: "",
-			GitEmail:  "jaslian@gmail.com",
+			GitEmail:  "user@example.com",
 			Env: map[string]string{
 				"GITHUB_TOKEN":              "ghp_set_in_login_env",
 				"GITHUB_API_TOKEN":          "ghp_set_in_login_env",
@@ -130,7 +130,7 @@ func TestIdentityStrictShellDeny_DeniesPersonalRemoteWithPoisonedToken(t *testin
 	identityGateStateProviderForTest = func() identityGateState {
 		return identityGateState{
 			RemoteURL: "git@github.com:nfsarch33/cursor-tools.git",
-			GitEmail:  "jaslian@gmail.com",
+			GitEmail:  "user@example.com",
 			Env:       map[string]string{"GITHUB_TOKEN": "ghp_set"},
 		}
 	}

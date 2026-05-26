@@ -18,7 +18,7 @@ func TestEvaluateIdentityGate_StrictWithMissingRemoteFails(t *testing.T) {
 
 	failures := evaluateIdentityGateStrict(identityGateState{
 		RemoteURL: "",
-		GitEmail:  "jaslian@gmail.com",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	if len(failures) == 0 {
@@ -39,7 +39,7 @@ func TestEvaluateIdentityGate_StrictWithEmptyEmailOnPersonalRemoteFails(t *testi
 	t.Parallel()
 
 	failures := evaluateIdentityGateStrict(identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
 		GitEmail:  "",
 		Env:       map[string]string{},
 	})
@@ -54,8 +54,8 @@ func TestEvaluateIdentityGate_StrictAllowsCleanIdentity(t *testing.T) {
 	t.Parallel()
 
 	failures := evaluateIdentityGateStrict(identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	if len(failures) != 0 {

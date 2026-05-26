@@ -422,8 +422,8 @@ func TestFleetConfigFromEnv_Defaults(t *testing.T) {
 	t.Setenv("FLEET_DASHBOARD_URL", "")
 
 	cfg := fleetConfigFromEnv()
-	if cfg.SSHTarget != "wsl1-travel" {
-		t.Errorf("expected default SSH target wsl1-travel, got %s", cfg.SSHTarget)
+	if cfg.SSHTarget != "" {
+		t.Errorf("expected empty default SSH target, got %s", cfg.SSHTarget)
 	}
 	if cfg.EngramHealthzURL != "http://127.0.0.1:8280/healthz" {
 		t.Errorf("unexpected EngramHealthzURL: %s", cfg.EngramHealthzURL)

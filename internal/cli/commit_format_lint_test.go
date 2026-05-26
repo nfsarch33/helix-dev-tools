@@ -160,8 +160,8 @@ func TestGuardShell_DeniesMultiScopeCommit(t *testing.T) {
 	prev := identityGateStateProviderForTest
 	identityGateStateProviderForTest = func() identityGateState {
 		return identityGateState{
-			RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-			GitEmail:  "jaslian@gmail.com",
+			RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+			GitEmail:  "user@example.com",
 			Env:       map[string]string{},
 		}
 	}
@@ -201,8 +201,8 @@ func TestGuardShell_AllowsSingleScopeCommit(t *testing.T) {
 	prev := identityGateStateProviderForTest
 	identityGateStateProviderForTest = func() identityGateState {
 		return identityGateState{
-			RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-			GitEmail:  "jaslian@gmail.com",
+			RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+			GitEmail:  "user@example.com",
 			Env:       map[string]string{},
 		}
 	}

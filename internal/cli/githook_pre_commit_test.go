@@ -64,7 +64,7 @@ func TestPreCommit_BlocksZendeskEmail(t *testing.T) {
 	if !strings.Contains(msg, "Zendesk identity") {
 		t.Errorf("stderr %q missing 'Zendesk identity'", msg)
 	}
-	if !strings.Contains(msg, "jaslian@gmail.com") {
+	if !strings.Contains(msg, "user.email") {
 		t.Errorf("stderr %q missing remediation guidance", msg)
 	}
 }
@@ -83,7 +83,7 @@ func TestPreCommit_BlocksAnyZendeskDomain(t *testing.T) {
 
 func TestPreCommit_AllowsPersonalEmail(t *testing.T) {
 	withFakeGitConfig(t, map[string]string{
-		"user.email": "jaslian@gmail.com",
+		"user.email": "user@example.com",
 	}, nil)
 	code, stderr := withFakeExit(t)
 

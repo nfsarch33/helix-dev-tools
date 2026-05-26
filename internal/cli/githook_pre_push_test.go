@@ -62,8 +62,8 @@ func withFakeAncestorChecker(t *testing.T, fn func(remoteSHA, localSHA string) b
 func TestPrePush_BlocksPoisonedGitHubTokenOnPersonalRemote(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{"GITHUB_TOKEN": "ghp_work"},
 	})
 	code, stderr := withCapturedPrePushExit(t)
@@ -71,7 +71,7 @@ func TestPrePush_BlocksPoisonedGitHubTokenOnPersonalRemote(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-global-kb.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/cursor-global-kb.git"})
 	if *code != 1 {
 		t.Fatalf("want exit 1 for poisoned token, got %d", *code)
 	}
@@ -83,8 +83,8 @@ func TestPrePush_BlocksPoisonedGitHubTokenOnPersonalRemote(t *testing.T) {
 func TestPrePush_AllowsCleanIdentityFeatureBranch(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	code, _ := withCapturedPrePushExit(t)
@@ -92,7 +92,7 @@ func TestPrePush_AllowsCleanIdentityFeatureBranch(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	if err := runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-global-kb.git"}); err != nil {
+	if err := runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/cursor-global-kb.git"}); err != nil {
 		t.Fatalf("clean identity should not return error: %v", err)
 	}
 	if *code != 0 {
@@ -205,8 +205,8 @@ func TestPrePush_AllowsZendeskNewBranchAllZeroRemoteSHA(t *testing.T) {
 func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/helixon-mcp.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/helixon-mcp.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	withFakePublicRepoGate(t, func(remoteURL string) []string {
@@ -220,7 +220,7 @@ func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/helixon-mcp.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/helixon-mcp.git"})
 	if *code != 1 {
 		t.Fatalf("public-repo-gate finding must block push, got exit %d", *code)
 	}
@@ -237,8 +237,8 @@ func TestPrePush_BlocksPublicRepoLeakFinding(t *testing.T) {
 func TestPrePush_AllowsCleanPublicRepo(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/helixon-mcp.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/helixon-mcp.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	gateInvoked := false
@@ -252,7 +252,7 @@ func TestPrePush_AllowsCleanPublicRepo(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	if err := runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/helixon-mcp.git"}); err != nil {
+	if err := runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/helixon-mcp.git"}); err != nil {
 		t.Fatalf("clean public repo push should not error: %v", err)
 	}
 	if *code != 0 {
@@ -270,8 +270,8 @@ func TestPrePush_AllowsCleanPublicRepo(t *testing.T) {
 func TestPrePush_SkipsGateForPrivatePersonalRepo(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	gateInvoked := false
@@ -288,7 +288,7 @@ func TestPrePush_SkipsGateForPrivatePersonalRepo(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feature/foo local-sha refs/heads/feature/foo remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	if err := runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-global-kb.git"}); err != nil {
+	if err := runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/cursor-global-kb.git"}); err != nil {
 		t.Fatalf("private repo push should not error: %v", err)
 	}
 	if *code != 0 {
@@ -306,8 +306,8 @@ func TestPublicRepoNameFromURLDefault_TableDriven(t *testing.T) {
 		url  string
 		want string
 	}{
-		{name: "ssh agtc personal", url: "git@github-agtc:nfsarch33/helixon-mcp.git", want: "helixon-mcp"},
-		{name: "ssh agtc no .git", url: "git@github-agtc:nfsarch33/helixon-mcp", want: "helixon-mcp"},
+		{name: "ssh agtc personal", url: "git@github.com:nfsarch33/helixon-mcp.git", want: "helixon-mcp"},
+		{name: "ssh agtc no .git", url: "git@github.com:nfsarch33/helixon-mcp", want: "helixon-mcp"},
 		{name: "https personal", url: "https://github.com/nfsarch33/helix-dev-tools.git", want: "helix-dev-tools"},
 		{name: "zendesk work clone", url: "git@github.com:zendesk/secure-auth-platform.git", want: ""},
 		{name: "empty", url: "", want: ""},
@@ -337,8 +337,8 @@ func TestResolvePublicRepoAlias(t *testing.T) {
 func TestPrePush_StillBlocksPushToMainOnPersonalRemote(t *testing.T) {
 	withFakeAllowMainPush(t, false)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-global-kb.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-global-kb.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	code, stderr := withCapturedPrePushExit(t)
@@ -346,7 +346,7 @@ func TestPrePush_StillBlocksPushToMainOnPersonalRemote(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/main local-sha refs/heads/main remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-global-kb.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/cursor-global-kb.git"})
 	if *code != 1 {
 		t.Fatalf("push to main must be blocked even with clean identity: %d", *code)
 	}
@@ -369,10 +369,10 @@ func TestIsHelixonRemote(t *testing.T) {
 		url  string
 		want bool
 	}{
-		{"git@github-agtc:nfsarch33/helixon-ops.git", true},
+		{"git@github.com:nfsarch33/helixon-ops.git", true},
 		{"https://github.com/nfsarch33/helixon-mcp.git", true},
-		{"git@github-agtc:nfsarch33/helixon-kb.git", true},
-		{"git@github-agtc:nfsarch33/cursor-tools.git", false},
+		{"git@github.com:nfsarch33/helixon-kb.git", true},
+		{"git@github.com:nfsarch33/cursor-tools.git", false},
 		{"git@github.com:zendesk/secure-auth-platform.git", false},
 		{"", false},
 	}
@@ -387,8 +387,8 @@ func TestIsHelixonRemote(t *testing.T) {
 func TestPrePush_RebrandGateBlocksHelixonRemote(t *testing.T) {
 	withFakeAllowMainPush(t, true)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/helixon-ops.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/helixon-ops.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	withFakePublicRepoGate(t, func(string) []string { return nil })
@@ -403,7 +403,7 @@ func TestPrePush_RebrandGateBlocksHelixonRemote(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feat/init local-sha refs/heads/feat/init remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/helixon-ops.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/helixon-ops.git"})
 	if *code != 1 {
 		t.Fatalf("want exit 1 for helixon remote with legacy terms, got %d", *code)
 	}
@@ -415,8 +415,8 @@ func TestPrePush_RebrandGateBlocksHelixonRemote(t *testing.T) {
 func TestPrePush_RebrandGateSkipsNonHelixonRemote(t *testing.T) {
 	withFakeAllowMainPush(t, true)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/cursor-tools.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/cursor-tools.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	withFakePublicRepoGate(t, func(string) []string { return nil })
@@ -431,7 +431,7 @@ func TestPrePush_RebrandGateSkipsNonHelixonRemote(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feat/foo local-sha refs/heads/feat/foo remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/cursor-tools.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/cursor-tools.git"})
 	if *code != 0 {
 		t.Fatalf("non-helixon remote should not trigger rebrand gate, got exit %d", *code)
 	}
@@ -440,8 +440,8 @@ func TestPrePush_RebrandGateSkipsNonHelixonRemote(t *testing.T) {
 func TestPrePush_RebrandGatePassesCleanHelixonRepo(t *testing.T) {
 	withFakeAllowMainPush(t, true)
 	withFakeIdentityGate(t, evaluateIdentityGateStrict, identityGateState{
-		RemoteURL: "git@github-agtc:nfsarch33/helixon-mcp.git",
-		GitEmail:  "jaslian@gmail.com",
+		RemoteURL: "git@github.com:nfsarch33/helixon-mcp.git",
+		GitEmail:  "user@example.com",
 		Env:       map[string]string{},
 	})
 	withFakePublicRepoGate(t, func(string) []string { return nil })
@@ -451,7 +451,7 @@ func TestPrePush_RebrandGatePassesCleanHelixonRepo(t *testing.T) {
 	prePushStdin = strings.NewReader("refs/heads/feat/init local-sha refs/heads/feat/init remote-sha\n")
 	defer func() { prePushStdin = io.Reader(nil) }()
 
-	_ = runPrePush(nil, []string{"origin", "git@github-agtc:nfsarch33/helixon-mcp.git"})
+	_ = runPrePush(nil, []string{"origin", "git@github.com:nfsarch33/helixon-mcp.git"})
 	if *code != 0 {
 		t.Fatalf("clean helixon repo should pass rebrand gate, got exit %d", *code)
 	}

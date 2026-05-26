@@ -9,18 +9,18 @@ import (
 
 var _ = Describe("classifyLearningsPath", func() {
 	It("detects workspace .learnings/ edits", func() {
-		action, ws := classifyLearningsPath("/Users/jason.lian/agentic-ai-research/.learnings/ERRORS.md")
+		action, ws := classifyLearningsPath("/home/testuser/agentic-ai-research/.learnings/ERRORS.md")
 		Expect(action).To(Equal(learningsLocal))
-		Expect(ws).To(Equal("/Users/jason.lian/agentic-ai-research"))
+		Expect(ws).To(Equal("/home/testuser/agentic-ai-research"))
 	})
 
 	It("does not treat the retired ~/memo path as canonical learnings", func() {
-		action, _ := classifyLearningsPath("/Users/jason.lian/memo/learnings/PATTERNS.md")
+		action, _ := classifyLearningsPath("/home/testuser/memo/learnings/PATTERNS.md")
 		Expect(action).To(Equal(learningsNone))
 	})
 
 	It("detects global learnings via ~/Code/global-kb/ real path", func() {
-		action, _ := classifyLearningsPath("/Users/jason.lian/Code/global-kb/learnings/PATTERNS.md")
+		action, _ := classifyLearningsPath("/home/testuser/Code/global-kb/learnings/PATTERNS.md")
 		Expect(action).To(Equal(learningsGlobal))
 	})
 
@@ -30,7 +30,7 @@ var _ = Describe("classifyLearningsPath", func() {
 	})
 
 	It("returns learningsNone for unrelated files", func() {
-		action, _ := classifyLearningsPath("/Users/jason.lian/Code/global-kb/sop/engineering.md")
+		action, _ := classifyLearningsPath("/home/testuser/Code/global-kb/sop/engineering.md")
 		Expect(action).To(Equal(learningsNone))
 	})
 

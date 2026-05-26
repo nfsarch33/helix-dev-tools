@@ -85,7 +85,7 @@ var doctorFleetCmd = &cobra.Command{
 
 func init() {
 	doctorFleetCmd.Flags().StringVar(&doctorFleetFlags.sshTarget, "ssh-target", "",
-		"SSH target alias for remote probes (default: FLEET_SSH_TARGET or wsl1-travel)")
+		"SSH target alias for remote probes (reads FLEET_SSH_TARGET env var)")
 	doctorFleetCmd.Flags().BoolVar(&doctorFleetFlags.local, "local", false,
 		"Run probes locally (no SSH); auto-detected via FLEET_LOCAL=true")
 	doctorCmd.AddCommand(doctorFleetCmd)
@@ -101,7 +101,7 @@ func isLocalMode() bool {
 
 func fleetConfigFromEnv() FleetConfig {
 	cfg := FleetConfig{
-		SSHTarget:        envOrDefault("FLEET_SSH_TARGET", "wsl1-travel"),
+		SSHTarget:        os.Getenv("FLEET_SSH_TARGET"),
 		EngramHealthzURL: envOrDefault("FLEET_ENGRAM_HEALTHZ_URL", "http://127.0.0.1:8280/healthz"),
 		EngramTunnelURL:  envOrDefault("FLEET_ENGRAM_TUNNEL_URL", "http://127.0.0.1:18888/healthz"),
 		DashboardURL:     envOrDefault("FLEET_DASHBOARD_URL", "http://127.0.0.1:9095/api/health"),
