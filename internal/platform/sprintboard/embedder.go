@@ -97,8 +97,12 @@ func (e *Embedder) embedTFIDF(text string) []float32 {
 		return vec
 	}
 
+	if e.config.Dimension <= 0 {
+		return vec
+	}
 	for _, word := range words {
-		idx := hashWord(word) % uint32(e.config.Dimension)
+		dim := uint32(e.config.Dimension) // #nosec G115 -- Dimension validated > 0
+		idx := hashWord(word) % dim
 		vec[idx] += 1.0
 	}
 
