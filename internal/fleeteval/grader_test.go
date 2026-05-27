@@ -139,14 +139,24 @@ Let me think step by step.
 	}
 }
 
-func TestCleanResponse_UnclosedThinkBlock(t *testing.T) {
+func TestCleanResponse_UnclosedThinkBlock_WithContent(t *testing.T) {
 	raw := `<think>
-Some reasoning that never closes...
-Still thinking...
+This function calculates a percentage and returns GREEN, YELLOW, or RED based on thresholds.
 `
 	got := CleanResponse(raw)
-	if got != "" {
-		t.Errorf("expected empty after stripping unclosed think block, got %q", got)
+	if !strings.Contains(got, "percentage") {
+		t.Errorf("expected content extracted from unclosed think block, got %q", got)
+	}
+}
+
+func TestCleanResponse_UnclosedThinkBlock_Empty(t *testing.T) {
+	raw := `some answer
+<think>
+reasoning follows
+`
+	got := CleanResponse(raw)
+	if got != "some answer" {
+		t.Errorf("expected 'some answer' after stripping unclosed think, got %q", got)
 	}
 }
 

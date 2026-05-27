@@ -12,10 +12,17 @@ var (
 
 // CleanResponse removes model artifacts like <think> blocks, task_claim/complete
 // protocol wrapping, and leading/trailing whitespace.
+// If the entire response is inside a <think> block, extracts the content.
 func CleanResponse(raw string) string {
 	cleaned := thinkBlockRE.ReplaceAllString(raw, "")
 	if strings.Contains(cleaned, "<think>") {
-		cleaned = thinkUnclosed.ReplaceAllString(cleaned, "")
+		afterThink := cleaned[strings.Index(cleaned, "<think>")+len("<think>"):]
+		stripped := thinkUnclosed.ReplaceAllString(cleaned, "")
+		if strings.TrimSpace(stripped) == "" && strings.TrimSpace(afterThink) != "" {
+			cleaned = afterThink
+		} else {
+			cleaned = stripped
+		}
 	}
 
 	lines := strings.Split(cleaned, "\n")
