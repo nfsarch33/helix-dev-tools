@@ -13,6 +13,7 @@ type Config struct {
 	Capabilities []string
 	PollInterval time.Duration
 	MaxRetries   int
+	SystemPrompt string
 }
 
 // Agent implements the claim/execute/report loop.
@@ -97,7 +98,10 @@ func (a *Agent) poll(ctx context.Context) error {
 func (a *Agent) execute(ctx context.Context, t Ticket) ExecutionResult {
 	start := time.Now()
 
-	systemPrompt := fmt.Sprintf("You are fleet agent %q. Execute the following task and return a concise result.", a.cfg.AgentID)
+	systemPrompt := a.cfg.SystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = fmt.Sprintf("You are fleet agent %q. Execute the following task and return a concise result.", a.cfg.AgentID)
+	}
 	userPrompt := fmt.Sprintf("Ticket: %s\nTitle: %s\nDescription: %s", t.ID, t.Title, t.Description)
 
 	output, err := a.llm.Complete(ctx, systemPrompt, userPrompt)

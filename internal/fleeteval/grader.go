@@ -161,7 +161,8 @@ func scoreRubricEntry(rubric RubricEntry, response string) float64 {
 		}
 		return 0.3
 	case "diagnosis":
-		if containsAny(r, []string{"because", "means", "reason", "package not found", "cannot find"}) {
+		if containsAny(r, []string{"because", "means", "reason", "package not found", "cannot find",
+			"integer division", "truncat", "before conversion", "division by zero", "bug"}) {
 			return 0.8
 		}
 		return 0.3
