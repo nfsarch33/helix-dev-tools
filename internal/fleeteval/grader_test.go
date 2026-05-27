@@ -127,6 +127,52 @@ func TestGradeResponse_ZeroMaxScore(t *testing.T) {
 	}
 }
 
+func TestCleanResponse_ThinkBlock(t *testing.T) {
+	raw := `<think>
+Some reasoning here about the task...
+Let me think step by step.
+</think>
+2026-05-27T17:00:00+10:00`
+	got := CleanResponse(raw)
+	if got != "2026-05-27T17:00:00+10:00" {
+		t.Errorf("expected cleaned timestamp, got %q", got)
+	}
+}
+
+func TestCleanResponse_ProtocolWrapping(t *testing.T) {
+	raw := `task_claim(ticket_id="eval-01", agent_id="fleet-agent", reason="echo")
+fleet-agent-v18200-healthy
+task_complete(ticket_id="eval-01", agent_id="fleet-agent", evidence="done")`
+	got := CleanResponse(raw)
+	if got != "fleet-agent-v18200-healthy" {
+		t.Errorf("expected stripped response, got %q", got)
+	}
+}
+
+func TestCleanResponse_CodeFences(t *testing.T) {
+	raw := "```go\nfunc CountMatches(ctx context.Context, items []string) (int, error)\n```"
+	got := CleanResponse(raw)
+	want := "func CountMatches(ctx context.Context, items []string) (int, error)"
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
+func TestCleanResponse_Empty(t *testing.T) {
+	got := CleanResponse("")
+	if got != "" {
+		t.Errorf("expected empty, got %q", got)
+	}
+}
+
+func TestCleanResponse_NoArtifacts(t *testing.T) {
+	raw := "This is a clean response."
+	got := CleanResponse(raw)
+	if got != raw {
+		t.Errorf("expected unchanged, got %q", got)
+	}
+}
+
 func TestContainsAny(t *testing.T) {
 	if !containsAny("run the command", []string{"command", "tool"}) {
 		t.Error("expected true for 'command' in string")

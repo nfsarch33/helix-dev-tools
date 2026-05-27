@@ -98,8 +98,9 @@ func (r *Runner) runTask(ctx context.Context, task Task) Result {
 		}
 	}
 
-	score, details, gradeErr := GradeResponse(task, response)
-	matched, _ := MatchesPattern(task.ExpectedPattern, response)
+	cleaned := CleanResponse(response)
+	score, details, gradeErr := GradeResponse(task, cleaned)
+	matched, _ := MatchesPattern(task.ExpectedPattern, cleaned)
 
 	maxScore := task.Grading.MaxScore
 	if maxScore == 0 {

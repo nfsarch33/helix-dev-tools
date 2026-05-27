@@ -5,6 +5,33 @@ import (
 	"strings"
 )
 
+var thinkBlockRE = regexp.MustCompile(`(?s)<think>.*?</think>`)
+
+// CleanResponse removes model artifacts like <think> blocks, task_claim/complete
+// protocol wrapping, and leading/trailing whitespace.
+func CleanResponse(raw string) string {
+	cleaned := thinkBlockRE.ReplaceAllString(raw, "")
+
+	lines := strings.Split(cleaned, "\n")
+	var filtered []string
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "task_claim(") ||
+			strings.HasPrefix(trimmed, "task_complete(") ||
+			strings.HasPrefix(trimmed, "handoff_publish(") ||
+			strings.HasPrefix(trimmed, "agent_register(") ||
+			strings.HasPrefix(trimmed, "sprint_status(") {
+			continue
+		}
+		if trimmed == "```go" || trimmed == "```json" || trimmed == "```" {
+			continue
+		}
+		filtered = append(filtered, line)
+	}
+	result := strings.Join(filtered, "\n")
+	return strings.TrimSpace(result)
+}
+
 // GradeResponse scores an LLM response against a task's criteria.
 // Returns a score (0 to task.Grading.MaxScore) and detail entries.
 func GradeResponse(task Task, response string) (int, []GradeEntry, error) {
