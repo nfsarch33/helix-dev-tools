@@ -1,6 +1,9 @@
 package fleeteval
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMatchesPattern_Simple(t *testing.T) {
 	cases := []struct {
