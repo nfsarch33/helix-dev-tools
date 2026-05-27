@@ -108,7 +108,7 @@ func DecodeBase64Int8(b64 string) ([]int8, error) {
 	}
 	result := make([]int8, len(raw))
 	for i, b := range raw {
-		result[i] = int8(b)
+		result[i] = int8(b) // #nosec G115 -- intentional uint8-to-int8 reinterpret for signed quantization
 	}
 	return result, nil
 }
