@@ -46,6 +46,9 @@ func (c *RESTSprintBoardClient) ListReady(ctx context.Context, _ []string) ([]Ti
 		return nil, fmt.Errorf("read response: %w", err)
 	}
 
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, nil
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("api error %d: %s", resp.StatusCode, string(body))
 	}
