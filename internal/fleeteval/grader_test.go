@@ -139,6 +139,30 @@ Let me think step by step.
 	}
 }
 
+func TestCleanResponse_UnclosedThinkBlock(t *testing.T) {
+	raw := `<think>
+Some reasoning that never closes...
+Still thinking...
+`
+	got := CleanResponse(raw)
+	if got != "" {
+		t.Errorf("expected empty after stripping unclosed think block, got %q", got)
+	}
+}
+
+func TestCleanResponse_ThinkThenAnswer(t *testing.T) {
+	raw := `<think>
+Planning my answer...
+</think>
+
+func CountMatches(ctx context.Context, items []string) (int, error)`
+	got := CleanResponse(raw)
+	want := "func CountMatches(ctx context.Context, items []string) (int, error)"
+	if got != want {
+		t.Errorf("expected %q, got %q", want, got)
+	}
+}
+
 func TestCleanResponse_ProtocolWrapping(t *testing.T) {
 	raw := `task_claim(ticket_id="eval-01", agent_id="fleet-agent", reason="echo")
 fleet-agent-v18200-healthy

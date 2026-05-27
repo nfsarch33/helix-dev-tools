@@ -5,12 +5,18 @@ import (
 	"strings"
 )
 
-var thinkBlockRE = regexp.MustCompile(`(?s)<think>.*?</think>`)
+var (
+	thinkBlockRE  = regexp.MustCompile(`(?s)<think>.*?</think>`)
+	thinkUnclosed = regexp.MustCompile(`(?s)<think>.*$`)
+)
 
 // CleanResponse removes model artifacts like <think> blocks, task_claim/complete
 // protocol wrapping, and leading/trailing whitespace.
 func CleanResponse(raw string) string {
 	cleaned := thinkBlockRE.ReplaceAllString(raw, "")
+	if strings.Contains(cleaned, "<think>") {
+		cleaned = thinkUnclosed.ReplaceAllString(cleaned, "")
+	}
 
 	lines := strings.Split(cleaned, "\n")
 	var filtered []string
