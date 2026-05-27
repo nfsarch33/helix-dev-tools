@@ -20,11 +20,13 @@ func main() {
 			pollSec = int(n.Seconds())
 		}
 	}
+	systemPrompt := loadPromptFile(envOrDefault("FLEET_SYSTEM_PROMPT", ""))
 	cfg := fleetagent.Config{
 		AgentID:      envOrDefault("FLEET_AGENT_ID", "fleet-agent-1"),
 		Capabilities: []string{"go-build", "go-test", "docker", "k3s-deploy"},
 		PollInterval: time.Duration(pollSec) * time.Second,
 		MaxRetries:   3,
+		SystemPrompt: systemPrompt,
 	}
 
 	sprintboardURL := envOrDefault("SPRINTBOARD_URL", "http://127.0.0.1:9400")
@@ -53,6 +55,17 @@ func main() {
 		os.Exit(1)
 	}
 	log.Info("fleet-agent stopped cleanly")
+}
+
+func loadPromptFile(path string) string {
+	if path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return string(data)
 }
 
 func envOrDefault(key, def string) string {
