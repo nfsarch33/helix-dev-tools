@@ -30,11 +30,12 @@ func main() {
 	}
 
 	sprintboardURL := envOrDefault("SPRINTBOARD_URL", "http://127.0.0.1:9400")
+	sprintID := envOrDefault("SPRINT_ID", "v18400")
 	llmURL := envOrDefault("LLM_ROUTER_URL", "http://127.0.0.1:8787")
-	llmModel := envOrDefault("LLM_MODEL", "Qwen/Qwen3.5-4B")
+	llmModel := envOrDefault("LLM_MODEL", "MiniMax-M2.7")
 	engramURL := envOrDefault("ENGRAM_URL", "http://127.0.0.1:8281")
 
-	board := fleetagent.NewHTTPSprintBoardClient(sprintboardURL)
+	board := fleetagent.NewRESTSprintBoardClient(sprintboardURL, sprintID)
 	llm := fleetagent.NewHTTPLLMClient(llmURL, llmModel, "")
 	reporter := fleetagent.NewEngramReporter(engramURL, "nfsarch33", "fleet-agent", "")
 
