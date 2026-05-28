@@ -19,7 +19,7 @@ type stubFetcher struct {
 	err    error
 }
 
-func (f *stubFetcher) Name() string                             { return f.name }
+func (f *stubFetcher) Name() string                            { return f.name }
 func (f *stubFetcher) Fetch(_ context.Context) (Status, error) { return f.status, f.err }
 
 func newTestServer(t *testing.T, fetchers ...Fetcher) *Server {
@@ -45,6 +45,7 @@ func TestDashboardServer_Routes(t *testing.T) {
 		{"/fleet", http.StatusOK},
 		{"/roadmap", http.StatusOK},
 		{"/api/health", http.StatusOK},
+		{"/api/fleet/health", http.StatusOK},
 	}
 	for _, tc := range routes {
 		t.Run(tc.path, func(t *testing.T) {
