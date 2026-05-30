@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -519,6 +520,16 @@ func suiteInstallReadiness(p config.Paths) *Suite {
 	return s
 }
 
+// resolveMCPServer returns the first matching MCP server spec by trying legacy and user-* names.
+func resolveMCPServer(cfg *mcpHealthConfig, names ...string) (mcpHealthServerSpec, string, bool) {
+	for _, name := range names {
+		if spec, ok := cfg.MCPServers[name]; ok {
+			return spec, name, true
+		}
+	}
+	return mcpHealthServerSpec{}, "", false
+}
+
 func suiteMCPReadiness(p config.Paths) *Suite {
 	s := &Suite{Name: "MCP Readiness"}
 	mcpPath := p.CursorMCPConfig()
@@ -533,18 +544,35 @@ func suiteMCPReadiness(p config.Paths) *Suite {
 	s.Assert("mcpServers present", len(cfg.MCPServers) >= 9, itoa(len(cfg.MCPServers)))
 
 	// github-official omitted: WSL fleet uses git-mcp-server + gh; Windows native omits PAT-heavy Docker GitHub MCP per daily-startup.
-	requiredServers := []string{
-		"mem0", "context-mode", "context7", "git-mcp-server",
-		"duckduckgo", "fetch",
+	requiredServers := []struct {
+		label string
+		names []string
+	}{
+		{label: "mem0", names: []string{"mem0", "user-engram"}},
+		{label: "context-mode", names: []string{"context-mode", "user-context-mode"}},
+		{label: "context7", names: []string{"context7", "user-context7"}},
+		{label: "duckduckgo", names: []string{"duckduckgo", "user-duckduckgo"}},
+		{label: "fetch", names: []string{"fetch", "user-fetch"}},
 	}
-	for _, name := range requiredServers {
-		_, ok := cfg.MCPServers[name]
-		s.Assert("MCP server: "+name, ok, "not found in mcp.json")
+	for _, req := range requiredServers {
+		_, resolved, ok := resolveMCPServer(cfg, req.names...)
+		if ok {
+			s.Pass("MCP server: " + req.label + " (" + resolved + ")")
+			continue
+		}
+		s.Fail("MCP server: "+req.label, "not found in mcp.json (tried "+strings.Join(req.names, ", ")+")")
 	}
 
-	_, hasPerplexityAsk := cfg.MCPServers["perplexity-ask"]
-	_, hasPerplexity := cfg.MCPServers["perplexity"]
-	s.Assert("Perplexity server present", hasPerplexityAsk || hasPerplexity, "expected perplexity or perplexity-ask")
+	if _, _, ok := resolveMCPServer(cfg, "git-mcp-server"); ok {
+		s.Pass("MCP server: git-mcp-server")
+	} else if p.PlatformProfile() == "wsl" {
+		s.Pass("git-mcp-server optional on WSL portable template (use gh + runx git)")
+	} else {
+		s.Fail("MCP server: git-mcp-server", "not found in mcp.json")
+	}
+
+	_, _, hasPerplexity := resolveMCPServer(cfg, "perplexity-ask", "perplexity", "user-perplexity-ask")
+	s.Assert("Perplexity server present", hasPerplexity, "expected perplexity, perplexity-ask, or user-perplexity-ask")
 
 	activeServers := 0
 	for name, spec := range cfg.MCPServers {
@@ -578,17 +606,23 @@ func suiteMem0Connectivity(p config.Paths) *Suite {
 	}
 	s.Pass("mcp.json parses")
 
-	mem0, ok := cfg.MCPServers["mem0"]
-	s.Assert("mem0 configured", ok, "add mem0 to ~/.cursor/mcp.json")
+	mem0, resolved, ok := resolveMCPServer(cfg, "user-engram", "mem0")
+	s.Assert("engram/mem0 configured", ok, "add user-engram (Engram PRIMARY) or mem0 to ~/.cursor/mcp.json")
 	if !ok {
 		return s
 	}
 
-	s.Assert("mem0 enabled", !mem0.Disabled, "mem0 is disabled")
-	s.Assert("mem0 command resolvable", commandResolvable(mem0.Command), "command not found: "+mem0.Command)
-	s.Assert("mem0 env ready", envReady(mem0.Env), "MEM0_API_KEY or MEM0_DEFAULT_USER_ID missing")
-	s.Assert("mem0 default user id configured", strings.TrimSpace(mem0.Env["MEM0_DEFAULT_USER_ID"]) != "", "set MEM0_DEFAULT_USER_ID")
-	s.Assert("mem0 api key configured", strings.TrimSpace(mem0.Env["MEM0_API_KEY"]) != "", "set MEM0_API_KEY")
+	s.Assert(resolved+" enabled", !mem0.Disabled, resolved+" is disabled")
+	s.Assert(resolved+" command resolvable", commandResolvable(mem0.Command), "command not found: "+mem0.Command)
+	s.Assert(resolved+" env ready", envReady(mem0.Env), "missing env placeholder for "+resolved)
+
+	if resolved == "user-engram" {
+		s.Assert("engram healthz reachable", engramHealthzOK(mem0.Env), "curl http://127.0.0.1:8281/healthz failed — start engramd")
+	} else {
+		s.Assert("mem0 env ready", envReady(mem0.Env), "MEM0_API_KEY or MEM0_DEFAULT_USER_ID missing")
+		s.Assert("mem0 default user id configured", strings.TrimSpace(mem0.Env["MEM0_DEFAULT_USER_ID"]) != "", "set MEM0_DEFAULT_USER_ID")
+		s.Assert("mem0 api key configured", strings.TrimSpace(mem0.Env["MEM0_API_KEY"]) != "", "set MEM0_API_KEY")
+	}
 
 	if allPepper, hasAllPepper := cfg.MCPServers["allPepper-memory-bank"]; hasAllPepper {
 		s.Assert("allPepper disabled during Mem0 migration", allPepper.Disabled, "disable allPepper-memory-bank after Mem0 cutover")
@@ -825,8 +859,16 @@ func suiteProgrammaticCounts(p config.Paths) *Suite {
 	hooksJSON := filepath.Join(p.CursorConfigDir(), "hooks.json")
 	data, err := os.ReadFile(hooksJSON)
 	hookRoutes := 0
+	expectedHookNames := []string{"guard-shell", "sanitize-read", "guard-mcp", "post-edit", "housekeeping"}
 	if err == nil {
-		hookRoutes = strings.Count(string(data), "cursor-tools hook")
+		content := string(data)
+		for _, hookName := range expectedHookNames {
+			needleHelix := "helix-dev-tools hook " + hookName
+			needleCursor := "cursor-tools hook " + hookName
+			if strings.Contains(content, needleHelix) || strings.Contains(content, needleCursor) {
+				hookRoutes++
+			}
+		}
 	}
 	const expectedGoHookRoutes = 5
 	s.Assert(fmt.Sprintf("hooks.json has %d Go routes", expectedGoHookRoutes), hookRoutes == expectedGoHookRoutes, itoa(hookRoutes))
@@ -951,19 +993,19 @@ func suiteHelixonReadiness(p config.Paths) *Suite {
 		s.Pass("mcp.json parses (Helixon check skipped)")
 		return s
 	}
-	spec, hasIronclaw := cfg.MCPServers["helixon"]
+	spec, resolved, hasIronclaw := resolveMCPServer(cfg, "user-ironclaw", "helixon")
 	if !hasIronclaw {
 		s.Pass("helixon not configured (optional for local Cursor+Helixon integration)")
 		return s
 	}
 	if spec.Disabled {
-		s.Pass("helixon configured but disabled")
+		s.Pass(resolved + " configured but disabled")
 		return s
 	}
-	s.Assert("helixon command resolvable", commandResolvable(spec.Command), "helixon-mcp binary not found: "+spec.Command)
-	// envReady is optional: helixon-mcp defaults to http://localhost:3000
+	s.Assert(resolved+" command resolvable", commandResolvable(spec.Command), "ironclaw-mcp binary not found: "+spec.Command)
+	// envReady is optional: ironclaw-mcp defaults to http://localhost:3000
 	if len(spec.Env) > 0 {
-		s.Assert("helixon env ready", envReady(spec.Env), "missing env placeholder for helixon")
+		s.Assert(resolved+" env ready", envReady(spec.Env), "missing env placeholder for "+resolved)
 	}
 	return s
 }
@@ -1394,6 +1436,29 @@ func absArgsExist(args []string) bool {
 		}
 	}
 	return true
+}
+
+func engramHealthzOK(env map[string]string) bool {
+	addr := strings.TrimSpace(env["ENGRAM_LISTEN_ADDR"])
+	if addr == "" {
+		addr = "127.0.0.1:8281"
+	}
+	if !strings.Contains(addr, "://") {
+		addr = "http://" + addr
+	}
+	url := strings.TrimSuffix(addr, "/") + "/healthz"
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return false
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	return resp.StatusCode == http.StatusOK
 }
 
 // latestGlobMatch returns the lexicographically latest file matching pattern in dir,
