@@ -23,11 +23,14 @@ const (
 )
 
 type FleetProbe struct {
-	Name    string        `json:"name"`
-	Command []string      `json:"-"`
-	Expect  string        `json:"-"`
-	Timeout time.Duration `json:"-"`
-	Local   bool          `json:"-"`
+	Name           string        `json:"name"`
+	Command        []string      `json:"-"`
+	Expect         string        `json:"-"`
+	Timeout        time.Duration `json:"-"`
+	Local          bool          `json:"-"`
+	LatencyGreen   time.Duration `json:"-"`
+	MaxLatencyWarn time.Duration `json:"-"`
+	MaxLatencyFail time.Duration `json:"-"`
 }
 
 type FleetProbeResult struct {
@@ -51,6 +54,7 @@ var fleetExecCommandContext = execCommandContext
 var doctorFleetFlags struct {
 	sshTarget string
 	local     bool
+	travel    bool
 }
 
 var doctorFleetCmd = &cobra.Command{
@@ -63,6 +67,9 @@ var doctorFleetCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg := fleetConfigFromEnv()
 		probes := buildFleetProbes(cfg)
+		if isTravelMode() && !cfg.LocalMode {
+			probes = append(probes, buildFleetTravelProbes()...)
+		}
 		results := runFleetProbes(probes)
 
 		if doctorOutputJSON {
@@ -88,6 +95,8 @@ func init() {
 		"SSH target alias for remote probes (reads FLEET_SSH_TARGET env var)")
 	doctorFleetCmd.Flags().BoolVar(&doctorFleetFlags.local, "local", false,
 		"Run probes locally (no SSH); auto-detected via FLEET_LOCAL=true")
+	doctorFleetCmd.Flags().BoolVar(&doctorFleetFlags.travel, "travel", false,
+		"Add wsl1/wsl2 direct+via-jump latency probes (FLEET_TRAVEL_MODE=1; profile via FLEET_LATENCY_PROFILE=china|home)")
 	doctorCmd.AddCommand(doctorFleetCmd)
 }
 
@@ -244,6 +253,7 @@ func runSingleFleetProbe(p FleetProbe) FleetProbeResult {
 	} else {
 		result.Status = FleetYellow
 	}
+	applyLatencyStatus(&result, p)
 	return result
 }
 

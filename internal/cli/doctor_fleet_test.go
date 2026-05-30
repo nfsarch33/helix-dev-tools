@@ -562,3 +562,29 @@ func TestPrintFleetTable_MultilineOutputFlattened(t *testing.T) {
 		t.Error("expected newlines in output to be replaced")
 	}
 }
+
+func TestBuildFleetTravelProbes_Count(t *testing.T) {
+	probes := buildFleetTravelProbes()
+	if len(probes) != 5 {
+		t.Fatalf("expected 5 travel probes, got %d", len(probes))
+	}
+}
+
+func TestApplyLatencyStatus_YellowOnSlow(t *testing.T) {
+	result := FleetProbeResult{Status: FleetGreen, Duration: 20 * time.Second}
+	p := FleetProbe{LatencyGreen: 3 * time.Second, MaxLatencyWarn: 12 * time.Second, MaxLatencyFail: 30 * time.Second}
+	applyLatencyStatus(&result, p)
+	if result.Status != FleetYellow {
+		t.Fatalf("expected YELLOW for slow probe, got %s", result.Status)
+	}
+}
+
+func TestIsTravelMode_Env(t *testing.T) {
+	old := doctorFleetFlags.travel
+	doctorFleetFlags.travel = false
+	defer func() { doctorFleetFlags.travel = old }()
+	t.Setenv("FLEET_TRAVEL_MODE", "1")
+	if !isTravelMode() {
+		t.Error("expected travel mode from env")
+	}
+}
