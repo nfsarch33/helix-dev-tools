@@ -65,6 +65,7 @@ var suiteCatalog = []suiteSpec{
 	{name: "DRL EvoLoop Observability", builder: suiteDRLEvoLoopObservability},
 	{name: "EvoLoop Cycle Freshness", builder: suiteStaleCycleAge},
 	{name: "Pre-Push Readiness", builder: suitePrePushReadiness},
+	{name: "Personal Repo GitHub Ops", builder: suitePersonalRepoGitHubOps},
 }
 
 var suiteCatalogByName = func() map[string]suiteSpec {
@@ -117,6 +118,7 @@ func BuildDoctorSuites(p config.Paths, profile string) []*Suite {
 			"skills-cursor Policy",
 			"Hooks, Sub-agents, Commands, MCP",
 			"Install Readiness",
+			"Personal Repo GitHub Ops",
 			"MCP Readiness",
 			"Mem0 Connectivity",
 			"Platform Readiness",
@@ -447,6 +449,22 @@ func assertHooksJSONInstallState(p config.Paths, s *Suite) {
 	}
 }
 
+// assertHooksJSONRoutesGoHook accepts either helix-dev-tools or cursor-tools binary
+// names in hooks.json (rebrand-safe; live installs may use ~/bin/helix-dev-tools).
+func assertHooksJSONRoutesGoHook(s *Suite, hooksPath, hookName string) {
+	data, err := os.ReadFile(hooksPath)
+	if err != nil {
+		s.Fail("hooks.json routes "+hookName+" to Go", fmt.Sprintf("cannot read: %s", hooksPath))
+		return
+	}
+	content := string(data)
+	needleHelix := "helix-dev-tools hook " + hookName
+	needleCursor := "cursor-tools hook " + hookName
+	ok := strings.Contains(content, needleHelix) || strings.Contains(content, needleCursor)
+	s.Assert("hooks.json routes "+hookName+" to Go", ok,
+		fmt.Sprintf("expected %q or %q in %s", needleHelix, needleCursor, filepath.Base(hooksPath)))
+}
+
 func suiteHooksSubagentsCommandsMCP(p config.Paths) *Suite {
 	s := &Suite{Name: "Hooks, Sub-agents, Commands, MCP"}
 
@@ -454,11 +472,11 @@ func suiteHooksSubagentsCommandsMCP(p config.Paths) *Suite {
 	s.AssertFileExists("cursor-tools binary exists", binaryPath)
 
 	templateHooks := filepath.Join(p.CursorConfigDir(), "hooks.json")
-	s.AssertFileContains("hooks.json routes guard-shell to Go", templateHooks, "cursor-tools hook guard-shell")
-	s.AssertFileContains("hooks.json routes sanitize-read to Go", templateHooks, "cursor-tools hook sanitize-read")
-	s.AssertFileContains("hooks.json routes guard-mcp to Go", templateHooks, "cursor-tools hook guard-mcp")
-	s.AssertFileContains("hooks.json routes post-edit to Go", templateHooks, "cursor-tools hook post-edit")
-	s.AssertFileContains("hooks.json routes housekeeping to Go", templateHooks, "cursor-tools hook housekeeping")
+	assertHooksJSONRoutesGoHook(s, templateHooks, "guard-shell")
+	assertHooksJSONRoutesGoHook(s, templateHooks, "sanitize-read")
+	assertHooksJSONRoutesGoHook(s, templateHooks, "guard-mcp")
+	assertHooksJSONRoutesGoHook(s, templateHooks, "post-edit")
+	assertHooksJSONRoutesGoHook(s, templateHooks, "housekeeping")
 
 	assertHooksJSONInstallState(p, s)
 
@@ -1803,6 +1821,58 @@ func probeCoordinationSignals(binPath string) (int, error) {
 		}
 	}
 	return count, nil
+}
+
+// suitePersonalRepoGitHubOps verifies runx-first GitHub operations discipline on
+// personal repos: runx pr/env surfaces, hygiene skill, rules, and alias config.
+func suitePersonalRepoGitHubOps(p config.Paths) *Suite {
+	s := &Suite{Name: "Personal Repo GitHub Ops"}
+
+	s.Assert("runx on PATH", commandResolvable("runx"), "runx binary not found")
+	if commandResolvable("runx") {
+		out, err := runCombinedOutput(15*time.Second, "runx", "pr", "--help")
+		s.Assert("runx pr --help resolvable", err == nil && len(out) > 0, strings.TrimSpace(string(out)))
+	}
+
+	poisoned := os.Getenv("GITHUB_TOKEN") != "" || os.Getenv("GITHUB_API_TOKEN") != "" ||
+		os.Getenv("GH_TOKEN") != ""
+	if poisoned && commandResolvable("runx") {
+		out, _ := runCombinedOutput(15*time.Second, "runx", "env", "audit")
+		combined := strings.ToUpper(string(out))
+		s.Assert("runx env audit warns when GITHUB_TOKEN set",
+			strings.Contains(combined, "WARN") || strings.Contains(combined, "GITHUB"),
+			"expected WARN/remediation when token env is poisoned")
+	} else {
+		s.Pass("runx env audit (clean env or runx unavailable)")
+	}
+
+	skillCandidates := []string{
+		filepath.Join(p.SkillsDir, "personal-repo-shell-hygiene", "SKILL.md"),
+		filepath.Join(p.GlobalKB, "cursor-config", "skills", "personal-repo-shell-hygiene", "SKILL.md"),
+	}
+	skillFound := false
+	for _, sp := range skillCandidates {
+		if _, err := os.Stat(sp); err == nil {
+			skillFound = true
+			break
+		}
+	}
+	s.Assert("personal-repo-shell-hygiene skill installed", skillFound,
+		"not found under ~/.cursor/skills or global-kb cursor-config/skills")
+
+	noShellLeak := filepath.Join(p.RulesDir, "no-shell-leak.mdc")
+	postSprint := filepath.Join(p.RulesDir, "post-sprint-commit-merge.mdc")
+	s.AssertFileExists("no-shell-leak.mdc present", noShellLeak)
+	s.AssertFileExists("post-sprint-commit-merge.mdc present", postSprint)
+	s.AssertFileContains("no-shell-leak cites runx pr", noShellLeak, "runx pr")
+	s.AssertFileContains("post-sprint cites runx pr", postSprint, "runx pr")
+
+	if commandResolvable("runx") {
+		out, err := runCombinedOutput(30*time.Second, "runx", "config", "check-aliases", "v303")
+		s.Assert("runx config check-aliases v303 ok", err == nil, strings.TrimSpace(string(out)))
+	}
+
+	return s
 }
 
 // suitePrePushReadiness checks that formatting tools are configured for

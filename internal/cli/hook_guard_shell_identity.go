@@ -66,8 +66,9 @@ func identityStrictShellDeny(cmd string) *hookio.Response {
 	}
 	user := "BLOCKED: strict identity gate failed before sensitive shell command\n  - " +
 		strings.Join(failures, "\n  - ")
-	agent := "Run `cursor-tools doctor identity --strict` to see the same failures and the canonical remediation. " +
-		"Do NOT bypass — fix the identity (unset GITHUB_TOKEN family / set personal user.email) and rerun the command."
+	agent := "Use `runx pr create --repo <alias>` or `runx env personal-shell --exec 'runx git push --repo <alias>'` — " +
+		"never raw `gh` or `unset GITHUB_TOKEN && ...`. Skill: personal-repo-shell-hygiene. " +
+		"Run `helix-dev-tools doctor identity --strict` for the full gate output."
 	return hookio.Deny(user, agent)
 }
 
