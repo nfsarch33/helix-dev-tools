@@ -24,10 +24,10 @@ func TestHealth(t *testing.T) {
 }
 
 var _ = Describe("BuildAllSuites", func() {
-	It("returns 39 suites", func() {
+	It("returns 40 suites", func() {
 		p := config.DefaultPaths()
 		suites := health.BuildAllSuites(p)
-		Expect(suites).To(HaveLen(39))
+		Expect(suites).To(HaveLen(40))
 	})
 
 	It("includes Pre-Push Readiness as Suite 39", func() {
@@ -72,6 +72,16 @@ var _ = Describe("BuildAllSuites", func() {
 		Expect(names).To(ContainElement("Mem0 Connectivity"))
 		Expect(names).To(ContainElement("Coordination Signals"))
 		Expect(names).To(ContainElement("Git Sync Resilience"))
+	})
+
+	It("builds doctor install suites including Personal Repo GitHub Ops", func() {
+		p := config.DefaultPaths()
+		suites := health.BuildDoctorSuites(p, "install")
+		names := make([]string, 0, len(suites))
+		for _, suite := range suites {
+			names = append(names, suite.Name)
+		}
+		Expect(names).To(ContainElement("Personal Repo GitHub Ops"))
 	})
 
 	It("builds doctor deps suites from the shared catalog", func() {

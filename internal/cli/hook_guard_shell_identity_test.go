@@ -97,6 +97,15 @@ func TestGuardShell_DeniesSensitiveCommandWhenIdentityPoisoned(t *testing.T) {
 		t.Fatalf("expected remediation hint to mention %q, got user=%q agent=%q",
 			want, resp.UserMessage, resp.AgentMessage)
 	}
+	if want := "runx pr create"; !strings.Contains(resp.AgentMessage, want) {
+		t.Fatalf("expected agent message to cite %q, got %q", want, resp.AgentMessage)
+	}
+	if want := "personal-repo-shell-hygiene"; !strings.Contains(resp.AgentMessage, want) {
+		t.Fatalf("expected agent message to cite skill %q, got %q", want, resp.AgentMessage)
+	}
+	if bad := "fix the identity (unset GITHUB_TOKEN"; strings.Contains(resp.AgentMessage, bad) {
+		t.Fatalf("agent message must not suggest legacy unset pattern")
+	}
 }
 
 func TestGuardShell_AllowsSensitiveCommandWhenIdentityClean(t *testing.T) {
